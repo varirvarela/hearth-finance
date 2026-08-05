@@ -1,0 +1,25 @@
+{
+  "name": "hearth-finance",
+  "version": "0.2.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:e2e": "playwright test",
+    "worker:dev": "wrangler dev workers/src/index.js --port 8787",
+    "worker:deploy": "wrangler deploy --config workers/wrangler.toml"
+  },
+  "dependencies": {
+    "firebase": "^10.14.1",
+    "chart.js": "^4.4.7"
+  },
+  "devDependencies": {
+    "vite": "^5.4.11",
+    "vitest": "^2.1.8",
+    "@playwright/test": "^1.49.1",
+    "wrangler": "^3.93.0"
+  }
+}

@@ -1,0 +1,13 @@
+{
+  "name": "Hearth Finance",
+  "short_name": "Hearth",
+  "description": "Household budgeting and account tracking",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#16a34a",
+  "orientation": "portrait",
+  "icons": [
+    { "src": "/icons/icon.svg", "sizes": "any", "type": "image/svg+xml" }
+  ]
+}

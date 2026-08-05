@@ -1,0 +1,21 @@
+name            = "hearth-worker"
+main            = "src/index.js"
+compatibility_date = "2024-11-01"
+
+[triggers]
+crons = ["0 6 * * *", "0 20 * * *", "0 8 1 * *"]
+
+[[kv_namespaces]]
+binding = "PLAID_TOKENS"
+id      = "REPLACE_WITH_YOUR_KV_NAMESPACE_ID"
+
+[vars]
+PLAID_ENV = "sandbox"
+
+# Secrets — set these via: wrangler secret put <NAME>
+# PLAID_CLIENT_ID
+# PLAID_SECRET
+# ANTHROPIC_API_KEY
+# FIREBASE_DATABASE_URL
+# FIREBASE_SECRET
+# FIREBASE_API_KEY   (used to verify Firebase ID tokens)
