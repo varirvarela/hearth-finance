@@ -576,6 +576,35 @@ button:active  { opacity: 0.7; transform: scale(0.97); }
 }
 .empty-icon { font-size: 2.5rem; opacity: 0.5; line-height: 1; }
 
+/* ── Import UI ─────────────────────────────────────────── */
+.import-drop {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 2px dashed var(--border);
+  border-radius: var(--r);
+  padding: 1.5rem;
+  cursor: pointer;
+  font-size: 0.95rem;
+  color: var(--muted);
+  transition: border-color 0.15s, background 0.15s;
+  margin-bottom: 1rem;
+}
+.import-drop:hover { border-color: var(--brand); background: var(--brand-xl); color: var(--brand); }
+
+.progress-bar-wrap {
+  height: 8px;
+  background: var(--faint);
+  border-radius: 99px;
+  overflow: hidden;
+}
+.progress-bar-fill {
+  height: 100%;
+  background: var(--brand);
+  border-radius: 99px;
+  transition: width 0.2s ease;
+}
+
 /* ── Animations ────────────────────────────────────────── */
 @keyframes fade-in {
   from { opacity: 0; transform: translateY(6px); }

@@ -7,6 +7,7 @@ import {
   getChildCategories,
   getIncomeCategories,
   getExpenseCategories,
+  CATEGORY_NAME_MAP,
 } from '../shared/categories.js';
 
 describe('CATEGORIES', () => {
@@ -26,7 +27,7 @@ describe('CATEGORIES', () => {
 
   it('every category has id, name, icon, color', () => {
     for (const cat of CATEGORIES) {
-      expect(cat.id, `${cat.id} missing id`).toBeTruthy();
+      expect(cat.id, `missing id`).toBeTruthy();
       expect(cat.name, `${cat.id} missing name`).toBeTruthy();
       expect(cat.icon, `${cat.id} missing icon`).toBeTruthy();
       expect(cat.color, `${cat.id} missing color`).toBeTruthy();
@@ -42,9 +43,9 @@ describe('CATEGORY_MAP', () => {
 
 describe('getCategoryById', () => {
   it('returns the correct category', () => {
-    const cat = getCategoryById('food_groceries');
-    expect(cat.name).toBe('Groceries');
-    expect(cat.parent).toBe('food');
+    const cat = getCategoryById('paycheck');
+    expect(cat.name).toBe('Paycheck');
+    expect(cat.parent).toBe('income_trabajo');
   });
 
   it('falls back to uncategorized for unknown ids', () => {
@@ -65,26 +66,26 @@ describe('getRootCategories', () => {
     expect(getRootCategories().some(c => c.id === 'uncategorized')).toBe(false);
   });
 
-  it('includes known root categories', () => {
+  it('includes the expected groups', () => {
     const ids = new Set(getRootCategories().map(c => c.id));
-    expect(ids.has('food')).toBe(true);
-    expect(ids.has('housing')).toBe(true);
-    expect(ids.has('transport')).toBe(true);
-    expect(ids.has('income')).toBe(true);
+    expect(ids.has('casa')).toBe(true);
+    expect(ids.has('auto')).toBe(true);
+    expect(ids.has('salidas')).toBe(true);
+    expect(ids.has('income_trabajo')).toBe(true);
+    expect(ids.has('travel')).toBe(true);
   });
 });
 
 describe('getChildCategories', () => {
-  it('returns children of food', () => {
-    const children = getChildCategories('food');
+  it('returns children of casa', () => {
+    const children = getChildCategories('casa');
     expect(children.length).toBeGreaterThan(0);
-    expect(children.every(c => c.parent === 'food')).toBe(true);
-    expect(children.some(c => c.id === 'food_groceries')).toBe(true);
-    expect(children.some(c => c.id === 'food_dining')).toBe(true);
+    expect(children.every(c => c.parent === 'casa')).toBe(true);
+    expect(children.some(c => c.id === 'casa_fijo_mensual')).toBe(true);
   });
 
   it('returns empty array for a leaf category', () => {
-    expect(getChildCategories('food_groceries')).toHaveLength(0);
+    expect(getChildCategories('paycheck')).toHaveLength(0);
   });
 
   it('returns empty array for unknown id', () => {
@@ -97,8 +98,10 @@ describe('getIncomeCategories', () => {
     expect(getIncomeCategories().every(c => c.isIncome)).toBe(true);
   });
 
-  it('includes salary', () => {
-    expect(getIncomeCategories().some(c => c.id === 'income_salary')).toBe(true);
+  it('includes paycheck and bonus', () => {
+    const ids = new Set(getIncomeCategories().map(c => c.id));
+    expect(ids.has('paycheck')).toBe(true);
+    expect(ids.has('bonus')).toBe(true);
   });
 });
 
@@ -111,9 +114,26 @@ describe('getExpenseCategories', () => {
     expect(getExpenseCategories().some(c => c.id === 'transfer')).toBe(false);
   });
 
-  it('includes food and housing', () => {
+  it('includes core expense categories', () => {
     const ids = new Set(getExpenseCategories().map(c => c.id));
-    expect(ids.has('food')).toBe(true);
-    expect(ids.has('housing')).toBe(true);
+    expect(ids.has('casa')).toBe(true);
+    expect(ids.has('auto')).toBe(true);
+    expect(ids.has('salidas')).toBe(true);
+  });
+});
+
+describe('CATEGORY_NAME_MAP', () => {
+  it('maps all known Tiller category names to valid ids', () => {
+    const validIds = new Set(CATEGORIES.map(c => c.id));
+    for (const [name, id] of Object.entries(CATEGORY_NAME_MAP)) {
+      expect(validIds.has(id), `"${name}" maps to unknown id "${id}"`).toBe(true);
+    }
+  });
+
+  it('maps key categories correctly', () => {
+    expect(CATEGORY_NAME_MAP['Paycheck']).toBe('paycheck');
+    expect(CATEGORY_NAME_MAP['Casa Fijo Mensual']).toBe('casa_fijo_mensual');
+    expect(CATEGORY_NAME_MAP['Shopping Comunes Mensual']).toBe('shopping_comunes');
+    expect(CATEGORY_NAME_MAP['Travel Argentina']).toBe('travel_argentina');
   });
 });

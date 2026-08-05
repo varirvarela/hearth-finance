@@ -3,6 +3,7 @@ import { signOut } from 'firebase/auth';
 import { CATEGORIES, getCategoryById } from '../shared/categories.js';
 import { buildRule } from '../shared/rules.js';
 import { CHANGELOG } from '../shared/changelog.js';
+import { openImportModal } from './import.js';
 
 export function renderSettings(container) {
   container.innerHTML = `
@@ -15,6 +16,11 @@ export function renderSettings(container) {
       <section class="section">
         <h3>Partner Sharing</h3>
         <div id="partner-section"></div>
+      </section>
+      <section class="section">
+        <h3>Import Data</h3>
+        <p style="color:var(--muted);font-size:0.875rem;margin-bottom:0.75rem">Import a Tiller CSV export to load your transaction history.</p>
+        <button class="btn-secondary" id="import-csv" style="width:auto;padding:0.5rem 1rem">Import CSV…</button>
       </section>
       <section class="section">
         <h3>Export</h3>
@@ -38,6 +44,7 @@ export function renderSettings(container) {
 
   document.getElementById('add-rule').addEventListener('click', () => openRuleEditor(uid));
   document.getElementById('sign-out').addEventListener('click', () => signOut(auth));
+  document.getElementById('import-csv').addEventListener('click', () => openImportModal());
   document.getElementById('export-csv').addEventListener('click', () => exportCsv(uid));
 }
 

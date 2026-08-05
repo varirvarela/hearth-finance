@@ -1,5 +1,14 @@
 export const CHANGELOG = [
   {
+    version: '0.4.0',
+    date: '2026-08-05',
+    changes: [
+      'Replaced generic categories with the family\'s actual taxonomy (auto, casa, salidas, kids, travel, etc.).',
+      'Added Tiller CSV importer in Settings — imports ~8,000 transactions with automatic deduplication.',
+      'Category name map links Tiller category names directly to internal IDs.',
+    ],
+  },
+  {
     version: '0.3.0',
     date: '2026-08-05',
     changes: [
