@@ -1,5 +1,12 @@
 export const CHANGELOG = [
   {
+    version: '0.3.0',
+    date: '2026-08-05',
+    changes: [
+      'Deploy to GitHub Pages via GitHub Actions on every push to main.',
+    ],
+  },
+  {
     version: '0.2.0',
     date: '2026-08-05',
     changes: [
