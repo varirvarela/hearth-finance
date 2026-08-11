@@ -31,7 +31,7 @@ export default {
     const { pathname } = new URL(request.url);
 
     try {
-      if (pathname.startsWith('/plaid/')) return handlePlaid(request, env, pathname);
+      if (pathname.startsWith('/plaid/')) return await handlePlaid(request, env, pathname);
 
       if (pathname === '/categorize' && request.method === 'POST') {
         const token = (request.headers.get('Authorization') ?? '').replace(/^Bearer\s+/i, '');
