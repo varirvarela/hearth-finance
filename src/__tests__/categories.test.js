@@ -44,7 +44,7 @@ describe('CATEGORY_MAP', () => {
 describe('getCategoryById', () => {
   it('returns the correct category', () => {
     const cat = getCategoryById('paycheck');
-    expect(cat.name).toBe('Paycheck');
+    expect(cat.name).toBe('Sueldo');
     expect(cat.parent).toBe('income_trabajo');
   });
 

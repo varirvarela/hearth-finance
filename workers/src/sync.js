@@ -18,10 +18,11 @@ export async function handleSync(env) {
     for (const [, account] of Object.entries(accounts)) {
       if (account.isManual || !account.plaidItemId) continue;
 
-      const token = await env.PLAID_TOKENS.get(`${uid}:${account.plaidItemId}`);
+      const slot  = account.plaidSlot ?? 1;
+      const token = await env.PLAID_TOKENS.get(`s${slot}:${uid}:${account.plaidItemId}`);
       if (!token) continue;
 
-      const { transactions: plaidTxns, error } = await getTransactions(env, token, startDate, endDate);
+      const { transactions: plaidTxns, error } = await getTransactions(env, token, startDate, endDate, slot);
       if (error || !plaidTxns) continue;
 
       const existing = await fbGet(env, `transactions/${uid}`).catch(() => ({})) ?? {};
@@ -36,11 +37,23 @@ export async function handleSync(env) {
 
         const ruleCategory = evaluateRules(txn, rules);
         if (ruleCategory) {
+          const { getCategoryBudgetFields } = await import('../../src/shared/categories.js');
+          const fields = getCategoryBudgetFields(ruleCategory);
           txn.category       = ruleCategory;
+          txn.group          = fields.group;
+          txn.isFixed        = fields.isFixed;
+          txn.isAnnual       = fields.isAnnual;
           txn.categorySource = 'rule';
+          txn.needsReview    = false;
         } else {
-          txn.category       = await categorizeTransaction(txn, env);
+          const ai = await categorizeTransaction(txn, env);
+          txn.category       = ai.category;
+          txn.group          = ai.group;
+          txn.isFixed        = ai.isFixed;
+          txn.isAnnual       = ai.isAnnual;
+          txn.aiConfidence   = ai.confidence;
           txn.categorySource = 'ai';
+          txn.needsReview    = ai.needsReview;
         }
 
         await fbPush(env, `transactions/${uid}`, txn);

@@ -61,7 +61,7 @@ async function openPlaidLink(uid) {
     headers: { Authorization: `Bearer ${idToken}` },
   });
   if (!res.ok) { alert('Could not start bank connection. Try again.'); return; }
-  const { link_token } = await res.json();
+  const { link_token, slot } = await res.json();
 
   // Plaid Link requires the Plaid Link JS library loaded from CDN.
   // Load it dynamically so it's not part of the main bundle.
@@ -77,11 +77,11 @@ async function openPlaidLink(uid) {
 
   const handler = window.Plaid.create({
     token: link_token,
-    onSuccess: async (publicToken, metadata) => {
+    onSuccess: async (publicToken) => {
       const exchRes = await fetch(`${WORKER_URL}/plaid/exchange-token`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${idToken}` },
-        body: JSON.stringify({ public_token: publicToken }),
+        body: JSON.stringify({ public_token: publicToken, slot }),
       });
       if (!exchRes.ok) { alert('Failed to connect account. Please try again.'); return; }
       // Worker writes account records to RTDB; dbListen will pick up the change automatically.

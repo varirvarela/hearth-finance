@@ -1,5 +1,17 @@
 export const CHANGELOG = [
   {
+    version: '0.5.0',
+    date: '2026-08-05',
+    changes: [
+      'Category taxonomy enriched: leaf names now describe what (not budget type), with isFixed/isAnnual as data attributes.',
+      'Added new categories: Delivery, Gym & Fitness, Suscripciones, Colegio & Útiles.',
+      'Transactions now store group, isFixed, and isAnnual fields (run scripts/enrich-transactions.js to migrate history).',
+      'Category picker upgraded to two-step flow: pick group → pick leaf category.',
+      'Transactions flagged as uncategorized or low-confidence AI show a ⚠ needs-review dot and "Needs review" filter.',
+      'Cloudflare Worker /categorize endpoint now returns confidence score and alternatives, enabling AI-assisted categorization.',
+    ],
+  },
+  {
     version: '0.4.0',
     date: '2026-08-05',
     changes: [

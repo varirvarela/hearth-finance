@@ -1,5 +1,6 @@
-import { handlePlaid } from './plaid.js';
-import { handleSync }  from './sync.js';
+import { handlePlaid }           from './plaid.js';
+import { handleSync }            from './sync.js';
+import { categorizeTransaction } from './categorize.js';
 
 const CORS = {
   'Access-Control-Allow-Origin':  '*',
@@ -7,35 +8,54 @@ const CORS = {
   'Access-Control-Allow-Headers': 'Content-Type, Authorization',
 };
 
+const json = (data, status = 200) =>
+  new Response(JSON.stringify(data), {
+    status,
+    headers: { ...CORS, 'Content-Type': 'application/json' },
+  });
+
+// Extract UID from a Firebase JWT without full JWKS verification.
+// The actual security boundary is Firebase RTDB rules — this is for routing only.
+function uidFromJwt(token) {
+  try {
+    const payload = token.split('.')[1];
+    const decoded = JSON.parse(atob(payload.replace(/-/g, '+').replace(/_/g, '/')));
+    return decoded.sub ?? decoded.user_id ?? null;
+  } catch { return null; }
+}
+
 export default {
   async fetch(request, env) {
     if (request.method === 'OPTIONS') return new Response(null, { headers: CORS });
 
-    const url  = new URL(request.url);
-    const path = url.pathname;
+    const { pathname } = new URL(request.url);
 
     try {
-      if (path.startsWith('/plaid/')) return handlePlaid(request, env, path);
+      if (pathname.startsWith('/plaid/')) return handlePlaid(request, env, pathname);
+
+      if (pathname === '/categorize' && request.method === 'POST') {
+        const token = (request.headers.get('Authorization') ?? '').replace(/^Bearer\s+/i, '');
+        const uid   = uidFromJwt(token);
+        if (!uid) return json({ error: 'Unauthorized' }, 401);
+
+        const txn    = await request.json();
+        const result = await categorizeTransaction(txn, env);
+        return json(result);
+      }
+
       return new Response('Not found', { status: 404, headers: CORS });
     } catch (err) {
       console.error(err);
-      return new Response(JSON.stringify({ error: err.message }), {
-        status: 500,
-        headers: { ...CORS, 'Content-Type': 'application/json' },
-      });
+      return json({ error: err.message }, 500);
     }
   },
 
   async scheduled(event, env, ctx) {
-    if (event.cron === '0 6 * * *') {
-      ctx.waitUntil(handleSync(env));
-    }
-    if (event.cron === '0 20 * * *') {
-      ctx.waitUntil(handleBudgetAlerts(env));
-    }
+    if (event.cron === '0 6 * * *')  ctx.waitUntil(handleSync(env));
+    if (event.cron === '0 20 * * *') ctx.waitUntil(handleBudgetAlerts(env));
   },
 };
 
-async function handleBudgetAlerts(env) {
+async function handleBudgetAlerts(_env) {
   // TODO: fetch budgets + transactions, compute overage, send push notifications
 }

@@ -1,5 +1,5 @@
-name            = "hearth-worker"
-main            = "src/index.js"
+name               = "hearth-worker"
+main               = "src/index.js"
 compatibility_date = "2024-11-01"
 
 [triggers]
@@ -7,15 +7,28 @@ crons = ["0 6 * * *", "0 20 * * *", "0 8 1 * *"]
 
 [[kv_namespaces]]
 binding = "PLAID_TOKENS"
-id      = "REPLACE_WITH_YOUR_KV_NAMESPACE_ID"
+id      = "1ff7b7629cd24915be578ec752e1d9e9"
 
 [vars]
-PLAID_ENV = "sandbox"
+# Change to "development" for real bank connections (free, up to 10 Items per Plaid account).
+PLAID_ENV = "development"
 
-# Secrets — set these via: wrangler secret put <NAME>
-# PLAID_CLIENT_ID
-# PLAID_SECRET
-# ANTHROPIC_API_KEY
-# FIREBASE_DATABASE_URL
-# FIREBASE_SECRET
-# FIREBASE_API_KEY   (used to verify Firebase ID tokens)
+# ── Secrets ─────────────────────────────────────────────────────────────────
+# Set each one via:  npx wrangler secret put <NAME>
+#
+# Plaid — slot 1 (first free Plaid account, up to 10 bank connections)
+#   PLAID_CLIENT_ID_1
+#   PLAID_SECRET_1
+#
+# Plaid — slot 2 (second free Plaid account, used once slot 1 reaches 10 Items)
+#   PLAID_CLIENT_ID_2   (optional — only needed if you need > 10 connections)
+#   PLAID_SECRET_2
+#
+# Google AI (Gemini) — free tier at aistudio.google.com
+#   GOOGLE_AI_API_KEY
+#
+# Firebase (backend — never expose these to the browser)
+#   FIREBASE_DATABASE_URL    e.g. https://hearth-finance-9830c-default-rtdb.firebaseio.com
+#   FIREBASE_CLIENT_EMAIL    client_email from service-account.json
+#   FIREBASE_PRIVATE_KEY     private_key from service-account.json
+#   FIREBASE_API_KEY         Web API key (used to verify Firebase ID tokens via REST)

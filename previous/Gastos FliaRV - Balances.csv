@@ -1,0 +1,29 @@
+,,,,,,,,,Sorted Assets,,,,,,,Sorted Liabilities,,,,,,,Sheet References,
+,Balances,,,,,,,,Row,Id,Group,Account,Last Updated,Balance,,Row,Id,Group,Account,Last Updated,Balance,,Accounts,
+,"August 5, 2026",,,,,,,,1,6600f72990c6b67f3ac76e1c,Accenture Stock,Restricted Stock Awards/Units,today,$0.00,,1,65fe547e2877644d75f25979,Ungrouped Liability,CREDIT CARD (-8278) (xxxx8278),today,$565.41,,Account Id,G
+,,,,,,,© 2026 Tiller,,2,6600f72990c6b67f3ac76e07,Accenture Stock,Shares,today,"$129,216.26",,2,672689ce1da01e89c36b951b,Ungrouped Liability,CREDIT CARD (-9815) (xxxx9815),today,"$22,213.28",,Group,P
+,NET WORTH,,,,,,"$337,466",,3,6600f72990c6b67f3ac76dec,Accenture Stock,UBS Bank Fund,today,"$19,191.09",,3,65fe34312877644d75ec90fa,Ungrouped Liability,Customized Cash Rewards Visa Signature (-7302) (xxxx7302),today,$52.31,,Account,J
+,,,,,,,,,6,6600430a90c6b67f3a9dbeb5,Etrade,Securities (xxxx6886),today,"$45,423.83",,4,65fe55bf2877644d75f2887d,Ungrouped Liability,Navyist Rewards (xxxx4391),today,$0.00,,Account #,K
+,ASSETS,,"$360,798",,LIABILITIES,,"$23,332",,9,65fe34312877644d75ec910f,Ungrouped Asset,Adv Plus Banking (xxxx3741),today,$362.69,,5,660c1642e63e6cabbbef1ca8,Ungrouped Liability,Corporate Platinum Card (-1004) (xxxx1004),5 days ago,$497.62,,Last Update,H
+,,,,,,,,,10,6662f74fc17c88dea7e2b71f,Ungrouped Asset,Brokerage Account (xxxx8076),today,"$155,599.79",,6,65fe53a77e276d33680bef25,Ungrouped Liability,Discover it chrome Card (xxxx3549),6 days ago,$3.00,,Last Balance,I
+,ACCENTURE STOCK,Updated,"$148,407",,UNGROUPED LIABILITY,Updated,"$23,332",,11,6886efc4341c9648ac5be7ca,Ungrouped Asset,Business Adv Fundamentals (xxxx6314),today,$648.38,,,,,,,,,Class,O
+,Restricted Stock Awards/Units,today,$0,,CREDIT CARD (-8278) (xxxx8278),today,$565,,12,66467a055e830b6fa7bf99a7,Ungrouped Asset,Cash,today,"$1,372.46",,,,,,,,,Hide,Q
+,Shares,today,"$129,216",,CREDIT CARD (-9815) (xxxx9815),today,"$22,213",,13,65fe53142877644d75f223e2,Ungrouped Asset,Checking (xxxx3046),today,$227.83,,,,,,,,,Account Id,'Accounts'!$G$2:$G
+,UBS Bank Fund,today,"$19,191",,Customized Cash Rewards Visa Signature (-7302) (xxxx7302),today,$52,,14,65fe53142877644d75f223cd,Ungrouped Asset,Citi Savings Account (xxxx3070),today,"$6,305.17",,,,,,,,,Group,'Accounts'!$P$2:$P
+,,,,,Navyist Rewards (xxxx4391),today,$0,,15,65fe34dd5bbb7eafbff42247,Ungrouped Asset,EVERYDAY CHECKING ...3828 (xxxx3828),today,"$1,562.17",,,,,,,,,Account,'Accounts'!$J$2:$J
+,ETRADE,Updated,"$45,424",,Corporate Platinum Card (-1004) (xxxx1004),5 days ago,$498,,16,6600476790c6b67f3a9efcd1,Ungrouped Asset,Venmo Guli,467 days ago,$345.09,,,,,,,,,Account #,'Accounts'!$K$2:$K
+,Securities (xxxx6886),today,"$45,424",,Discover it chrome Card (xxxx3549),6 days ago,$3,,17,660043c67e276d336881a9a0,Ungrouped Asset,Venmo Vari,467 days ago,$540.08,,,,,,,,,Last Update,'Accounts'!$H$2:$H
+,,,,,,,,,20,65fe56117e276d33680c5937,Unused Banks,ONLINE SAVINGS (xxxx4355),48 days ago,$2.75,,,,,,,,,Last Balance,'Accounts'!$I$2:$I
+,UNGROUPED ASSET,Updated,"$166,964",,,,,,,,,,,,,,,,,,,,Class,'Accounts'!$O$2:$O
+,Adv Plus Banking (xxxx3741),today,$363,,,,,,,,,,,,,,,,,,,,Hide,'Accounts'!$Q$2:$Q
+,Brokerage Account (xxxx8076),today,"$155,600",,,,,,,,,,,,,,,,,,,,,
+,Business Adv Fundamentals (xxxx6314),today,$648,,,,,,,,,,,,,,,,,,,,,
+,Cash,today,"$1,372",,,,,,,,,,,,,,,,,,,,,
+,Checking (xxxx3046),today,$228,,,,,,,,,,,,,,,,,,,,,
+,Citi Savings Account (xxxx3070),today,"$6,305",,,,,,,,,,,,,,,,,,,,,
+,EVERYDAY CHECKING ...3828 (xxxx3828),today,"$1,562",,,,,,,,,,,,,,,,,,,,,
+,Venmo Guli,467 days ago,$345,,,,,,,,,,,,,,,,,,,,,
+,Venmo Vari,467 days ago,$540,,,,,,,,,,,,,,,,,,,,,
+,,,,,,,,,,,,,,,,,,,,,,,,
+,UNUSED BANKS,Updated,$3,,,,,,,,,,,,,,,,,,,,,
+,ONLINE SAVINGS (xxxx4355),48 days ago,$3,,,,,,,,,,,,,,,,,,,,,

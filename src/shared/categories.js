@@ -1,104 +1,114 @@
-// Category taxonomy derived from the family's actual spending structure.
-// Groups (parent: null) match the "Group" column from the previous system.
-// Leaf categories match the "Category" column.
+// Two-level category hierarchy for Hearth Finance.
+// Groups (parent: null) are containers shown in step 1 of the picker.
+// Leaf categories (parent: <groupId>) are the actual tags on transactions.
+//
+// isFixed  → amount is the same every period (mortgage, phone, gym)
+// isAnnual → budgeted on an annual basis, not monthly (insurance, trips, events)
+// hide     → kept for data integrity but not shown in the picker
 
 export const CATEGORIES = [
   // ── Groups ──────────────────────────────────────────────────────────────
-  { id: 'auto',           name: 'Auto',             parent: null, icon: '🚗', color: '#7c3aed' },
-  { id: 'salidas',        name: 'Salidas',           parent: null, icon: '🍽️', color: '#d97706' },
-  { id: 'utilities',      name: 'Utilities',         parent: null, icon: '⚡', color: '#0284c7' },
-  { id: 'super_farmacia', name: 'Super y Farmacia',  parent: null, icon: '🛒', color: '#16a34a' },
-  { id: 'adult_act',      name: 'Adult Activities',  parent: null, icon: '🎾', color: '#0891b2' },
-  { id: 'casa',           name: 'Casa',              parent: null, icon: '🏡', color: '#2563eb' },
-  { id: 'kids',           name: 'Kids',              parent: null, icon: '👶', color: '#ea580c' },
-  { id: 'shopping',       name: 'Shopping',          parent: null, icon: '🛍️', color: '#9333ea' },
-  { id: 'travel',         name: 'Travel',            parent: null, icon: '✈️', color: '#0d9488' },
-  { id: 'business',       name: 'Business',          parent: null, icon: '💼', color: '#475569' },
-  { id: 'donacion',       name: 'Donation',          parent: null, icon: '❤️', color: '#dc2626' },
-  { id: 'cumpleanos',     name: 'Cumpleaños',        parent: null, icon: '🎂', color: '#db2777' },
-  { id: 'salud',          name: 'Salud',             parent: null, icon: '🏥', color: '#be185d' },
-  { id: 'varios',         name: 'Varios',            parent: null, icon: '📦', color: '#6b7280' },
-  { id: 'income_trabajo', name: 'Income Work',       parent: null, icon: '💰', color: '#15803d', isIncome: true },
-  { id: 'income_otros',   name: 'Income Non-Work',   parent: null, icon: '📈', color: '#166534', isIncome: true },
-  { id: 'transfer',       name: 'Transfer',          parent: null, icon: '↔️', color: '#9ca3af' },
+  { id: 'auto',           name: 'Auto',              parent: null, icon: '🚗', color: '#7c3aed' },
+  { id: 'salidas',        name: 'Salidas & Ocio',    parent: null, icon: '🍽️', color: '#d97706' },
+  { id: 'utilities',      name: 'Utilities',          parent: null, icon: '⚡', color: '#0284c7' },
+  { id: 'super_farmacia', name: 'Super & Farmacia',   parent: null, icon: '🛒', color: '#16a34a' },
+  { id: 'adult_act',      name: 'Actividades Adultos',parent: null, icon: '🎾', color: '#0891b2' },
+  { id: 'casa',           name: 'Casa',               parent: null, icon: '🏡', color: '#2563eb' },
+  { id: 'kids',           name: 'Kids',               parent: null, icon: '👶', color: '#ea580c' },
+  { id: 'shopping',         name: 'Shopping',           parent: null, icon: '🛍️', color: '#9333ea' },
+  { id: 'suscripciones',   name: 'Suscripciones',     parent: null, icon: '📱', color: '#4f46e5' },
+  { id: 'travel',          name: 'Travel',             parent: null, icon: '✈️', color: '#0d9488' },
+  { id: 'business',       name: 'Business',           parent: null, icon: '💼', color: '#475569' },
+  { id: 'donacion',       name: 'Donación',           parent: null, icon: '❤️', color: '#dc2626' },
+  { id: 'cumpleanos',     name: 'Cumpleaños',         parent: null, icon: '🎂', color: '#db2777' },
+  { id: 'salud',          name: 'Salud & Bienestar',  parent: null, icon: '🏥', color: '#be185d' },
+  { id: 'varios',         name: 'Varios',             parent: null, icon: '📦', color: '#6b7280' },
+  { id: 'income_trabajo', name: 'Income — Trabajo',   parent: null, icon: '💰', color: '#15803d', isIncome: true },
+  { id: 'income_otros',   name: 'Income — Otros',     parent: null, icon: '📈', color: '#166534', isIncome: true },
+  { id: 'transfer',       name: 'Transfer',           parent: null, icon: '↔️', color: '#9ca3af' },
 
   // ── Auto ────────────────────────────────────────────────────────────────
-  { id: 'auto_fijo',         name: 'Auto Fijo Mensual',    parent: 'auto', icon: '🏎️', color: '#6d28d9' },
-  { id: 'auto_comunes',      name: 'Auto Comunes Mensual', parent: 'auto', icon: '⛽', color: '#5b21b6' },
-  { id: 'auto_comunes_anual',name: 'Auto Comunes Anual',   parent: 'auto', icon: '🔧', color: '#4c1d95' },
+  { id: 'auto_fijo',          name: 'Cuota del Auto',        parent: 'auto', icon: '🏎️', color: '#6d28d9', isFixed: true,  isAnnual: false },
+  { id: 'auto_comunes',       name: 'Combustible & Peajes',  parent: 'auto', icon: '⛽', color: '#5b21b6', isFixed: false, isAnnual: false },
+  { id: 'auto_comunes_anual', name: 'Seguro & Mantenimiento',parent: 'auto', icon: '🔧', color: '#4c1d95', isFixed: false, isAnnual: true  },
 
   // ── Salidas ─────────────────────────────────────────────────────────────
-  { id: 'salidas_comunes',  name: 'Salidas Comunes Mensual', parent: 'salidas', icon: '🍴', color: '#b45309' },
-  { id: 'salidas_eventos',  name: 'Salidas Eventos Anual',   parent: 'salidas', icon: '🎟️', color: '#92400e' },
+  { id: 'salidas_comunes',  name: 'Restaurantes & Bares',      parent: 'salidas', icon: '🍴', color: '#b45309', isFixed: false, isAnnual: false },
+  { id: 'salidas_eventos',  name: 'Eventos & Entretenimiento', parent: 'salidas', icon: '🎟️', color: '#92400e', isFixed: false, isAnnual: true  },
+  { id: 'salidas_delivery', name: 'Delivery',                  parent: 'salidas', icon: '🛵', color: '#78350f', isFixed: false, isAnnual: false },
 
   // ── Utilities ───────────────────────────────────────────────────────────
-  { id: 'telecom_fijo',     name: 'Telecom Fijo Mensual',     parent: 'utilities', icon: '📡', color: '#0369a1' },
-  { id: 'utilities_comunes',name: 'Utilities Comunes Mensual',parent: 'utilities', icon: '🔌', color: '#075985' },
+  { id: 'telecom_fijo',      name: 'Teléfono & Internet',  parent: 'utilities', icon: '📡', color: '#0369a1', isFixed: true,  isAnnual: false },
+  { id: 'utilities_comunes', name: 'Luz, Gas & Agua',      parent: 'utilities', icon: '🔌', color: '#075985', isFixed: false, isAnnual: false },
 
   // ── Super y Farmacia ────────────────────────────────────────────────────
-  { id: 'super_farmacia_comunes', name: 'Super y Farmacia Comunes Mensual', parent: 'super_farmacia', icon: '🛒', color: '#15803d' },
+  { id: 'super_farmacia_comunes', name: 'Super & Farmacia', parent: 'super_farmacia', icon: '🛒', color: '#15803d', isFixed: false, isAnnual: false },
 
-  // ── Adult Activities ────────────────────────────────────────────────────
-  { id: 'adult_activities', name: 'Adult Activities Comunes Anual', parent: 'adult_act', icon: '🎾', color: '#0e7490' },
+  // ── Actividades Adultos ─────────────────────────────────────────────────
+  { id: 'adult_activities', name: 'Actividades', parent: 'adult_act', icon: '🎾', color: '#0e7490', isFixed: false, isAnnual: true },
 
   // ── Casa ────────────────────────────────────────────────────────────────
-  { id: 'casa_fijo_mensual',   name: 'Casa Fijo Mensual',   parent: 'casa', icon: '🔑', color: '#1d4ed8' },
-  { id: 'casa_fijo_anual',     name: 'Casa Fijo Anual',     parent: 'casa', icon: '🛡️', color: '#1e40af' },
-  { id: 'casa_comunes_mensual',name: 'Casa Comunes Mensual',parent: 'casa', icon: '🧹', color: '#1e3a8a' },
-  { id: 'casa_comunes_anual',  name: 'Casa Comunes Anual',  parent: 'casa', icon: '🪚', color: '#172554' },
-  { id: 'casa_mudanza',        name: 'Mudanza',             parent: 'casa', icon: '📦', color: '#1e3a8a', hide: true },
-  { id: 'casa_compra',         name: 'Compra Casa',         parent: 'casa', icon: '🏠', color: '#1e3a8a', hide: true },
-  { id: 'casa_obra',           name: 'Obra Casa',           parent: 'casa', icon: '🏗️', color: '#1e3a8a', hide: true },
+  { id: 'casa_fijo_mensual',    name: 'Hipoteca & HOA',        parent: 'casa', icon: '🔑', color: '#1d4ed8', isFixed: true,  isAnnual: false },
+  { id: 'casa_fijo_anual',      name: 'Seguros del Hogar',     parent: 'casa', icon: '🛡️', color: '#1e40af', isFixed: true,  isAnnual: true  },
+  { id: 'casa_comunes_mensual', name: 'Limpieza & Servicio',   parent: 'casa', icon: '🧹', color: '#1e3a8a', isFixed: false, isAnnual: false },
+  { id: 'casa_comunes_anual',   name: 'Mejoras & Reparaciones',parent: 'casa', icon: '🪚', color: '#172554', isFixed: false, isAnnual: true  },
+  { id: 'casa_mudanza',         name: 'Mudanza',               parent: 'casa', icon: '📦', color: '#1e3a8a', isFixed: false, isAnnual: true,  hide: true },
+  { id: 'casa_compra',          name: 'Compra Casa',           parent: 'casa', icon: '🏠', color: '#1e3a8a', isFixed: false, isAnnual: true,  hide: true },
+  { id: 'casa_obra',            name: 'Obra Casa',             parent: 'casa', icon: '🏗️', color: '#1e3a8a', isFixed: false, isAnnual: true,  hide: true },
 
   // ── Kids ────────────────────────────────────────────────────────────────
-  { id: 'kids_activities', name: 'Kids Activities Comunes Anual', parent: 'kids', icon: '⚽', color: '#c2410c' },
-  { id: 'kids_tuition',    name: 'Tuition',                       parent: 'kids', icon: '🎓', color: '#9a3412' },
+  { id: 'kids_activities', name: 'Actividades',   parent: 'kids', icon: '⚽', color: '#c2410c', isFixed: false, isAnnual: true  },
+  { id: 'kids_tuition',    name: 'Tuition',        parent: 'kids', icon: '🎓', color: '#9a3412', isFixed: true,  isAnnual: false },
+  { id: 'kids_colegio',    name: 'Colegio & Útiles',parent: 'kids', icon: '📚', color: '#7c2d12', isFixed: false, isAnnual: false },
 
   // ── Shopping ────────────────────────────────────────────────────────────
-  { id: 'shopping_comunes', name: 'Shopping Comunes Mensual', parent: 'shopping', icon: '🛍️', color: '#7e22ce' },
+  { id: 'shopping_comunes',    name: 'Shopping',        parent: 'shopping',       icon: '🛍️', color: '#7e22ce', isFixed: false, isAnnual: false },
+
+  // ── Suscripciones ────────────────────────────────────────────────────────
+  { id: 'suscripciones_comunes', name: 'Streaming & Apps', parent: 'suscripciones', icon: '📺', color: '#4338ca', isFixed: true, isAnnual: false },
 
   // ── Travel ──────────────────────────────────────────────────────────────
-  { id: 'travel_argentina', name: 'Travel Argentina', parent: 'travel', icon: '🇦🇷', color: '#0f766e' },
-  { id: 'travel_montana',   name: 'Travel Montaña',   parent: 'travel', icon: '⛷️', color: '#115e59' },
-  { id: 'travel_family',    name: 'Travel Family',    parent: 'travel', icon: '🌴', color: '#134e4a' },
-  { id: 'travel_vari',      name: 'Travel Vari',      parent: 'travel', icon: '🗺️', color: '#042f2e' },
-  { id: 'travel_guli',      name: 'Travel Guli',      parent: 'travel', icon: '👶', color: '#022c22' },
+  { id: 'travel_argentina', name: 'Argentina', parent: 'travel', icon: '🇦🇷', color: '#0f766e', isFixed: false, isAnnual: true },
+  { id: 'travel_montana',   name: 'Montaña',   parent: 'travel', icon: '⛷️', color: '#115e59', isFixed: false, isAnnual: true },
+  { id: 'travel_family',    name: 'Familia',   parent: 'travel', icon: '🌴', color: '#134e4a', isFixed: false, isAnnual: true },
+  { id: 'travel_vari',      name: 'Vari',      parent: 'travel', icon: '🗺️', color: '#042f2e', isFixed: false, isAnnual: true },
+  { id: 'travel_guli',      name: 'Guli',      parent: 'travel', icon: '👶', color: '#022c22', isFixed: false, isAnnual: true },
 
   // ── Business ────────────────────────────────────────────────────────────
-  { id: 'business_accenture', name: 'Accenture Expenses', parent: 'business', icon: '💼', color: '#334155' },
-  { id: 'business_realtor',   name: 'Realtor Expenses',   parent: 'business', icon: '🏘️', color: '#1e293b' },
+  { id: 'business_accenture', name: 'Gastos Accenture', parent: 'business', icon: '💼', color: '#334155', isFixed: false, isAnnual: false },
+  { id: 'business_realtor',   name: 'Gastos Realtor',   parent: 'business', icon: '🏘️', color: '#1e293b', isFixed: false, isAnnual: false },
 
-  // ── Donation ────────────────────────────────────────────────────────────
-  { id: 'donation', name: 'Donation', parent: 'donacion', icon: '🤝', color: '#b91c1c' },
+  // ── Donación ────────────────────────────────────────────────────────────
+  { id: 'donation', name: 'Donación', parent: 'donacion', icon: '🤝', color: '#b91c1c', isFixed: false, isAnnual: false },
 
   // ── Cumpleaños ──────────────────────────────────────────────────────────
-  { id: 'cumpleanos_comunes', name: 'Cumpleaños', parent: 'cumpleanos', icon: '🎁', color: '#be185d' },
+  { id: 'cumpleanos_comunes', name: 'Regalos & Celebraciones', parent: 'cumpleanos', icon: '🎁', color: '#be185d', isFixed: false, isAnnual: true },
 
-  // ── Salud ───────────────────────────────────────────────────────────────
-  { id: 'salud_comunes', name: 'Salud', parent: 'salud', icon: '💊', color: '#9d174d' },
+  // ── Salud & Bienestar ───────────────────────────────────────────────────
+  { id: 'salud_comunes', name: 'Médico & Gastos', parent: 'salud', icon: '🩺', color: '#9d174d', isFixed: false, isAnnual: false },
 
   // ── Varios ──────────────────────────────────────────────────────────────
-  { id: 'venmo',           name: 'Venmo',           parent: 'varios', icon: '📱', color: '#4b5563' },
-  { id: 'gastos_argentina',name: 'Gastos Argentina',parent: 'varios', icon: '🇦🇷', color: '#374151', hide: true },
+  { id: 'venmo',            name: 'Venmo',           parent: 'varios', icon: '📱', color: '#4b5563', isFixed: false, isAnnual: false },
+  { id: 'gastos_argentina', name: 'Gastos Argentina',parent: 'varios', icon: '🇦🇷', color: '#374151', isFixed: false, isAnnual: true, hide: true },
 
-  // ── Income Work ─────────────────────────────────────────────────────────
-  { id: 'paycheck',         name: 'Paycheck',         parent: 'income_trabajo', icon: '💵', color: '#14532d', isIncome: true },
-  { id: 'bonus',            name: 'Bonus',            parent: 'income_trabajo', icon: '🎁', color: '#14532d', isIncome: true },
-  { id: 'compra_acciones',  name: 'Compra Acciones',  parent: 'income_trabajo', icon: '📊', color: '#052e16', isIncome: true },
-  { id: 'realtor_income',   name: 'Realtor Income',   parent: 'income_trabajo', icon: '🏘️', color: '#052e16', isIncome: true },
+  // ── Income — Trabajo ────────────────────────────────────────────────────
+  { id: 'paycheck',        name: 'Sueldo',          parent: 'income_trabajo', icon: '💵', color: '#14532d', isIncome: true, isFixed: true,  isAnnual: false },
+  { id: 'bonus',           name: 'Bonus',           parent: 'income_trabajo', icon: '🎁', color: '#14532d', isIncome: true, isFixed: false, isAnnual: true  },
+  { id: 'compra_acciones', name: 'Acciones / ESPP', parent: 'income_trabajo', icon: '📊', color: '#052e16', isIncome: true, isFixed: false, isAnnual: false },
+  { id: 'realtor_income',  name: 'Ingresos Realtor',parent: 'income_trabajo', icon: '🏘️', color: '#052e16', isIncome: true, isFixed: false, isAnnual: false },
 
-  // ── Income Non-Work ─────────────────────────────────────────────────────
-  { id: 'income_interest',  name: 'Interest',         parent: 'income_otros', icon: '💹', color: '#15803d', isIncome: true },
-  { id: 'income_other',     name: 'Other Income',     parent: 'income_otros', icon: '➕', color: '#14532d', isIncome: true },
-  { id: 'taxes',            name: 'Taxes',            parent: 'income_otros', icon: '📋', color: '#052e16', isIncome: true },
-  { id: 'venta_depto',      name: 'Venta Depto',      parent: 'income_otros', icon: '🏠', color: '#052e16', isIncome: true, hide: true },
+  // ── Income — Otros ──────────────────────────────────────────────────────
+  { id: 'income_interest', name: 'Intereses',     parent: 'income_otros', icon: '💹', color: '#15803d', isIncome: true, isFixed: false, isAnnual: false },
+  { id: 'income_other',    name: 'Otros Ingresos',parent: 'income_otros', icon: '➕', color: '#14532d', isIncome: true, isFixed: false, isAnnual: false },
+  { id: 'taxes',           name: 'Impuestos',     parent: 'income_otros', icon: '📋', color: '#052e16', isIncome: true, isFixed: false, isAnnual: true  },
+  { id: 'venta_depto',     name: 'Venta Depto',   parent: 'income_otros', icon: '🏠', color: '#052e16', isIncome: true, isFixed: false, isAnnual: true,  hide: true },
 
   // ── Transfer ────────────────────────────────────────────────────────────
-  { id: 'transfer_cuentas', name: 'Transfer Cuentas', parent: 'transfer', icon: '🔄', color: '#6b7280' },
-  { id: 'transfer_tarjeta', name: 'Pago Tarjeta',     parent: 'transfer', icon: '💳', color: '#4b5563' },
+  { id: 'transfer_cuentas', name: 'Entre Cuentas', parent: 'transfer', icon: '🔄', color: '#6b7280', isFixed: false, isAnnual: false },
+  { id: 'transfer_tarjeta', name: 'Pago Tarjeta',  parent: 'transfer', icon: '💳', color: '#4b5563', isFixed: false, isAnnual: false },
 
   // ── Catch-all ───────────────────────────────────────────────────────────
-  { id: 'uncategorized', name: 'Uncategorized', parent: null, icon: '❓', color: '#d1d5db' },
+  { id: 'uncategorized', name: 'Sin categoría', parent: null, icon: '❓', color: '#d1d5db' },
 ];
 
 export const CATEGORY_MAP = Object.fromEntries(CATEGORIES.map(c => [c.id, c]));
@@ -109,7 +119,19 @@ export const getChildCategories = parentId => CATEGORIES.filter(c => c.parent ==
 export const getIncomeCategories  = ()     => CATEGORIES.filter(c => c.isIncome);
 export const getExpenseCategories = ()     => CATEGORIES.filter(c => !c.isIncome && c.id !== 'transfer' && c.id !== 'uncategorized');
 
-// Flat name → id lookup used by the CSV importer.
+// Derives the three budget-type fields for a given category id.
+// Used by the importer and the enrichment migration script.
+export function getCategoryBudgetFields(categoryId) {
+  const cat = CATEGORY_MAP[categoryId];
+  if (!cat || !cat.parent) return { group: categoryId, isFixed: false, isAnnual: false };
+  return {
+    group:    cat.parent,
+    isFixed:  cat.isFixed  ?? false,
+    isAnnual: cat.isAnnual ?? false,
+  };
+}
+
+// Flat name → id lookup used by the Tiller CSV importer.
 export const CATEGORY_NAME_MAP = {
   'Auto Fijo Mensual':                  'auto_fijo',
   'Auto Comunes Mensual':               'auto_comunes',

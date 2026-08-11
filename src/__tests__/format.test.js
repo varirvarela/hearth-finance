@@ -44,17 +44,20 @@ describe('fmtMonth', () => {
   });
 });
 
+// fmtRelativeDate compares against local midnight, so tests must use local date.
+function localDateStr(offsetDays = 0) {
+  const d = new Date();
+  d.setDate(d.getDate() + offsetDays);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+
 describe('fmtRelativeDate', () => {
   it('returns Today for today', () => {
-    const today = new Date().toISOString().slice(0, 10);
-    expect(fmtRelativeDate(today)).toBe('Today');
+    expect(fmtRelativeDate(localDateStr(0))).toBe('Today');
   });
 
   it('returns Yesterday for yesterday', () => {
-    const d = new Date();
-    d.setDate(d.getDate() - 1);
-    const yesterday = d.toISOString().slice(0, 10);
-    expect(fmtRelativeDate(yesterday)).toBe('Yesterday');
+    expect(fmtRelativeDate(localDateStr(-1))).toBe('Yesterday');
   });
 
   it('falls back to formatted date for older dates', () => {
