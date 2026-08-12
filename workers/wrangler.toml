@@ -11,7 +11,7 @@ id      = "1ff7b7629cd24915be578ec752e1d9e9"
 
 [vars]
 # Change to "development" for real bank connections (free, up to 10 Items per Plaid account).
-PLAID_ENV = "development"
+PLAID_ENV = "sandbox"
 
 # ── Secrets ─────────────────────────────────────────────────────────────────
 # Set each one via:  npx wrangler secret put <NAME>

@@ -1,5 +1,15 @@
 export const CHANGELOG = [
   {
+    version: '0.5.1',
+    date: '2026-08-12',
+    changes: [
+      'Plaid bank connection now works end-to-end in sandbox mode.',
+      'Added "Sync transactions" button on Accounts tab — pulls up to 90 days on first sync, 2 days on subsequent.',
+      'Fixed sync bug that wrote lastSync to the wrong Firebase path.',
+      'Transaction sync now deduplicates by Plaid Item (one API call per institution, not per account).',
+    ],
+  },
+  {
     version: '0.5.0',
     date: '2026-08-05',
     changes: [

@@ -11,6 +11,9 @@ export function renderAccounts(container) {
         <button class="btn-primary" id="link-account" style="flex:1">+ Link Bank Account</button>
         <button class="btn-secondary" id="add-manual" style="flex:1">+ Manual Account</button>
       </div>
+      <div style="margin-top:0.5rem">
+        <button class="btn-ghost" id="sync-now" style="width:100%">Sync transactions</button>
+      </div>
     </div>
   `;
 
@@ -23,6 +26,7 @@ export function renderAccounts(container) {
 
   document.getElementById('link-account').addEventListener('click', () => openPlaidLink(uid));
   document.getElementById('add-manual').addEventListener('click', () => openManualAccountForm(uid));
+  document.getElementById('sync-now').addEventListener('click', () => syncTransactions(uid));
 }
 
 function renderAccountList(accounts) {
@@ -89,6 +93,27 @@ async function openPlaidLink(uid) {
     onExit: (err) => { if (err) console.error('Plaid Link exit error:', err); },
   });
   handler.open();
+}
+
+async function syncTransactions(uid) {
+  const btn = document.getElementById('sync-now');
+  btn.textContent = 'Syncing…';
+  btn.disabled = true;
+  try {
+    const idToken = await auth.currentUser.getIdToken();
+    const res = await fetch(`${WORKER_URL}/sync`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${idToken}` },
+    });
+    const { synced, error } = await res.json();
+    if (error) throw new Error(error);
+    btn.textContent = `Sync transactions (${synced} new)`;
+    setTimeout(() => { btn.textContent = 'Sync transactions'; btn.disabled = false; }, 4000);
+  } catch (err) {
+    console.error('Sync failed:', err);
+    btn.textContent = 'Sync failed — try again';
+    btn.disabled = false;
+  }
 }
 
 function openManualAccountForm(uid) {

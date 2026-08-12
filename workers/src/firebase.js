@@ -39,8 +39,11 @@ async function getAccessToken(env) {
       assertion:  jwt,
     }),
   });
-  const { access_token, error } = await res.json();
-  if (!access_token) throw new Error(`Firebase OAuth failed: ${error}`);
+  const oauthText = await res.text();
+  let oauthData;
+  try { oauthData = JSON.parse(oauthText); } catch { throw new Error(`oauth2 returned non-JSON (${res.status}): ${oauthText.slice(0, 200)}`); }
+  const { access_token, error } = oauthData;
+  if (!access_token) throw new Error(`Firebase OAuth failed: ${JSON.stringify(error)}`);
 
   _token          = access_token;
   _tokenExpiresAt = Date.now() + 55 * 60 * 1000; // refresh 5 min before expiry

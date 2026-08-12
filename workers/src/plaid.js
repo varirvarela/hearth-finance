@@ -43,14 +43,20 @@ export async function createLinkToken(env, uid, slot) {
     method: 'POST',
     headers: plaidHeaders(env, slot),
     body: JSON.stringify({
-      user:          { client_user_id: uid },
+      user: {
+        client_user_id:            uid,
+        phone_number:              '+15005550006',
+        phone_number_verified_time: new Date().toISOString(),
+      },
       client_name:   'Hearth Finance',
       products:      ['transactions'],
       country_codes: ['US'],
       language:      'en',
     }),
   });
-  return res.json();
+  const plaidText = await res.text();
+  console.log('[plaid] createLinkToken status:', res.status, 'body:', plaidText.slice(0, 200));
+  try { return JSON.parse(plaidText); } catch { throw new Error(`Plaid returned non-JSON (${res.status}): ${plaidText.slice(0, 200)}`); }
 }
 
 export async function exchangePublicToken(env, publicToken, slot) {
@@ -94,7 +100,9 @@ async function getUidFromRequest(request, env) {
     `https://identitytoolkit.googleapis.com/v1/accounts:lookup?key=${env.FIREBASE_API_KEY}`,
     { method: 'POST', body: JSON.stringify({ idToken }), headers: { 'Content-Type': 'application/json' } },
   );
-  const data = await res.json();
+  const text = await res.text();
+  let data;
+  try { data = JSON.parse(text); } catch { throw new Error(`identitytoolkit returned non-JSON (${res.status}): ${text.slice(0, 200)}`); }
   return data.users?.[0]?.localId ?? null;
 }
 

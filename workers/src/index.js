@@ -1,6 +1,6 @@
-import { handlePlaid }           from './plaid.js';
-import { handleSync }            from './sync.js';
-import { categorizeTransaction } from './categorize.js';
+import { handlePlaid }                    from './plaid.js';
+import { handleSync, handleUserSync }     from './sync.js';
+import { categorizeTransaction }          from './categorize.js';
 
 const CORS = {
   'Access-Control-Allow-Origin':  '*',
@@ -32,6 +32,14 @@ export default {
 
     try {
       if (pathname.startsWith('/plaid/')) return await handlePlaid(request, env, pathname);
+
+      if (pathname === '/sync' && request.method === 'POST') {
+        const token = (request.headers.get('Authorization') ?? '').replace(/^Bearer\s+/i, '');
+        const uid   = uidFromJwt(token);
+        if (!uid) return json({ error: 'Unauthorized' }, 401);
+        const result = await handleUserSync(env, uid);
+        return json(result);
+      }
 
       if (pathname === '/categorize' && request.method === 'POST') {
         const token = (request.headers.get('Authorization') ?? '').replace(/^Bearer\s+/i, '');
