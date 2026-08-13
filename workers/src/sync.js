@@ -3,25 +3,22 @@ import { getTransactions } from './plaid.js';
 import { categorizeTransaction } from './categorize.js';
 import { evaluateRules } from '../../src/shared/rules.js';
 
-// Cron-triggered: sync last 2 days for every user.
 export async function handleSync(env) {
   const users = await fbGet(env, 'users');
   if (!users) return;
   for (const [uid] of Object.entries(users)) {
-    await handleUserSync(env, uid, 2);
+    await handleUserSync(env, uid);
   }
 }
 
-// Manual or per-user sync. lookbackDays defaults to 90 for first-time sync.
-export async function handleUserSync(env, uid, lookbackDays) {
+export async function handleUserSync(env, uid, { startDate, endDate } = {}) {
   const accounts = await fbGet(env, `accounts/${uid}`).catch(() => null);
-  if (!accounts) return { synced: 0 };
+  if (!accounts) return { synced: 0, errors: 0 };
 
-  const today   = new Date();
-  const endDate = today.toISOString().slice(0, 10);
+  const today       = new Date();
+  const computedEnd = today.toISOString().slice(0, 10);
 
-  // Deduplicate by plaidItemId — one access token covers all accounts in an institution.
-  const itemsSeen = new Map(); // itemId → { token, slot, accountKeys[], firstLastSync }
+  const itemsSeen = new Map();
   for (const [key, account] of Object.entries(accounts)) {
     if (account.isManual || !account.plaidItemId) continue;
     if (!itemsSeen.has(account.plaidItemId)) {
@@ -33,18 +30,32 @@ export async function handleUserSync(env, uid, lookbackDays) {
     itemsSeen.get(account.plaidItemId).accountKeys.push(key);
   }
 
-  const existing   = await fbGet(env, `transactions/${uid}`).catch(() => ({})) ?? {};
-  const rules      = await fbGet(env, `rules/${uid}`).catch(() => ({})) ?? {};
+  const existing         = await fbGet(env, `transactions/${uid}`).catch(() => ({})) ?? {};
+  const rules            = await fbGet(env, `rules/${uid}`).catch(() => ({})) ?? {};
   const existingPlaidIds = new Set(Object.values(existing).map(t => t.plaidId).filter(Boolean));
 
   let synced = 0;
+  let errors = 0;
 
   for (const [itemId, { token, slot, accountKeys, lastSync }] of itemsSeen) {
-    const days = lookbackDays ?? (lastSync ? 2 : 90);
-    const startDate = new Date(today - days * 86400000).toISOString().slice(0, 10);
+    const resolvedStart = startDate ?? new Date(today - (lastSync ? 2 : 730) * 86400000).toISOString().slice(0, 10);
+    const resolvedEnd   = endDate ?? computedEnd;
 
-    const { transactions: plaidTxns, error } = await getTransactions(env, token, startDate, endDate, slot);
-    if (error || !plaidTxns) continue;
+    let plaidTxns;
+    try {
+      const result = await getTransactions(env, token, resolvedStart, resolvedEnd, slot);
+      if (!result.transactions) throw new Error(result.error_message ?? result.error_code ?? 'Plaid error');
+      plaidTxns = result.transactions;
+    } catch (err) {
+      const errPatch = {};
+      for (const key of accountKeys) {
+        errPatch[`accounts/${uid}/${key}/lastSyncStatus`] = 'error';
+        errPatch[`accounts/${uid}/${key}/lastSyncError`]  = err.message;
+      }
+      await fbPatch(env, '', errPatch);
+      errors++;
+      continue;
+    }
 
     for (const plaidTxn of plaidTxns) {
       if (existingPlaidIds.has(plaidTxn.transaction_id)) continue;
@@ -77,13 +88,16 @@ export async function handleUserSync(env, uid, lookbackDays) {
       synced++;
     }
 
-    // Update lastSync on every account that belongs to this item.
     const patch = {};
-    for (const key of accountKeys) patch[`accounts/${uid}/${key}/lastSync`] = endDate;
+    for (const key of accountKeys) {
+      patch[`accounts/${uid}/${key}/lastSync`]       = resolvedEnd;
+      patch[`accounts/${uid}/${key}/lastSyncStatus`] = 'ok';
+      patch[`accounts/${uid}/${key}/lastSyncError`]  = null;
+    }
     await fbPatch(env, '', patch);
   }
 
-  return { synced };
+  return { synced, errors };
 }
 
 function normalizePlaidTransaction(plaidTxn, plaidItemId) {

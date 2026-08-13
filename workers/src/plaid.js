@@ -39,14 +39,17 @@ async function chooseSlot(env, uid) {
 }
 
 export async function createLinkToken(env, uid, slot) {
+  const isSandbox = env.PLAID_ENV === 'sandbox';
   const res = await fetch(plaidUrl(env, '/link/token/create'), {
     method: 'POST',
     headers: plaidHeaders(env, slot),
     body: JSON.stringify({
       user: {
-        client_user_id:            uid,
-        phone_number:              '+15005550006',
-        phone_number_verified_time: new Date().toISOString(),
+        client_user_id: uid,
+        ...(isSandbox && {
+          phone_number:               '+15005550006',
+          phone_number_verified_time: new Date().toISOString(),
+        }),
       },
       client_name:   'Hearth Finance',
       products:      ['transactions'],
@@ -55,7 +58,22 @@ export async function createLinkToken(env, uid, slot) {
     }),
   });
   const plaidText = await res.text();
-  console.log('[plaid] createLinkToken status:', res.status, 'body:', plaidText.slice(0, 200));
+  try { return JSON.parse(plaidText); } catch { throw new Error(`Plaid returned non-JSON (${res.status}): ${plaidText.slice(0, 200)}`); }
+}
+
+export async function createReconnectToken(env, uid, accessToken, slot) {
+  const res = await fetch(plaidUrl(env, '/link/token/create'), {
+    method: 'POST',
+    headers: plaidHeaders(env, slot),
+    body: JSON.stringify({
+      user:          { client_user_id: uid },
+      client_name:   'Hearth Finance',
+      access_token:  accessToken,
+      country_codes: ['US'],
+      language:      'en',
+    }),
+  });
+  const plaidText = await res.text();
   try { return JSON.parse(plaidText); } catch { throw new Error(`Plaid returned non-JSON (${res.status}): ${plaidText.slice(0, 200)}`); }
 }
 
@@ -114,6 +132,14 @@ export async function handlePlaid(request, env, path) {
     const slot = await chooseSlot(env, uid);
     const data = await createLinkToken(env, uid, slot);
     // Return the slot so the frontend can pass it back during exchange
+    return new Response(JSON.stringify({ ...data, slot }), { headers: CORS });
+  }
+
+  if (path === '/plaid/reconnect-token' && request.method === 'POST') {
+    const { itemId, slot = 1 } = await request.json();
+    const token = await env.PLAID_TOKENS.get(`s${slot}:${uid}:${itemId}`);
+    if (!token) return new Response(JSON.stringify({ error: 'Not found' }), { status: 404, headers: CORS });
+    const data = await createReconnectToken(env, uid, token, slot);
     return new Response(JSON.stringify({ ...data, slot }), { headers: CORS });
   }
 

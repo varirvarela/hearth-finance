@@ -439,6 +439,38 @@ input:focus, select:focus, textarea:focus { outline: none; }
 .account-balance { font-size: 0.95rem; font-weight: 700; }
 .account-balance.debt { color: var(--danger); }
 
+.sync-status-dot         { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 6px; flex-shrink: 0; }
+.sync-status-dot.ok      { background: #22c55e; }
+.sync-status-dot.error   { background: #ef4444; }
+.sync-status-dot.unknown { background: #94a3b8; }
+
+.btn-reconnect {
+  font-size: 0.75rem;
+  padding: 2px 8px;
+  border-radius: var(--r-sm);
+  border: 1.5px solid var(--border);
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+  font-weight: 500;
+  width: auto;
+  transition: border-color 0.15s, color 0.15s;
+  -webkit-tap-highlight-color: transparent;
+}
+.btn-reconnect:hover { border-color: var(--brand); color: var(--brand); }
+
+.sync-controls { display: flex; align-items: center; gap: 0.5rem; }
+.sync-controls input[type="date"] {
+  padding: 0.55rem 0.6rem;
+  border: 1.5px solid var(--border);
+  border-radius: var(--r-sm);
+  font-size: 0.85rem;
+  background: var(--surface);
+  min-width: 0;
+  transition: border-color 0.15s;
+}
+.sync-controls input[type="date"]:focus { border-color: var(--brand); outline: none; }
+
 /* ── Settings ──────────────────────────────────────────── */
 .page.settings .section {
   background: var(--surface);

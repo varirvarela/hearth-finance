@@ -37,7 +37,9 @@ export default {
         const token = (request.headers.get('Authorization') ?? '').replace(/^Bearer\s+/i, '');
         const uid   = uidFromJwt(token);
         if (!uid) return json({ error: 'Unauthorized' }, 401);
-        const result = await handleUserSync(env, uid);
+        const body = await request.json().catch(() => ({}));
+        const { startDate, endDate } = body;
+        const result = await handleUserSync(env, uid, { startDate, endDate });
         return json(result);
       }
 

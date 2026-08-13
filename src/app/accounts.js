@@ -4,6 +4,9 @@ import { fmtCurrency, fmtDate } from '../shared/format.js';
 const WORKER_URL = import.meta.env.VITE_WORKER_URL ?? 'http://localhost:8787';
 
 export function renderAccounts(container) {
+  const today   = new Date().toISOString().slice(0, 10);
+  const ninetyAgo = new Date(Date.now() - 90 * 86400000).toISOString().slice(0, 10);
+
   container.innerHTML = `
     <div class="page accounts">
       <div id="account-list"></div>
@@ -12,7 +15,11 @@ export function renderAccounts(container) {
         <button class="btn-secondary" id="add-manual" style="flex:1">+ Manual Account</button>
       </div>
       <div style="margin-top:0.5rem">
-        <button class="btn-ghost" id="sync-now" style="width:100%">Sync transactions</button>
+        <div class="sync-controls">
+          <input type="date" id="sync-from" value="${ninetyAgo}" style="flex:1" />
+          <input type="date" id="sync-to"   value="${today}"     style="flex:1" />
+          <button class="btn-ghost" id="sync-now" style="flex:2">Sync transactions</button>
+        </div>
       </div>
     </div>
   `;
@@ -21,7 +28,7 @@ export function renderAccounts(container) {
   if (!uid) return;
 
   dbListen(`accounts/${uid}`, accounts => {
-    renderAccountList(accounts ?? {});
+    renderAccountList(accounts ?? {}, uid);
   });
 
   document.getElementById('link-account').addEventListener('click', () => openPlaidLink(uid));
@@ -29,7 +36,7 @@ export function renderAccounts(container) {
   document.getElementById('sync-now').addEventListener('click', () => syncTransactions(uid));
 }
 
-function renderAccountList(accounts) {
+function renderAccountList(accounts, uid) {
   const el = document.getElementById('account-list');
   const entries = Object.entries(accounts);
   if (!entries.length) {
@@ -44,9 +51,22 @@ function renderAccountList(accounts) {
     grouped[group].push([id, a]);
   }
 
-  el.innerHTML = Object.entries(grouped).map(([institution, accts]) => `
+  el.innerHTML = Object.entries(grouped).map(([institution, accts]) => {
+    const rep        = accts[0][1];
+    const status     = rep.lastSyncStatus ?? null;
+    const dotClass   = status === 'ok' ? 'ok' : status === 'error' ? 'error' : 'unknown';
+    const itemId     = rep.plaidItemId ?? null;
+    const slot       = rep.plaidSlot ?? 1;
+    const reconnectBtn = itemId
+      ? `<button class="btn-reconnect" data-item-id="${itemId}" data-slot="${slot}">Reconnect</button>`
+      : '';
+    return `
     <div class="account-group">
-      <h3 class="account-institution">${institution}</h3>
+      <div style="display:flex;align-items:center;gap:0.5rem;margin-bottom:0.5rem">
+        <span class="sync-status-dot ${dotClass}"></span>
+        <h3 class="account-institution" style="margin-bottom:0">${institution}</h3>
+        ${reconnectBtn}
+      </div>
       ${accts.map(([id, a]) => `
         <div class="account-row">
           <div class="account-info">
@@ -55,7 +75,12 @@ function renderAccountList(accounts) {
           </div>
           <span class="account-balance ${a.type === 'credit' ? 'debt' : ''}">${fmtCurrency(a.currentBalance ?? 0)}</span>
         </div>`).join('')}
-    </div>`).join('');
+    </div>`;
+  }).join('');
+
+  el.querySelectorAll('.btn-reconnect').forEach(btn => {
+    btn.addEventListener('click', () => reconnectPlaid(uid, btn.dataset.itemId, Number(btn.dataset.slot)));
+  });
 }
 
 async function openPlaidLink(uid) {
@@ -96,16 +121,19 @@ async function openPlaidLink(uid) {
 }
 
 async function syncTransactions(uid) {
-  const btn = document.getElementById('sync-now');
+  const btn       = document.getElementById('sync-now');
+  const startDate = document.getElementById('sync-from').value;
+  const endDate   = document.getElementById('sync-to').value;
   btn.textContent = 'Syncing…';
   btn.disabled = true;
   try {
     const idToken = await auth.currentUser.getIdToken();
     const res = await fetch(`${WORKER_URL}/sync`, {
       method: 'POST',
-      headers: { Authorization: `Bearer ${idToken}` },
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${idToken}` },
+      body: JSON.stringify({ startDate, endDate }),
     });
-    const { synced, error } = await res.json();
+    const { synced, errors, error } = await res.json();
     if (error) throw new Error(error);
     btn.textContent = `Sync transactions (${synced} new)`;
     setTimeout(() => { btn.textContent = 'Sync transactions'; btn.disabled = false; }, 4000);
@@ -113,6 +141,46 @@ async function syncTransactions(uid) {
     console.error('Sync failed:', err);
     btn.textContent = 'Sync failed — try again';
     btn.disabled = false;
+  }
+}
+
+async function reconnectPlaid(uid, itemId, slot) {
+  const btn = document.querySelector(`.btn-reconnect[data-item-id="${itemId}"]`);
+  if (btn) { btn.textContent = 'Connecting…'; btn.disabled = true; }
+  try {
+    const idToken = await auth.currentUser.getIdToken();
+    const res = await fetch(`${WORKER_URL}/plaid/reconnect-token`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${idToken}` },
+      body: JSON.stringify({ itemId, slot }),
+    });
+    if (!res.ok) throw new Error('Failed to get reconnect token');
+    const { link_token } = await res.json();
+
+    if (!window.Plaid) {
+      await new Promise((resolve, reject) => {
+        const s = document.createElement('script');
+        s.src = 'https://cdn.plaid.com/link/v2/stable/link-initialize.js';
+        s.onload = resolve;
+        s.onerror = reject;
+        document.head.appendChild(s);
+      });
+    }
+
+    const handler = window.Plaid.create({
+      token: link_token,
+      onSuccess: () => {
+        if (btn) { btn.textContent = 'Reconnected!'; btn.disabled = false; }
+        setTimeout(() => { if (btn) btn.textContent = 'Reconnect'; }, 3000);
+      },
+      onExit: (err) => {
+        if (btn) { btn.textContent = 'Reconnect'; btn.disabled = false; }
+        if (err) console.error('Plaid reconnect exit error:', err);
+      },
+    });
+    handler.open();
+  } catch (err) {
+    if (btn) { btn.textContent = 'Reconnect'; btn.disabled = false; }
   }
 }
 
