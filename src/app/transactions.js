@@ -1,23 +1,48 @@
 import { dbListen, dbUpdate, auth } from '../shared/firebase.js';
 import { fmtCurrency, fmtDate }     from '../shared/format.js';
 import {
-  CATEGORIES,
   getCategoryById,
   getRootCategories,
   getChildCategories,
 } from '../shared/categories.js';
+
+const PAGE_SIZE = 100;
+
+const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+
+function blankState() {
+  return {
+    query:    '',
+    dateMode: 'all',
+    year:     new Date().getFullYear(),
+    month:    new Date().getMonth() + 1,
+    dateFrom: '',
+    dateTo:   '',
+    type:     'all',
+    amtMin:   '',
+    amtMax:   '',
+    groups:   [],
+    cats:     [],
+    accounts: [],
+    review:   false,
+    pending:  false,
+    page:     0,
+  };
+}
+
+let allTxns    = [];
+let accountMap = {};
 
 export function renderTransactions(container) {
   container.innerHTML = `
     <div class="page transactions">
       <div class="toolbar">
         <input type="search" id="txn-search" placeholder="Search…" />
-        <select id="txn-cat-filter">
-          <option value="">All</option>
-          <option value="__review__">⚠ Needs review</option>
-          ${getRootCategories().map(c => `<option value="${c.id}">${c.icon} ${c.name}</option>`).join('')}
-        </select>
+        <button class="btn-ghost filter-toggle" id="filter-toggle">
+          Filters <span class="filter-badge" id="filter-badge" style="display:none"></span>
+        </button>
       </div>
+      <div class="filter-panel" id="filter-panel"></div>
       <div id="txn-list"></div>
     </div>
   `;
@@ -25,23 +50,18 @@ export function renderTransactions(container) {
   const uid = auth.currentUser?.uid;
   if (!uid) return;
 
-  let allTxns = [];
+  const state = blankState();
+  let filterPanelRendered = false;
 
   const refresh = () => {
-    const query     = document.getElementById('txn-search').value.toLowerCase();
-    const catFilter = document.getElementById('txn-cat-filter').value;
-
-    const filtered = allTxns.filter(([, t]) => {
-      if (catFilter === '__review__') {
-        if (!needsReview(t)) return false;
-      } else if (catFilter) {
-        // Filter by group (denormalized) or by the category itself
-        if (t.group !== catFilter && t.category !== catFilter) return false;
-      }
-      if (query && !t.description?.toLowerCase().includes(query) && !t.merchantName?.toLowerCase().includes(query)) return false;
-      return true;
-    });
-    renderList(filtered, uid);
+    const filtered = applyFilters(allTxns, state);
+    const active   = countActive(state);
+    const badge    = document.getElementById('filter-badge');
+    if (badge) {
+      badge.textContent   = active > 0 ? String(active) : '';
+      badge.style.display = active > 0 ? 'inline-flex' : 'none';
+    }
+    renderPage(filtered, state, uid, refresh);
   };
 
   dbListen(`transactions/${uid}`, txns => {
@@ -49,22 +69,339 @@ export function renderTransactions(container) {
     refresh();
   });
 
-  document.getElementById('txn-search').addEventListener('input', refresh);
-  document.getElementById('txn-cat-filter').addEventListener('change', refresh);
+  dbListen(`accounts/${uid}`, accounts => {
+    accountMap = accounts ?? {};
+    refresh();
+  });
+
+  document.getElementById('txn-search').addEventListener('input', e => {
+    state.query = e.target.value.toLowerCase();
+    state.page  = 0;
+    refresh();
+  });
+
+  document.getElementById('filter-toggle').addEventListener('click', () => {
+    const panel = document.getElementById('filter-panel');
+    if (!filterPanelRendered) {
+      renderFilterPanel(state, accountMap, refresh);
+      filterPanelRendered = true;
+    }
+    panel.classList.toggle('open');
+  });
 }
 
-function needsReview(t) {
-  return t.needsReview === true || t.category === 'uncategorized' || (t.aiConfidence != null && t.aiConfidence < 0.75);
+function renderFilterPanel(state, accountMap, refresh) {
+  const panel   = document.getElementById('filter-panel');
+  const curYear = new Date().getFullYear();
+
+  const yearOptions = Array.from({ length: 6 }, (_, i) => {
+    const y = curYear - i;
+    return `<option value="${y}" ${state.year === y ? 'selected' : ''}>${y}</option>`;
+  }).join('');
+
+  const monthOptions = `<option value="0" ${state.month === 0 ? 'selected' : ''}>All months</option>`
+    + MONTHS.map((m, i) => `<option value="${i + 1}" ${state.month === i + 1 ? 'selected' : ''}>${m}</option>`).join('');
+
+  const roots = getRootCategories();
+
+  const groupPills = roots.map(c => `
+    <button class="pill${state.groups.includes(c.id) ? ' active' : ''}"
+            data-group="${c.id}"
+            style="--pill-color:${c.color}">
+      ${c.icon} ${c.name}
+    </button>`).join('');
+
+  const hasAccounts = Object.values(accountMap).some(a => a.source !== 'manual');
+
+  const accountSection = hasAccounts ? `
+    <div class="filter-section">
+      <span class="filter-label">Account</span>
+      <div class="pill-group" id="f-accounts">
+        ${Object.entries(accountMap)
+          .filter(([, a]) => a.source !== 'manual')
+          .map(([id, a]) => `
+            <button class="pill${state.accounts.includes(id) ? ' active' : ''}" data-account="${id}">
+              ${a.name}
+            </button>`).join('')}
+      </div>
+    </div>` : '';
+
+  panel.innerHTML = `
+    <div class="filter-section">
+      <span class="filter-label">Date</span>
+      <div class="seg-ctrl">
+        <button class="seg${state.dateMode === 'all'   ? ' active' : ''}" data-mode="all">All</button>
+        <button class="seg${state.dateMode === 'month' ? ' active' : ''}" data-mode="month">Month</button>
+        <button class="seg${state.dateMode === 'range' ? ' active' : ''}" data-mode="range">Range</button>
+      </div>
+      <div id="date-month-row" style="${state.dateMode !== 'month' ? 'display:none' : ''}">
+        <select id="f-month">${monthOptions}</select>
+        <select id="f-year">${yearOptions}</select>
+      </div>
+      <div id="date-range-row" style="${state.dateMode !== 'range' ? 'display:none' : ''}">
+        <input type="date" id="f-from" value="${state.dateFrom}">
+        <input type="date" id="f-to"   value="${state.dateTo}">
+      </div>
+    </div>
+
+    <div class="filter-section">
+      <div class="filter-row">
+        <div>
+          <span class="filter-label">Type</span>
+          <div class="seg-ctrl">
+            <button class="seg${state.type === 'all'     ? ' active' : ''}" data-type="all">All</button>
+            <button class="seg${state.type === 'expense' ? ' active' : ''}" data-type="expense">Expense</button>
+            <button class="seg${state.type === 'income'  ? ' active' : ''}" data-type="income">Income</button>
+          </div>
+        </div>
+        <div>
+          <span class="filter-label">Amount</span>
+          <div style="display:flex;gap:0.5rem">
+            <input type="number" id="f-amt-min" placeholder="Min $" value="${state.amtMin}" style="width:80px">
+            <input type="number" id="f-amt-max" placeholder="Max $" value="${state.amtMax}" style="width:80px">
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="filter-section">
+      <span class="filter-label">Category</span>
+      <div class="pill-group" id="f-groups">${groupPills}</div>
+      <div id="f-leaves" class="f-leaf-section" style="${state.groups.length === 0 ? 'display:none' : ''}"></div>
+    </div>
+
+    ${accountSection}
+
+    <div class="filter-section">
+      <span class="filter-label">Status</span>
+      <label class="f-check">
+        <input type="checkbox" id="f-review" ${state.review ? 'checked' : ''}> Needs review
+      </label>
+      <label class="f-check">
+        <input type="checkbox" id="f-pending" ${state.pending ? 'checked' : ''}> Pending
+      </label>
+    </div>
+
+    <div class="filter-section">
+      <button class="btn-ghost" id="f-clear">Clear filters</button>
+    </div>
+  `;
+
+  if (state.groups.length > 0) updateLeafSection(state, refresh);
+
+  panel.querySelectorAll('.seg[data-mode]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      state.dateMode = btn.dataset.mode;
+      state.page     = 0;
+      panel.querySelectorAll('.seg[data-mode]').forEach(b => b.classList.toggle('active', b.dataset.mode === state.dateMode));
+      document.getElementById('date-month-row').style.display = state.dateMode === 'month' ? '' : 'none';
+      document.getElementById('date-range-row').style.display = state.dateMode === 'range' ? '' : 'none';
+      refresh();
+    });
+  });
+
+  document.getElementById('f-month').addEventListener('change', e => {
+    state.month = Number(e.target.value);
+    state.page  = 0;
+    refresh();
+  });
+
+  document.getElementById('f-year').addEventListener('change', e => {
+    state.year = Number(e.target.value);
+    state.page = 0;
+    refresh();
+  });
+
+  document.getElementById('f-from').addEventListener('change', e => {
+    state.dateFrom = e.target.value;
+    state.page     = 0;
+    refresh();
+  });
+
+  document.getElementById('f-to').addEventListener('change', e => {
+    state.dateTo = e.target.value;
+    state.page   = 0;
+    refresh();
+  });
+
+  panel.querySelectorAll('.seg[data-type]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      state.type = btn.dataset.type;
+      state.page = 0;
+      panel.querySelectorAll('.seg[data-type]').forEach(b => b.classList.toggle('active', b.dataset.type === state.type));
+      refresh();
+    });
+  });
+
+  document.getElementById('f-amt-min').addEventListener('input', e => {
+    state.amtMin = e.target.value;
+    state.page   = 0;
+    refresh();
+  });
+
+  document.getElementById('f-amt-max').addEventListener('input', e => {
+    state.amtMax = e.target.value;
+    state.page   = 0;
+    refresh();
+  });
+
+  panel.querySelector('#f-groups').addEventListener('click', e => {
+    const btn = e.target.closest('.pill[data-group]');
+    if (!btn) return;
+    const gid = btn.dataset.group;
+    if (state.groups.includes(gid)) {
+      state.groups = state.groups.filter(g => g !== gid);
+      state.cats   = state.cats.filter(c => getCategoryById(c).parent !== gid);
+    } else {
+      state.groups = [...state.groups, gid];
+    }
+    btn.classList.toggle('active', state.groups.includes(gid));
+    state.page = 0;
+    updateLeafSection(state, refresh);
+    refresh();
+  });
+
+  if (hasAccounts) {
+    panel.querySelector('#f-accounts').addEventListener('click', e => {
+      const btn = e.target.closest('.pill[data-account]');
+      if (!btn) return;
+      const aid = btn.dataset.account;
+      if (state.accounts.includes(aid)) {
+        state.accounts = state.accounts.filter(a => a !== aid);
+      } else {
+        state.accounts = [...state.accounts, aid];
+      }
+      btn.classList.toggle('active', state.accounts.includes(aid));
+      state.page = 0;
+      refresh();
+    });
+  }
+
+  document.getElementById('f-review').addEventListener('change', e => {
+    state.review = e.target.checked;
+    state.page   = 0;
+    refresh();
+  });
+
+  document.getElementById('f-pending').addEventListener('change', e => {
+    state.pending = e.target.checked;
+    state.page    = 0;
+    refresh();
+  });
+
+  document.getElementById('f-clear').addEventListener('click', () => {
+    Object.assign(state, blankState());
+    renderFilterPanel(state, accountMap, refresh);
+    refresh();
+  });
 }
 
-function renderList(entries, uid) {
+function updateLeafSection(state, refresh) {
+  const container = document.getElementById('f-leaves');
+  if (!container) return;
+
+  if (state.groups.length === 0) {
+    container.style.display = 'none';
+    container.innerHTML     = '';
+    return;
+  }
+
+  container.style.display = '';
+  const leaves = state.groups.flatMap(gid => getChildCategories(gid));
+
+  container.innerHTML = leaves.map(leaf => `
+    <label class="f-check">
+      <input type="checkbox" data-cat="${leaf.id}" ${state.cats.includes(leaf.id) ? 'checked' : ''}>
+      ${leaf.icon} ${leaf.name}
+    </label>`).join('');
+
+  container.querySelectorAll('input[data-cat]').forEach(cb => {
+    cb.addEventListener('change', () => {
+      const cid = cb.dataset.cat;
+      if (cb.checked) {
+        if (!state.cats.includes(cid)) state.cats = [...state.cats, cid];
+      } else {
+        state.cats = state.cats.filter(c => c !== cid);
+      }
+      state.page = 0;
+      if (refresh) refresh();
+    });
+  });
+}
+
+function applyFilters(txns, state) {
+  return txns.filter(([, t]) => {
+    if (state.query) {
+      const q = state.query;
+      if (
+        !t.description?.toLowerCase().includes(q) &&
+        !t.merchantName?.toLowerCase().includes(q) &&
+        !t.notes?.toLowerCase().includes(q)
+      ) return false;
+    }
+
+    if (state.dateMode === 'month') {
+      if (state.month === 0) {
+        if (!t.date?.startsWith(String(state.year))) return false;
+      } else {
+        const prefix = `${state.year}-${String(state.month).padStart(2, '0')}`;
+        if (!t.date?.startsWith(prefix)) return false;
+      }
+    }
+
+    if (state.dateMode === 'range') {
+      if (state.dateFrom && t.date < state.dateFrom) return false;
+      if (state.dateTo   && t.date > state.dateTo)   return false;
+    }
+
+    if (state.type === 'expense' && t.amount <= 0) return false;
+    if (state.type === 'income'  && t.amount >= 0) return false;
+
+    if (state.amtMin && Math.abs(t.amount) < Number(state.amtMin)) return false;
+    if (state.amtMax && Math.abs(t.amount) > Number(state.amtMax)) return false;
+
+    if (state.groups.length   > 0 && !state.groups.includes(t.group))       return false;
+    if (state.cats.length     > 0 && !state.cats.includes(t.category))      return false;
+    if (state.accounts.length > 0 && !state.accounts.includes(t.accountId)) return false;
+
+    if (state.review  && !needsReview(t))    return false;
+    if (state.pending && t.pending !== true) return false;
+
+    return true;
+  });
+}
+
+function countActive(state) {
+  let count = 0;
+  if (state.dateMode !== 'all')       count++;
+  if (state.type !== 'all')           count++;
+  if (state.amtMin || state.amtMax)   count++;
+  if (state.groups.length > 0)        count++;
+  if (state.accounts.length > 0)      count++;
+  if (state.review)                   count++;
+  if (state.pending)                  count++;
+  return count;
+}
+
+function renderPage(filtered, state, uid, refresh) {
   const el = document.getElementById('txn-list');
-  if (!entries.length) {
+  if (!el) return;
+
+  if (!filtered.length) {
     el.innerHTML = `<div class="empty"><span class="empty-icon">🔍</span><span>No transactions found.</span></div>`;
     return;
   }
 
-  const rows = entries.map(([id, t]) => {
+  const total      = filtered.length;
+  const totalPages = Math.ceil(total / PAGE_SIZE);
+  const page       = Math.min(state.page, totalPages - 1);
+  state.page       = page;
+
+  const start = page * PAGE_SIZE;
+  const end   = Math.min(start + PAGE_SIZE, total);
+  const slice = filtered.slice(start, end);
+
+  const rows = slice.map(([id, t]) => {
     const cat    = getCategoryById(t.category);
     const review = needsReview(t);
     return `
@@ -78,14 +415,34 @@ function renderList(entries, uid) {
       </div>`;
   }).join('');
 
-  el.innerHTML = `<div class="card-rows">${rows}</div>`;
+  const paginationHTML = total > PAGE_SIZE ? `
+    <div class="pagination">
+      <button class="btn-ghost page-btn" data-p="${page - 1}" ${page === 0 ? 'disabled' : ''}>← Prev</button>
+      <span class="page-info">Page ${page + 1} of ${totalPages}</span>
+      <button class="btn-ghost page-btn" data-p="${page + 1}" ${page === totalPages - 1 ? 'disabled' : ''}>Next →</button>
+    </div>` : '';
+
+  el.innerHTML = `
+    <div class="txn-summary">${total.toLocaleString()} transactions · showing ${start + 1}–${end}</div>
+    <div class="card-rows">${rows}</div>
+    ${paginationHTML}
+  `;
 
   el.querySelectorAll('.cat-btn').forEach(btn => {
     btn.addEventListener('click', () => openCategoryPicker(btn.dataset.id, btn.dataset.cat, uid));
   });
+
+  el.querySelectorAll('.page-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      state.page = Number(btn.dataset.p);
+      refresh();
+    });
+  });
 }
 
-// ── Two-step category picker ─────────────────────────────────────────────────
+function needsReview(t) {
+  return t.needsReview === true || t.category === 'uncategorized' || (t.aiConfidence != null && t.aiConfidence < 0.75);
+}
 
 function openCategoryPicker(txnId, currentCat, uid) {
   const currentCatObj = getCategoryById(currentCat);

@@ -1,5 +1,14 @@
 export const CHANGELOG = [
   {
+    version: '0.5.2',
+    date: '2026-08-13',
+    changes: [
+      'Transactions tab now paginates at 100 rows — no more slow full-list render.',
+      'Added rich filter panel: date (all / month+year / range), type (expense/income), amount range, hierarchical category multi-select, account multi-select, needs-review, pending.',
+      'Active filter count shown on Filters button badge.',
+    ],
+  },
+  {
     version: '0.5.1',
     date: '2026-08-12',
     changes: [
