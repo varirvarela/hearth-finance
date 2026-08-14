@@ -60,12 +60,16 @@ function renderAccountList(accounts, uid) {
     const reconnectBtn = itemId
       ? `<button class="btn-reconnect" data-item-id="${itemId}" data-slot="${slot}">Reconnect</button>`
       : '';
+    const unlinkBtn = itemId
+      ? `<button class="btn-unlink btn-ghost" style="font-size:0.75rem;padding:2px 8px;color:#ef4444;border-color:#ef4444" data-item-id="${itemId}" data-slot="${slot}">Unlink</button>`
+      : '';
     return `
     <div class="account-group">
       <div style="display:flex;align-items:center;gap:0.5rem;margin-bottom:0.5rem">
         <span class="sync-status-dot ${dotClass}"></span>
         <h3 class="account-institution" style="margin-bottom:0">${institution}</h3>
         ${reconnectBtn}
+        ${unlinkBtn}
       </div>
       ${accts.map(([id, a]) => `
         <div class="account-row">
@@ -80,6 +84,10 @@ function renderAccountList(accounts, uid) {
 
   el.querySelectorAll('.btn-reconnect').forEach(btn => {
     btn.addEventListener('click', () => reconnectPlaid(uid, btn.dataset.itemId, Number(btn.dataset.slot)));
+  });
+
+  el.querySelectorAll('.btn-unlink').forEach(btn => {
+    btn.addEventListener('click', () => unlinkAccount(uid, btn.dataset.itemId, Number(btn.dataset.slot)));
   });
 }
 
@@ -182,6 +190,64 @@ async function reconnectPlaid(uid, itemId, slot) {
   } catch (err) {
     if (btn) { btn.textContent = 'Reconnect'; btn.disabled = false; }
   }
+}
+
+async function unlinkAccount(uid, itemId, slot) {
+  await new Promise((resolve, reject) => {
+    const modal = document.createElement('div');
+    modal.className = 'modal-overlay';
+    modal.innerHTML = `
+      <div class="modal">
+        <h3>Unlink account?</h3>
+        <p>This will remove the bank connection and its accounts from Hearth. Your synced transactions can optionally be deleted too.</p>
+        <label style="display:flex;align-items:center;gap:0.5rem;margin-bottom:1rem">
+          <input type="checkbox" id="unlink-delete-txns" />
+          Also delete synced transactions
+        </label>
+        <div style="display:flex;gap:0.5rem;margin-top:1rem">
+          <button class="btn-ghost modal-cancel" style="flex:1">Cancel</button>
+          <button class="btn-primary modal-confirm" style="flex:1;background:#ef4444;border-color:#ef4444">Unlink</button>
+        </div>
+      </div>
+    `;
+    document.body.appendChild(modal);
+
+    modal.querySelector('.modal-cancel').addEventListener('click', () => {
+      modal.remove();
+      reject(new Error('cancelled'));
+    });
+
+    modal.querySelector('.modal-confirm').addEventListener('click', async () => {
+      const deleteTransactions = modal.querySelector('#unlink-delete-txns').checked;
+      modal.remove();
+
+      const btn = document.querySelector(`.btn-unlink[data-item-id="${itemId}"]`);
+      if (btn) { btn.textContent = 'Unlinking…'; btn.disabled = true; }
+
+      try {
+        const idToken = await auth.currentUser.getIdToken();
+        const res = await fetch(`${WORKER_URL}/plaid/remove-account`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${idToken}` },
+          body: JSON.stringify({ itemId, slot, deleteTransactions }),
+        });
+        if (!res.ok) throw new Error('Failed to unlink account');
+        // Firebase listener will automatically update the account list
+        resolve();
+      } catch {
+        alert('Failed to unlink account. Please try again.');
+        if (btn) { btn.textContent = 'Unlink'; btn.disabled = false; }
+        resolve();
+      }
+    });
+
+    modal.addEventListener('click', e => {
+      if (e.target === modal) {
+        modal.remove();
+        reject(new Error('cancelled'));
+      }
+    });
+  }).catch(() => {});
 }
 
 function openManualAccountForm(uid) {

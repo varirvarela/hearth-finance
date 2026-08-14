@@ -1,123 +1,196 @@
-import { dbGet, dbSet, dbListen, auth } from '../shared/firebase.js';
+import { dbListen, dbSet, auth } from '../shared/firebase.js';
 import { fmtCurrency, fmtMonth } from '../shared/format.js';
-import { getRootCategories, getCategoryById } from '../shared/categories.js';
+import { CATEGORIES } from '../shared/categories.js';
 
 export function renderBudgets(container) {
-  const now   = new Date();
-  const year  = now.getFullYear();
-  const month = String(now.getMonth() + 1).padStart(2, '0');
+  const now = new Date();
+  let year  = now.getFullYear();
+  let month = now.getMonth() + 1;
 
   container.innerHTML = `
     <div class="page budgets">
-      <div class="period-toggle">
-        <button class="active" data-period="monthly">Monthly</button>
-        <button data-period="annual">Annual</button>
+      <div class="budget-month-nav">
+        <button id="budget-prev">&#8592;</button>
+        <span id="budget-month-label">${fmtMonth(year, month)}</span>
+        <button id="budget-next">&#8594;</button>
       </div>
-      <div id="budget-period-label" class="page-title">${fmtMonth(year, month)}</div>
+      <div class="budget-summary" id="budget-summary"></div>
       <div id="budget-list"></div>
-      <button class="btn-primary" id="add-budget" style="margin-top:1rem">+ Add Budget</button>
     </div>
   `;
 
   const uid = auth.currentUser?.uid;
   if (!uid) return;
 
-  let period = 'monthly';
+  let latestBudgets = {};
+  let latestTxns    = {};
 
-  const render = () => {
-    const budgetPath = period === 'monthly'
-      ? `budgets/${uid}/${year}/monthly/${month}`
-      : `budgets/${uid}/${year}/annual`;
-    const txnPath = `transactions/${uid}`;
+  const refresh = () => renderBudgetList(uid, latestBudgets, latestTxns, year, month);
 
-    Promise.all([dbGet(budgetPath), dbGet(txnPath)]).then(([budgets, txns]) => {
-      renderBudgetList(budgets ?? {}, txns ?? {}, period, year, month);
-    });
+  const syncNextBtn = () => {
+    const today = new Date();
+    document.getElementById('budget-next').disabled =
+      year === today.getFullYear() && month === today.getMonth() + 1;
   };
 
-  document.querySelectorAll('.period-toggle button').forEach(btn => {
-    btn.addEventListener('click', () => {
-      document.querySelectorAll('.period-toggle button').forEach(b => b.classList.remove('active'));
-      btn.classList.add('active');
-      period = btn.dataset.period;
-      document.getElementById('budget-period-label').textContent =
-        period === 'monthly' ? fmtMonth(year, month) : String(year);
-      render();
-    });
+  syncNextBtn();
+
+  dbListen(`budgets/${uid}`, snap => { latestBudgets = snap ?? {}; refresh(); });
+  dbListen(`transactions/${uid}`, snap => { latestTxns = snap ?? {}; refresh(); });
+
+  document.getElementById('budget-prev').addEventListener('click', () => {
+    month--;
+    if (month < 1) { month = 12; year--; }
+    document.getElementById('budget-month-label').textContent = fmtMonth(year, month);
+    syncNextBtn();
+    refresh();
   });
 
-  document.getElementById('add-budget').addEventListener('click', () => openBudgetEditor(uid, period, year, month, render));
-  render();
+  document.getElementById('budget-next').addEventListener('click', () => {
+    month++;
+    if (month > 12) { month = 1; year++; }
+    document.getElementById('budget-month-label').textContent = fmtMonth(year, month);
+    syncNextBtn();
+    refresh();
+  });
 }
 
-function renderBudgetList(budgets, txns, period, year, month) {
-  const el = document.getElementById('budget-list');
-  const entries = Object.entries(budgets);
-  if (!entries.length) { el.innerHTML = '<p class="empty">No budgets set. Tap + Add Budget to start.</p>'; return; }
+function renderBudgetList(uid, budgets, txns, year, month) {
+  const listEl    = document.getElementById('budget-list');
+  const summaryEl = document.getElementById('budget-summary');
+  if (!listEl || !summaryEl) return;
 
-  const monthStr = `${year}-${month}`;
-  const txnArr   = Object.values(txns).filter(t => !t.ignored && !t.pending && t.amount > 0);
-
-  const spentByCategory = {};
-  for (const t of txnArr) {
-    if (period === 'monthly' && !t.date?.startsWith(monthStr)) continue;
-    if (period === 'annual'  && !t.date?.startsWith(String(year))) continue;
-    spentByCategory[t.category] = (spentByCategory[t.category] ?? 0) + t.amount;
+  const prefix = `${year}-${String(month).padStart(2, '0')}`;
+  const spentByCat = {};
+  for (const t of Object.values(txns)) {
+    if (t.amount > 0 && !t.ignored && !t.isTransfer && t.group !== 'transfer' && t.date?.startsWith(prefix)) {
+      spentByCat[t.category] = (spentByCat[t.category] ?? 0) + t.amount;
+    }
   }
 
-  el.innerHTML = entries.map(([catId, { limit }]) => {
-    const cat   = getCategoryById(catId);
-    const spent = spentByCategory[catId] ?? 0;
-    const pct   = Math.min(100, Math.round((spent / limit) * 100));
-    const color = pct >= 100 ? '#dc2626' : pct >= 80 ? '#f59e0b' : '#16a34a';
-    return `
-      <div class="budget-row">
-        <div class="budget-header">
-          <span>${cat.icon} ${cat.name}</span>
-          <span>${fmtCurrency(spent)} / ${fmtCurrency(limit)}</span>
-        </div>
-        <div class="budget-bar">
-          <div class="budget-bar-fill" style="width:${pct}%;background:${color}"></div>
-        </div>
-        <div class="budget-footer">
-          <span style="color:${color}">${pct}% used</span>
-          <span>${fmtCurrency(Math.max(0, limit - spent))} remaining</span>
-        </div>
+  const expenseLeaves = CATEGORIES.filter(c => c.parent && !c.isIncome);
+
+  const rootMap = new Map();
+  for (const leaf of expenseLeaves) {
+    if (!rootMap.has(leaf.parent)) rootMap.set(leaf.parent, []);
+    rootMap.get(leaf.parent).push(leaf);
+  }
+
+  const rootCats = CATEGORIES.filter(c => !c.parent && !c.isIncome && c.id !== 'transfer' && rootMap.has(c.id));
+
+  let totalBudgeted = 0;
+  let totalSpent    = 0;
+  for (const [catId, data] of Object.entries(budgets)) {
+    if (data?.monthly > 0) {
+      totalBudgeted += data.monthly;
+      totalSpent    += spentByCat[catId] ?? 0;
+    }
+  }
+  summaryEl.innerHTML = `
+    <span>Budgeted: ${fmtCurrency(totalBudgeted)}</span>
+    <span>Spent: ${fmtCurrency(totalSpent)}</span>
+    <span>Remaining: ${fmtCurrency(totalBudgeted - totalSpent)}</span>
+  `;
+
+  let html = '';
+  for (const root of rootCats) {
+    const leaves  = rootMap.get(root.id) ?? [];
+    const visible = leaves.filter(l => (budgets[l.id]?.monthly ?? 0) > 0 || (spentByCat[l.id] ?? 0) > 0);
+    if (!visible.length) continue;
+
+    html += `<div class="budget-group">
+      <div class="budget-group-header" style="color:${root.color}">
+        <span>${root.icon}</span><span>${root.name}</span>
       </div>`;
-  }).join('');
+
+    for (const leaf of visible) {
+      const spent    = spentByCat[leaf.id] ?? 0;
+      const limit    = budgets[leaf.id]?.monthly ?? 0;
+      const hasBudget = limit > 0;
+      const pct      = hasBudget ? Math.min(100, (spent / limit) * 100) : 0;
+      const barColor = pct >= 100 ? '#dc2626' : pct >= 80 ? '#f59e0b' : '#16a34a';
+
+      const badges = [
+        leaf.isFixed  ? '<span class="budget-badge">Fixed</span>'  : '',
+        leaf.isAnnual ? '<span class="budget-badge">Annual</span>' : '',
+      ].join('');
+
+      const limitCell = hasBudget
+        ? `<span class="budget-limit" data-cat="${leaf.id}">${fmtCurrency(limit)}/mo</span>`
+        : `<span class="set-budget-link" data-cat="${leaf.id}">Set budget</span>`;
+
+      const bar = hasBudget
+        ? `<div class="budget-bar-wrap"><div class="budget-bar-inner" style="width:${pct}%;background:${barColor}"></div></div>`
+        : '<div class="budget-bar-wrap"></div>';
+
+      html += `<div class="budget-leaf">
+        <span>${leaf.icon}</span>
+        <span class="budget-leaf-name">${leaf.name}</span>
+        ${badges}
+        <span class="budget-actual">${fmtCurrency(spent)}</span>
+        ${limitCell}
+        ${bar}
+      </div>`;
+    }
+
+    html += '</div>';
+  }
+
+  if (!html) {
+    listEl.innerHTML = '<p class="empty">No budgets set and no spending this month.</p>';
+    return;
+  }
+
+  listEl.innerHTML = html;
+
+  listEl.querySelectorAll('[data-cat]').forEach(el => {
+    el.addEventListener('click', () =>
+      openInlineEdit(el, uid, el.dataset.cat, budgets[el.dataset.cat]?.monthly ?? 0)
+    );
+  });
 }
 
-function openBudgetEditor(uid, period, year, month, onSave) {
-  const cats = getRootCategories().filter(c => !c.isIncome);
-  const modal = document.createElement('div');
-  modal.className = 'modal-overlay';
-  modal.innerHTML = `
-    <div class="modal">
-      <h3>Add Budget</h3>
-      <select id="budget-cat">
-        ${cats.map(c => `<option value="${c.id}">${c.icon} ${c.name}</option>`).join('')}
-      </select>
-      <input type="number" id="budget-limit" placeholder="Monthly limit ($)" min="1" step="1" />
-      <div style="display:flex;gap:0.5rem;margin-top:1rem">
-        <button class="btn-ghost modal-cancel" style="flex:1">Cancel</button>
-        <button class="btn-primary modal-save" style="flex:1">Save</button>
-      </div>
-    </div>
-  `;
-  document.body.appendChild(modal);
+function openInlineEdit(el, uid, catId, currentVal) {
+  const input = document.createElement('input');
+  input.type      = 'number';
+  input.className = 'budget-limit-input';
+  input.value     = currentVal || '';
+  input.min       = '0';
+  input.step      = '1';
+  el.replaceWith(input);
+  input.focus();
+  input.select();
 
-  modal.querySelector('.modal-save').addEventListener('click', async () => {
-    const catId = modal.querySelector('#budget-cat').value;
-    const limit = Number(modal.querySelector('#budget-limit').value);
-    if (!limit || limit <= 0) return;
-    const path = period === 'monthly'
-      ? `budgets/${uid}/${year}/monthly/${month}/${catId}`
-      : `budgets/${uid}/${year}/annual/${catId}`;
-    await dbSet(path, { limit });
-    modal.remove();
-    onSave();
+  let cancelled = false;
+
+  const cancel = () => {
+    cancelled = true;
+    const next = document.createElement('span');
+    if (currentVal > 0) {
+      next.className   = 'budget-limit';
+      next.textContent = `${fmtCurrency(currentVal)}/mo`;
+    } else {
+      next.className   = 'set-budget-link';
+      next.textContent = 'Set budget';
+    }
+    next.dataset.cat = catId;
+    input.replaceWith(next);
+    next.addEventListener('click', () => openInlineEdit(next, uid, catId, currentVal));
+  };
+
+  const save = () => {
+    if (cancelled) return;
+    const val = parseFloat(input.value);
+    if (!isNaN(val) && val > 0) {
+      dbSet(`budgets/${uid}/${catId}`, { monthly: val });
+    } else {
+      cancel();
+    }
+  };
+
+  input.addEventListener('blur', save);
+  input.addEventListener('keydown', e => {
+    if (e.key === 'Enter')  { input.blur(); }
+    if (e.key === 'Escape') { e.preventDefault(); cancel(); }
   });
-
-  modal.querySelector('.modal-cancel').addEventListener('click', () => modal.remove());
-  modal.addEventListener('click', e => { if (e.target === modal) modal.remove(); });
 }

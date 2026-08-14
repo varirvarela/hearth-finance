@@ -1,5 +1,18 @@
 export const CHANGELOG = [
   {
+    version: '0.6.0',
+    date: '2026-08-14',
+    changes: [
+      'Budget tab fully rebuilt: hierarchical category view, inline budget editing, progress bars (green/amber/red), month navigation.',
+      'Dashboard: month ← → navigation, 12-month SVG spending trend chart, "vs Budget" card showing over/under spend.',
+      'Transactions: click any row to expand detail panel with notes, transfer checkbox, source badge, and AI confidence.',
+      'Transactions: account name shown in each row; Tiller accounts now appear in the account filter.',
+      'Transactions: Hide transfers filter on by default — excludes both manually-marked and category-based transfers.',
+      'Accounts: Unlink button per institution — removes bank connection with optional transaction deletion.',
+      'Transfer transactions excluded from spending calculations in budget, dashboard, and trend chart.',
+    ],
+  },
+  {
     version: '0.5.2',
     date: '2026-08-13',
     changes: [

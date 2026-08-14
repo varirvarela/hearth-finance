@@ -174,5 +174,49 @@ export async function handlePlaid(request, env, path) {
     return new Response(JSON.stringify({ ok: true, item_id, slot }), { headers: CORS });
   }
 
+  if (path === '/plaid/remove-account' && request.method === 'POST') {
+    const { itemId, slot = 1, deleteTransactions = false } = await request.json();
+
+    // 1. Get the access token before deleting it from KV
+    const accessToken = await env.PLAID_TOKENS.get(`s${slot}:${uid}:${itemId}`);
+
+    // 2. Remove KV token
+    await env.PLAID_TOKENS.delete(`s${slot}:${uid}:${itemId}`);
+
+    // 3. Find and null-out all accounts for this item in Firebase
+    const { fbGet, fbPatch } = await import('./firebase.js');
+    const accounts = await fbGet(env, `accounts/${uid}`).catch(() => ({})) ?? {};
+    const patch = {};
+    let removed = 0;
+    for (const [key, acct] of Object.entries(accounts)) {
+      if (acct.plaidItemId === itemId) {
+        patch[`accounts/${uid}/${key}`] = null;
+        removed++;
+      }
+    }
+
+    // 4. Optionally delete transactions for this item
+    if (deleteTransactions) {
+      const txns = await fbGet(env, `transactions/${uid}`).catch(() => ({})) ?? {};
+      for (const [key, txn] of Object.entries(txns)) {
+        if (txn.plaidItemId === itemId) patch[`transactions/${uid}/${key}`] = null;
+      }
+    }
+
+    // 5. Write the Firebase patch
+    if (Object.keys(patch).length) await fbPatch(env, '', patch);
+
+    // 6. Tell Plaid to revoke the item (best-effort — don't fail if it errors)
+    if (accessToken) {
+      fetch(plaidUrl(env, '/item/remove'), {
+        method: 'POST',
+        headers: plaidHeaders(env, slot),
+        body: JSON.stringify({ access_token: accessToken }),
+      }).catch(() => {});
+    }
+
+    return new Response(JSON.stringify({ ok: true, removed }), { headers: CORS });
+  }
+
   return new Response(JSON.stringify({ error: 'Not found' }), { status: 404, headers: CORS });
 }

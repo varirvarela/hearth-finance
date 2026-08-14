@@ -783,3 +783,121 @@ button:active  { opacity: 0.7; transform: scale(0.97); }
 .pagination { display: flex; align-items: center; justify-content: center; gap: 1rem; padding: 1rem 0; }
 .page-info { font-size: 0.85rem; color: #64748b; }
 .txn-summary { font-size: 0.8rem; color: #94a3b8; padding: 0.5rem 0; text-align: right; }
+
+/* ── Budgets ────────────────────────────────────────────── */
+.budget-month-nav {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: center;
+  gap: 1rem;
+  margin-bottom: 1rem;
+}
+
+.budget-month-nav button {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-size: 1.2rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.budget-summary {
+  display: flex;
+  justify-content: space-between;
+  padding: 0.5rem 0;
+  font-size: 0.85rem;
+  color: var(--muted);
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 1rem;
+}
+
+.budget-group { margin-bottom: 1.5rem; }
+
+.budget-group-header {
+  font-weight: 600;
+  font-size: 0.9rem;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  margin-bottom: 0.5rem;
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.budget-leaf {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.4rem 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.budget-leaf-name {
+  flex: 1;
+  font-size: 0.9rem;
+}
+
+.budget-actual {
+  font-size: 0.85rem;
+  color: var(--text);
+  min-width: 64px;
+  text-align: right;
+}
+
+.budget-limit {
+  font-size: 0.85rem;
+  color: var(--muted);
+  min-width: 72px;
+  text-align: right;
+  cursor: pointer;
+}
+
+.budget-limit:hover { color: var(--brand); }
+
+.budget-limit-input {
+  width: 80px;
+  font-size: 0.85rem;
+  text-align: right;
+  border: 1px solid var(--brand);
+  border-radius: 4px;
+  padding: 2px 4px;
+}
+
+.budget-bar-wrap {
+  width: 80px;
+  height: 4px;
+  background: var(--border);
+  border-radius: 2px;
+  overflow: hidden;
+  flex-shrink: 0;
+}
+
+.budget-bar-inner {
+  height: 100%;
+  border-radius: 2px;
+  transition: width 0.3s;
+}
+
+.budget-badge {
+  font-size: 0.65rem;
+  font-weight: 600;
+  padding: 1px 5px;
+  border-radius: 10px;
+  background: #f1f5f9;
+  color: var(--muted);
+}
+
+.set-budget-link {
+  font-size: 0.8rem;
+  color: var(--brand);
+  cursor: pointer;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}

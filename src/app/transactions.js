@@ -12,28 +12,56 @@ const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov
 
 function blankState() {
   return {
-    query:    '',
-    dateMode: 'all',
-    year:     new Date().getFullYear(),
-    month:    new Date().getMonth() + 1,
-    dateFrom: '',
-    dateTo:   '',
-    type:     'all',
-    amtMin:   '',
-    amtMax:   '',
-    groups:   [],
-    cats:     [],
-    accounts: [],
-    review:   false,
-    pending:  false,
-    page:     0,
+    query:         '',
+    dateMode:      'all',
+    year:          new Date().getFullYear(),
+    month:         new Date().getMonth() + 1,
+    dateFrom:      '',
+    dateTo:        '',
+    type:          'all',
+    amtMin:        '',
+    amtMax:        '',
+    groups:        [],
+    cats:          [],
+    accounts:      [],
+    review:        false,
+    pending:       false,
+    hideTransfers: true,
+    page:          0,
   };
 }
 
 let allTxns    = [];
 let accountMap = {};
 
+function getSourceBadge(source) {
+  const map = {
+    ai:     { bg: '#dbeafe', color: '#1d4ed8', text: 'AI' },
+    rule:   { bg: '#dcfce7', color: '#15803d', text: 'Rule' },
+    import: { bg: '#fef9c3', color: '#854d0e', text: 'Import' },
+    tiller: { bg: '#fef9c3', color: '#854d0e', text: 'Import' },
+    manual: { bg: '#f3e8ff', color: '#7e22ce', text: 'Manual' },
+    plaid:  { bg: '#f1f5f9', color: '#475569', text: 'Plaid' },
+  };
+  const s = map[source] ?? { bg: '#f1f5f9', color: '#475569', text: source ?? '—' };
+  return `<span style="background:${s.bg};color:${s.color};border-radius:20px;padding:2px 8px;font-size:0.75rem;font-weight:600">${s.text}</span>`;
+}
+
 export function renderTransactions(container) {
+  if (!document.getElementById('txn-detail-styles')) {
+    const style = document.createElement('style');
+    style.id = 'txn-detail-styles';
+    style.textContent = `
+      .txn-detail { padding: 0.75rem 1rem; background: #f8fafc; border-bottom: 1px solid var(--border); font-size: 0.85rem; }
+      .txn-detail-grid { display: grid; gap: 0.35rem; }
+      .txn-detail-row { display: flex; gap: 0.5rem; align-items: flex-start; }
+      .txn-dl { color: var(--muted); min-width: 110px; flex-shrink: 0; font-size: 0.8rem; padding-top: 2px; }
+      .txn-dv { color: var(--text); flex: 1; }
+      .txn-notes-input { width: 100%; border: 1px solid var(--border); border-radius: 6px; padding: 4px 8px; font-size: 0.85rem; resize: vertical; font-family: inherit; }
+    `;
+    document.head.appendChild(style);
+  }
+
   container.innerHTML = `
     <div class="page transactions">
       <div class="toolbar">
@@ -61,7 +89,7 @@ export function renderTransactions(container) {
       badge.textContent   = active > 0 ? String(active) : '';
       badge.style.display = active > 0 ? 'inline-flex' : 'none';
     }
-    renderPage(filtered, state, uid, refresh);
+    renderPage(filtered, state, uid, refresh, accountMap);
   };
 
   dbListen(`transactions/${uid}`, txns => {
@@ -111,18 +139,30 @@ function renderFilterPanel(state, accountMap, refresh) {
       ${c.icon} ${c.name}
     </button>`).join('');
 
-  const hasAccounts = Object.values(accountMap).some(a => a.source !== 'manual');
+  // Build combined accounts list: Plaid accounts + Tiller accounts from transactions
+  const plaidAccounts = Object.entries(accountMap)
+    .filter(([, a]) => !a.isManual)
+    .map(([id, a]) => ({ key: id, name: a.name }));
+
+  const plaidNames       = new Set(plaidAccounts.map(a => a.name));
+  const tillerNamesSeen  = new Set();
+  allTxns.forEach(([, t]) => {
+    if ((t.source === 'tiller' || t.categorySource === 'import') && t.accountName && !plaidNames.has(t.accountName)) {
+      tillerNamesSeen.add(t.accountName);
+    }
+  });
+  const tillerAccounts   = [...tillerNamesSeen].map(name => ({ key: name, name }));
+  const combinedAccounts = [...plaidAccounts, ...tillerAccounts];
+  const hasAccounts      = combinedAccounts.length > 0;
 
   const accountSection = hasAccounts ? `
     <div class="filter-section">
       <span class="filter-label">Account</span>
       <div class="pill-group" id="f-accounts">
-        ${Object.entries(accountMap)
-          .filter(([, a]) => a.source !== 'manual')
-          .map(([id, a]) => `
-            <button class="pill${state.accounts.includes(id) ? ' active' : ''}" data-account="${id}">
-              ${a.name}
-            </button>`).join('')}
+        ${combinedAccounts.map(acc => `
+          <button class="pill${state.accounts.includes(acc.key) ? ' active' : ''}" data-account="${acc.key}">
+            ${acc.name}
+          </button>`).join('')}
       </div>
     </div>` : '';
 
@@ -179,6 +219,9 @@ function renderFilterPanel(state, accountMap, refresh) {
       </label>
       <label class="f-check">
         <input type="checkbox" id="f-pending" ${state.pending ? 'checked' : ''}> Pending
+      </label>
+      <label class="f-check">
+        <input type="checkbox" id="f-transfers" ${state.hideTransfers ? 'checked' : ''}> Hide transfers
       </label>
     </div>
 
@@ -289,6 +332,12 @@ function renderFilterPanel(state, accountMap, refresh) {
     refresh();
   });
 
+  document.getElementById('f-transfers').addEventListener('change', e => {
+    state.hideTransfers = e.target.checked;
+    state.page          = 0;
+    refresh();
+  });
+
   document.getElementById('f-clear').addEventListener('click', () => {
     Object.assign(state, blankState());
     renderFilterPanel(state, accountMap, refresh);
@@ -331,6 +380,8 @@ function updateLeafSection(state, refresh) {
 
 function applyFilters(txns, state) {
   return txns.filter(([, t]) => {
+    if (state.hideTransfers && (t.isTransfer || t.group === 'transfer')) return false;
+
     if (state.query) {
       const q = state.query;
       if (
@@ -360,9 +411,11 @@ function applyFilters(txns, state) {
     if (state.amtMin && Math.abs(t.amount) < Number(state.amtMin)) return false;
     if (state.amtMax && Math.abs(t.amount) > Number(state.amtMax)) return false;
 
-    if (state.groups.length   > 0 && !state.groups.includes(t.group))       return false;
-    if (state.cats.length     > 0 && !state.cats.includes(t.category))      return false;
-    if (state.accounts.length > 0 && !state.accounts.includes(t.accountId)) return false;
+    if (state.groups.length > 0 && !state.groups.includes(t.group))    return false;
+    if (state.cats.length   > 0 && !state.cats.includes(t.category))   return false;
+
+    if (state.accounts.length > 0 &&
+        !(state.accounts.includes(t.accountId) || state.accounts.includes(t.accountName))) return false;
 
     if (state.review  && !needsReview(t))    return false;
     if (state.pending && t.pending !== true) return false;
@@ -383,7 +436,7 @@ function countActive(state) {
   return count;
 }
 
-function renderPage(filtered, state, uid, refresh) {
+function renderPage(filtered, state, uid, refresh, accountMap) {
   const el = document.getElementById('txn-list');
   if (!el) return;
 
@@ -402,14 +455,19 @@ function renderPage(filtered, state, uid, refresh) {
   const slice = filtered.slice(start, end);
 
   const rows = slice.map(([id, t]) => {
-    const cat    = getCategoryById(t.category);
-    const review = needsReview(t);
+    const cat      = getCategoryById(t.category);
+    const review   = needsReview(t);
+    const acctName = t.accountName || accountMap[t.accountId]?.name || '';
+    const acctHTML = acctName
+      ? `<span class="txn-acct" style="font-size:0.75rem;color:var(--muted);display:block;margin-top:1px">${acctName}</span>`
+      : '';
     return `
       <div class="txn-row${review ? ' needs-review' : ''}" data-id="${id}">
         <button class="txn-icon cat-btn" title="Change category" data-id="${id}" data-cat="${t.category}">${cat.icon}</button>
         <div class="txn-meta">
           <span class="txn-desc">${t.merchantName ?? t.description}</span>
           <span class="txn-date">${fmtDate(t.date)} · <span class="cat-tag" style="color:${cat.color}">${cat.name}</span>${review ? ' <span class="review-tag">· revisar</span>' : ''}</span>
+          ${acctHTML}
         </div>
         <span class="txn-amount ${t.amount < 0 ? 'income' : ''}">${t.amount < 0 ? '−' : ''}${fmtCurrency(Math.abs(t.amount))}</span>
       </div>`;
@@ -436,6 +494,56 @@ function renderPage(filtered, state, uid, refresh) {
     btn.addEventListener('click', () => {
       state.page = Number(btn.dataset.p);
       refresh();
+    });
+  });
+
+  el.querySelectorAll('.txn-row').forEach(row => {
+    const id    = row.dataset.id;
+    const entry = slice.find(([sid]) => sid === id);
+    if (!entry) return;
+    const [, t] = entry;
+
+    row.addEventListener('click', e => {
+      if (e.target.closest('.cat-btn')) return;
+
+      const existingDetail = document.querySelector('.txn-detail');
+      if (existingDetail) {
+        const wasThisRow = existingDetail.previousElementSibling === row;
+        existingDetail.remove();
+        if (wasThisRow) return;
+      }
+
+      const accountName     = t.accountName || accountMap[t.accountId]?.name || '—';
+      const sourceBadgeHTML = getSourceBadge(t.categorySource);
+
+      const detail = document.createElement('div');
+      detail.className = 'txn-detail';
+      detail.innerHTML = `
+        <div class="txn-detail-grid">
+          <div class="txn-detail-row"><span class="txn-dl">Description</span><span class="txn-dv">${t.description}</span></div>
+          <div class="txn-detail-row"><span class="txn-dl">Original</span><span class="txn-dv">${t.fullDescription ?? t.originalDescription ?? '—'}</span></div>
+          <div class="txn-detail-row"><span class="txn-dl">Account</span><span class="txn-dv">${accountName}</span></div>
+          <div class="txn-detail-row"><span class="txn-dl">Date</span><span class="txn-dv">${t.date}</span></div>
+          <div class="txn-detail-row"><span class="txn-dl">Source</span><span class="txn-dv">${sourceBadgeHTML}</span></div>
+          ${t.aiConfidence != null ? `<div class="txn-detail-row"><span class="txn-dl">AI confidence</span><span class="txn-dv">${Math.round(t.aiConfidence * 100)}%</span></div>` : ''}
+          ${t.plaidCategory ? `<div class="txn-detail-row"><span class="txn-dl">Plaid category</span><span class="txn-dv">${t.plaidCategory}</span></div>` : ''}
+          <div class="txn-detail-row"><span class="txn-dl">Notes</span><span class="txn-dv"><textarea class="txn-notes-input" data-id="${id}" rows="2" placeholder="Add a note…">${t.notes ?? ''}</textarea></span></div>
+          <div class="txn-detail-row"><span class="txn-dl">Transfer</span><span class="txn-dv"><label style="display:flex;align-items:center;gap:0.4rem;cursor:pointer"><input type="checkbox" class="txn-transfer-chk" data-id="${id}" ${t.isTransfer ? 'checked' : ''}> Mark as inter-account transfer (excluded from spending)</label></span></div>
+        </div>
+      `;
+
+      row.insertAdjacentElement('afterend', detail);
+
+      const originalNotes = t.notes ?? '';
+      detail.querySelector('.txn-notes-input').addEventListener('blur', e2 => {
+        if (e2.target.value !== originalNotes) {
+          dbUpdate(`transactions/${uid}/${id}`, { notes: e2.target.value });
+        }
+      });
+
+      detail.querySelector('.txn-transfer-chk').addEventListener('change', e2 => {
+        dbUpdate(`transactions/${uid}/${id}`, { isTransfer: e2.target.checked });
+      });
     });
   });
 }
@@ -505,7 +613,10 @@ function openCategoryPicker(txnId, currentCat, uid) {
 
     modal.querySelector('.picker-back-btn').addEventListener('click', renderGroupStep);
     modal.querySelector('.modal-cancel').addEventListener('click', () => modal.remove());
-    modal.querySelector('.modal-rule').addEventListener('click', () => { modal.remove(); /* TODO: open rule builder */ });
+    modal.querySelector('.modal-rule').addEventListener('click', () => {
+      modal.remove();
+      location.hash = '#settings';
+    });
 
     modal.querySelectorAll('.picker-leaf-btn').forEach(btn => {
       btn.addEventListener('click', async () => {
