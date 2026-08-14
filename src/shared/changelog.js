@@ -1,5 +1,12 @@
 export const CHANGELOG = [
   {
+    version: '0.8.1',
+    date: '2026-08-14',
+    changes: [
+      'Internal: extracted filter utility functions into a shared module and added 61 unit tests covering all filter branches.',
+    ],
+  },
+  {
     version: '0.8.0',
     date: '2026-08-14',
     changes: [
