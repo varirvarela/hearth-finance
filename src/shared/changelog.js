@@ -1,5 +1,16 @@
 export const CHANGELOG = [
   {
+    version: '0.9.0',
+    date: '2026-08-14',
+    changes: [
+      'Responsive layout: on tablet and desktop the app uses a left sidebar navigation instead of a bottom bar.',
+      'Content is no longer constrained to a narrow mobile column — pages expand to 900px on tablet and 1080px on large screens.',
+      'Modals and category pickers appear as centered dialogs on desktop instead of bottom sheets.',
+      'The sign-in screen uses a split hero + form layout on wider screens.',
+      'Dashboard metric cards reflow to a single three-card row on wider screens.',
+    ],
+  },
+  {
     version: '0.8.1',
     date: '2026-08-14',
     changes: [

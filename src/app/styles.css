@@ -901,3 +901,149 @@ button:active  { opacity: 0.7; transform: scale(0.97); }
   text-decoration: underline;
   text-underline-offset: 2px;
 }
+
+/* ── Responsive: tablet + desktop ─────────────────────── */
+
+/* Centered-modal entry animation (referenced in media query) */
+@keyframes modal-in {
+  from { opacity: 0; transform: scale(0.96) translateY(-10px); }
+  to   { opacity: 1; transform: scale(1) translateY(0); }
+}
+
+/* Nav brand is hidden on mobile (sidebar only) */
+.nav-brand {
+  display: none;
+  align-items: center;
+  gap: 0.55rem;
+  padding: 0.25rem 1.25rem 1.25rem;
+  margin-bottom: 0.5rem;
+  border-bottom: 1px solid var(--border);
+  font-size: 1.05rem;
+  font-weight: 700;
+  color: var(--text);
+  letter-spacing: -0.2px;
+}
+.nav-brand-icon { font-size: 1.35rem; }
+
+@media (min-width: 768px) {
+  /* ── App shell: switch to row layout ── */
+  #app-shell {
+    flex-direction: row;
+    height: 100dvh;
+    overflow: hidden;
+  }
+
+  /* ── Left sidebar nav ── */
+  .bottom-nav {
+    position: sticky;
+    top: 0;
+    left: unset;
+    right: unset;
+    width: 220px;
+    height: 100dvh;
+    flex-direction: column;
+    align-items: stretch;
+    justify-content: flex-start;
+    border-top: none;
+    border-right: 1px solid var(--border);
+    box-shadow: none;
+    padding: 1.25rem 0 1.5rem;
+    overflow-y: auto;
+  }
+
+  .nav-brand { display: flex; }
+
+  .nav-tab {
+    flex-direction: row;
+    justify-content: flex-start;
+    gap: 0.75rem;
+    padding: 0.7rem 1.25rem;
+    font-size: 0.88rem;
+    border-radius: 0;
+  }
+
+  .nav-tab .nav-icon { font-size: 1.15rem; }
+
+  /* No bounce animation on desktop */
+  .nav-tab.active .nav-icon { transform: none; }
+
+  /* Replace circle dot with left-edge accent bar */
+  .nav-tab.active::after {
+    top: 0;
+    bottom: 0;
+    left: 0;
+    width: 3px;
+    height: unset;
+    border-radius: 0 2px 2px 0;
+  }
+
+  /* ── Scrollable main content ── */
+  #main {
+    flex: 1;
+    min-width: 0;
+    height: 100dvh;
+    overflow-y: auto;
+    padding-bottom: 2rem;
+  }
+
+  /* ── Wider page content ── */
+  .page {
+    max-width: 900px;
+    padding: 2rem 2rem 2rem;
+  }
+
+  /* ── Auth: side-by-side hero + form ── */
+  #auth-screen {
+    flex-direction: row;
+    min-height: 100dvh;
+  }
+
+  .auth-hero {
+    flex: 1;
+    border-radius: 0;
+  }
+
+  .auth-card {
+    width: 440px;
+    flex: none;
+    border-radius: 0;
+    min-height: 100dvh;
+    padding: 3rem 2.5rem;
+    justify-content: center;
+    box-shadow: -8px 0 32px rgba(0, 0, 0, 0.08);
+  }
+
+  /* ── Modals: centered dialogs, not bottom sheets ── */
+  .modal-overlay { align-items: center; }
+
+  .modal {
+    border-radius: var(--r-xl);
+    max-height: 85dvh;
+    overflow-y: auto;
+    padding-bottom: 2rem;
+    animation: modal-in 0.22s cubic-bezier(0.32, 0.72, 0, 1);
+  }
+
+  /* Hide the mobile drag handle */
+  .modal::before { display: none; }
+
+  /* ── Dashboard: 3 metric cards in one row ── */
+  .card-grid { grid-template-columns: repeat(3, 1fr); }
+
+  /* ── Filter panel: horizontal sections when open ── */
+  .filter-panel.open {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 0.25rem 1.5rem;
+    padding: 1rem 1.25rem;
+  }
+  /* Let filter-section that has the pill-group use full width */
+  .filter-panel.open .filter-section:has(.pill-group) {
+    grid-column: 1 / -1;
+  }
+}
+
+/* ── Large desktop ── */
+@media (min-width: 1200px) {
+  .page { max-width: 1080px; }
+}
