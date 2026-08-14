@@ -1,5 +1,17 @@
 export const CHANGELOG = [
   {
+    version: '1.0.0',
+    date:    '2026-08-14',
+    changes: [
+      'Transactions: full visual redesign — colored category icon backgrounds, bolder merchant names, cleaner amount/date layout, and a pending badge.',
+      'Transactions: needs-review rows now surface the AI-suggested category inline with one-tap Confirm or Change buttons.',
+      'Transactions: after confirming or changing a category, a prompt offers to create a permanent matching rule in one click.',
+      'Filters: new Source filter — quickly show only AI-categorized, rule-categorized, manually set, imported (Tiller), or Plaid transactions.',
+      'Filters: account list now scrolls instead of expanding to multiple rows.',
+      'Filters: redesigned pill chips, segment controls, and panel layout for a cleaner look on both mobile and desktop.',
+    ],
+  },
+  {
     version: '0.9.0',
     date: '2026-08-14',
     changes: [

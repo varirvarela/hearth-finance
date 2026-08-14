@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { blankState, needsReview, applyFilters, countActive } from '../shared/filter-utils.js';
+import { blankState, needsReview, applyFilters, countActive, normalizeSource } from '../shared/filter-utils.js';
 
 // [id, txnObject] tuple — mirrors the format transactions.js uses
 const tx = (id, overrides = {}) => [id, {
@@ -29,11 +29,12 @@ describe('blankState', () => {
   it('type defaults to all', () => {
     expect(blankState().type).toBe('all');
   });
-  it('starts with empty groups, cats, and accounts', () => {
+  it('starts with empty groups, cats, accounts, and sources', () => {
     const s = blankState();
     expect(s.groups).toHaveLength(0);
     expect(s.cats).toHaveLength(0);
     expect(s.accounts).toHaveLength(0);
+    expect(s.sources).toHaveLength(0);
   });
   it('review and pending default to false', () => {
     const s = blankState();
@@ -315,6 +316,95 @@ describe('applyFilters — review and pending', () => {
   });
 });
 
+// ── normalizeSource ───────────────────────────────────────────────────────────
+
+describe('normalizeSource', () => {
+  it('returns "import" for categorySource tiller', () => {
+    expect(normalizeSource({ categorySource: 'tiller' })).toBe('import');
+  });
+  it('returns "import" for categorySource import', () => {
+    expect(normalizeSource({ categorySource: 'import' })).toBe('import');
+  });
+  it('returns "ai" for categorySource ai', () => {
+    expect(normalizeSource({ categorySource: 'ai' })).toBe('ai');
+  });
+  it('returns "manual" for categorySource manual', () => {
+    expect(normalizeSource({ categorySource: 'manual' })).toBe('manual');
+  });
+  it('falls back to t.source when categorySource is absent', () => {
+    expect(normalizeSource({ source: 'plaid' })).toBe('plaid');
+  });
+  it('returns empty string when neither field is set', () => {
+    expect(normalizeSource({})).toBe('');
+  });
+});
+
+// ── applyFilters — source filter ──────────────────────────────────────────────
+
+describe('applyFilters — sources', () => {
+  it('empty sources array passes all transactions', () => {
+    const txns = [
+      tx('a', { categorySource: 'ai'     }),
+      tx('b', { categorySource: 'manual' }),
+      tx('c', { categorySource: 'rule'   }),
+    ];
+    expect(applyFilters(txns, st({ sources: [] }))).toHaveLength(3);
+  });
+
+  it('filters to AI-categorized transactions', () => {
+    const txns = [
+      tx('a', { categorySource: 'ai'     }),
+      tx('b', { categorySource: 'manual' }),
+    ];
+    const result = applyFilters(txns, st({ sources: ['ai'] }));
+    expect(result).toHaveLength(1);
+    expect(result[0][0]).toBe('a');
+  });
+
+  it('filters to manually categorized transactions', () => {
+    const txns = [
+      tx('a', { categorySource: 'ai'     }),
+      tx('b', { categorySource: 'manual' }),
+      tx('c', { categorySource: 'rule'   }),
+    ];
+    const result = applyFilters(txns, st({ sources: ['manual'] }));
+    expect(result).toHaveLength(1);
+    expect(result[0][0]).toBe('b');
+  });
+
+  it('normalizes tiller and import both match the "import" source filter', () => {
+    const txns = [
+      tx('a', { categorySource: 'tiller' }),
+      tx('b', { categorySource: 'import' }),
+      tx('c', { categorySource: 'ai'     }),
+    ];
+    const result = applyFilters(txns, st({ sources: ['import'] }));
+    expect(result).toHaveLength(2);
+    expect(result.map(([id]) => id)).toEqual(expect.arrayContaining(['a', 'b']));
+  });
+
+  it('multiple sources are inclusive (OR logic)', () => {
+    const txns = [
+      tx('a', { categorySource: 'ai'     }),
+      tx('b', { categorySource: 'manual' }),
+      tx('c', { categorySource: 'rule'   }),
+    ];
+    const result = applyFilters(txns, st({ sources: ['ai', 'manual'] }));
+    expect(result).toHaveLength(2);
+    expect(result.map(([id]) => id)).toEqual(expect.arrayContaining(['a', 'b']));
+  });
+
+  it('falls back to t.source when categorySource is absent', () => {
+    const txns = [
+      tx('a', { source: 'plaid', categorySource: undefined }),
+      tx('b', { source: 'tiller', categorySource: undefined }),
+    ];
+    const result = applyFilters(txns, st({ sources: ['plaid'] }));
+    expect(result).toHaveLength(1);
+    expect(result[0][0]).toBe('a');
+  });
+});
+
 // ── countActive ───────────────────────────────────────────────────────────────
 
 describe('countActive', () => {
@@ -344,6 +434,10 @@ describe('countActive', () => {
   it('counts non-empty accounts', () => {
     expect(countActive(st({ accounts: ['acct-1'] }))).toBe(1);
   });
+  it('counts non-empty sources', () => {
+    expect(countActive(st({ sources: ['ai'] }))).toBe(1);
+    expect(countActive(st({ sources: ['ai', 'manual'] }))).toBe(1);
+  });
   it('counts review flag', () => {
     expect(countActive(st({ review: true }))).toBe(1);
   });
@@ -364,8 +458,9 @@ describe('countActive', () => {
       amtMin:   '10',
       groups:   ['food'],
       accounts: ['acct-1'],
+      sources:  ['ai'],
       review:   true,
       pending:  true,
-    }))).toBe(7);
+    }))).toBe(8);
   });
 });

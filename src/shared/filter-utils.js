@@ -12,6 +12,7 @@ export function blankState() {
     groups:        [],
     cats:          [],
     accounts:      [],
+    sources:       [],
     review:        false,
     pending:       false,
     hideTransfers: true,
@@ -21,6 +22,14 @@ export function blankState() {
 
 export function needsReview(t) {
   return t.needsReview === true || t.category === 'uncategorized' || (t.aiConfidence != null && t.aiConfidence < 0.75);
+}
+
+// Normalize the raw source values stored on a transaction to a canonical bucket
+// used by the source filter UI.
+export function normalizeSource(t) {
+  const raw = t.categorySource ?? t.source ?? '';
+  if (raw === 'tiller' || raw === 'import') return 'import';
+  return raw; // 'ai' | 'rule' | 'manual' | 'plaid' | ''
 }
 
 export function applyFilters(txns, state) {
@@ -62,6 +71,8 @@ export function applyFilters(txns, state) {
     if (state.accounts.length > 0 &&
         !(state.accounts.includes(t.accountId) || state.accounts.includes(t.accountName))) return false;
 
+    if (state.sources.length > 0 && !state.sources.includes(normalizeSource(t))) return false;
+
     if (state.review  && !needsReview(t))    return false;
     if (state.pending && t.pending !== true) return false;
 
@@ -76,6 +87,7 @@ export function countActive(state) {
   if (state.amtMin || state.amtMax)   count++;
   if (state.groups.length > 0)        count++;
   if (state.accounts.length > 0)      count++;
+  if (state.sources.length > 0)       count++;
   if (state.review)                   count++;
   if (state.pending)                  count++;
   return count;
