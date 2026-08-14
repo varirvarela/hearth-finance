@@ -1,5 +1,24 @@
 export const CHANGELOG = [
   {
+    version: '0.8.0',
+    date: '2026-08-14',
+    changes: [
+      'Partner sharing: when a partner is linked, their transactions, accounts, and budgets are combined with yours across all tabs.',
+      'Transactions: partner transactions show a pill badge with the partner\'s initial and are read-only (notes, transfer flag, and category cannot be changed).',
+      'Accounts: partner institutions are marked with a "Partner" badge; Reconnect/Unlink controls are hidden for partner accounts.',
+      'Dashboard and Budgets: spending totals and budget calculations now include partner transactions.',
+    ],
+  },
+  {
+    version: '0.7.0',
+    date: '2026-08-14',
+    changes: [
+      'Settings: new Recurring Transactions section — define monthly bill and income templates, generate them as real transactions for any month with a single tap.',
+      'Settings: "Apply rules to existing transactions" batch button — re-categorizes all non-manual transactions in one click.',
+      'Transactions: clicking "Add Rule" in the category picker now pre-fills the merchant name in the rule editor.',
+    ],
+  },
+  {
     version: '0.6.0',
     date: '2026-08-14',
     changes: [

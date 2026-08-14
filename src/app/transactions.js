@@ -1,4 +1,4 @@
-import { dbListen, dbUpdate, auth } from '../shared/firebase.js';
+import { dbListen, dbGet, dbUpdate, auth, getPartnerUid } from '../shared/firebase.js';
 import { fmtCurrency, fmtDate }     from '../shared/format.js';
 import {
   getCategoryById,
@@ -31,8 +31,10 @@ function blankState() {
   };
 }
 
-let allTxns    = [];
-let accountMap = {};
+let allTxns        = [];
+let partnerAllTxns = [];
+let partnerInitial = 'P';
+let accountMap     = {};
 
 function getSourceBadge(source) {
   const map = {
@@ -78,11 +80,16 @@ export function renderTransactions(container) {
   const uid = auth.currentUser?.uid;
   if (!uid) return;
 
+  partnerAllTxns = [];
+  partnerInitial = 'P';
+
   const state = blankState();
   let filterPanelRendered = false;
 
   const refresh = () => {
-    const filtered = applyFilters(allTxns, state);
+    const combined = [...allTxns, ...partnerAllTxns]
+      .sort((a, b) => b[1].date.localeCompare(a[1].date));
+    const filtered = applyFilters(combined, state);
     const active   = countActive(state);
     const badge    = document.getElementById('filter-badge');
     if (badge) {
@@ -100,6 +107,27 @@ export function renderTransactions(container) {
   dbListen(`accounts/${uid}`, accounts => {
     accountMap = accounts ?? {};
     refresh();
+  });
+
+  getPartnerUid(uid).then(p => {
+    if (p) {
+      dbGet(`users/${p}`).then(partnerUser => {
+        if (partnerUser?.displayName) {
+          partnerInitial = partnerUser.displayName.charAt(0).toUpperCase();
+        } else if (partnerUser?.email) {
+          partnerInitial = partnerUser.email.charAt(0).toUpperCase();
+        }
+      });
+      dbListen(`transactions/${p}`, partnerTxns => {
+        partnerAllTxns = Object.entries(partnerTxns ?? {})
+          .map(([id, t]) => [id, { ...t, _owner: p }]);
+        refresh();
+      });
+      dbListen(`accounts/${p}`, partnerAccts => {
+        Object.assign(accountMap, partnerAccts ?? {});
+        refresh();
+      });
+    }
   });
 
   document.getElementById('txn-search').addEventListener('input', e => {
@@ -455,15 +483,19 @@ function renderPage(filtered, state, uid, refresh, accountMap) {
   const slice = filtered.slice(start, end);
 
   const rows = slice.map(([id, t]) => {
-    const cat      = getCategoryById(t.category);
-    const review   = needsReview(t);
-    const acctName = t.accountName || accountMap[t.accountId]?.name || '';
-    const acctHTML = acctName
-      ? `<span class="txn-acct" style="font-size:0.75rem;color:var(--muted);display:block;margin-top:1px">${acctName}</span>`
+    const cat       = getCategoryById(t.category);
+    const review    = needsReview(t);
+    const isPartner = !!t._owner;
+    const acctName  = t.accountName || accountMap[t.accountId]?.name || '';
+    const partnerBadge = isPartner
+      ? `<span style="background:#dbeafe;color:#1e40af;border-radius:10px;padding:1px 6px;font-size:0.7rem;font-weight:700">${partnerInitial}</span>`
       : '';
+    const acctHTML = acctName
+      ? `<span class="txn-acct" style="font-size:0.75rem;color:var(--muted);display:block;margin-top:1px">${acctName} ${partnerBadge}</span>`
+      : (isPartner ? `<span class="txn-acct" style="font-size:0.75rem;color:var(--muted);display:block;margin-top:1px">${partnerBadge}</span>` : '');
     return `
       <div class="txn-row${review ? ' needs-review' : ''}" data-id="${id}">
-        <button class="txn-icon cat-btn" title="Change category" data-id="${id}" data-cat="${t.category}">${cat.icon}</button>
+        <button class="txn-icon cat-btn" title="Change category" data-id="${id}" data-cat="${t.category}"${isPartner ? ' disabled' : ''}>${cat.icon}</button>
         <div class="txn-meta">
           <span class="txn-desc">${t.merchantName ?? t.description}</span>
           <span class="txn-date">${fmtDate(t.date)} · <span class="cat-tag" style="color:${cat.color}">${cat.name}</span>${review ? ' <span class="review-tag">· revisar</span>' : ''}</span>
@@ -513,6 +545,7 @@ function renderPage(filtered, state, uid, refresh, accountMap) {
         if (wasThisRow) return;
       }
 
+      const isPartner       = !!t._owner;
       const accountName     = t.accountName || accountMap[t.accountId]?.name || '—';
       const sourceBadgeHTML = getSourceBadge(t.categorySource);
 
@@ -527,23 +560,25 @@ function renderPage(filtered, state, uid, refresh, accountMap) {
           <div class="txn-detail-row"><span class="txn-dl">Source</span><span class="txn-dv">${sourceBadgeHTML}</span></div>
           ${t.aiConfidence != null ? `<div class="txn-detail-row"><span class="txn-dl">AI confidence</span><span class="txn-dv">${Math.round(t.aiConfidence * 100)}%</span></div>` : ''}
           ${t.plaidCategory ? `<div class="txn-detail-row"><span class="txn-dl">Plaid category</span><span class="txn-dv">${t.plaidCategory}</span></div>` : ''}
-          <div class="txn-detail-row"><span class="txn-dl">Notes</span><span class="txn-dv"><textarea class="txn-notes-input" data-id="${id}" rows="2" placeholder="Add a note…">${t.notes ?? ''}</textarea></span></div>
-          <div class="txn-detail-row"><span class="txn-dl">Transfer</span><span class="txn-dv"><label style="display:flex;align-items:center;gap:0.4rem;cursor:pointer"><input type="checkbox" class="txn-transfer-chk" data-id="${id}" ${t.isTransfer ? 'checked' : ''}> Mark as inter-account transfer (excluded from spending)</label></span></div>
+          <div class="txn-detail-row"><span class="txn-dl">Notes</span><span class="txn-dv"><textarea class="txn-notes-input" data-id="${id}" rows="2" placeholder="Add a note…"${isPartner ? ' disabled' : ''}>${t.notes ?? ''}</textarea></span></div>
+          <div class="txn-detail-row"><span class="txn-dl">Transfer</span><span class="txn-dv"><label style="display:flex;align-items:center;gap:0.4rem;cursor:pointer"><input type="checkbox" class="txn-transfer-chk" data-id="${id}" ${t.isTransfer ? 'checked' : ''}${isPartner ? ' disabled' : ''}> Mark as inter-account transfer (excluded from spending)</label></span></div>
         </div>
       `;
 
       row.insertAdjacentElement('afterend', detail);
 
-      const originalNotes = t.notes ?? '';
-      detail.querySelector('.txn-notes-input').addEventListener('blur', e2 => {
-        if (e2.target.value !== originalNotes) {
-          dbUpdate(`transactions/${uid}/${id}`, { notes: e2.target.value });
-        }
-      });
+      if (!isPartner) {
+        const originalNotes = t.notes ?? '';
+        detail.querySelector('.txn-notes-input').addEventListener('blur', e2 => {
+          if (e2.target.value !== originalNotes) {
+            dbUpdate(`transactions/${uid}/${id}`, { notes: e2.target.value });
+          }
+        });
 
-      detail.querySelector('.txn-transfer-chk').addEventListener('change', e2 => {
-        dbUpdate(`transactions/${uid}/${id}`, { isTransfer: e2.target.checked });
-      });
+        detail.querySelector('.txn-transfer-chk').addEventListener('change', e2 => {
+          dbUpdate(`transactions/${uid}/${id}`, { isTransfer: e2.target.checked });
+        });
+      }
     });
   });
 }
@@ -614,6 +649,13 @@ function openCategoryPicker(txnId, currentCat, uid) {
     modal.querySelector('.picker-back-btn').addEventListener('click', renderGroupStep);
     modal.querySelector('.modal-cancel').addEventListener('click', () => modal.remove());
     modal.querySelector('.modal-rule').addEventListener('click', () => {
+      const t = allTxns.find(([id]) => id === txnId)?.[1];
+      if (t && (t.merchantName || t.description)) {
+        sessionStorage.setItem('pendingRule', JSON.stringify({
+          matchValue: t.merchantName ?? t.description,
+          name: `${t.merchantName ?? t.description} → category`,
+        }));
+      }
       modal.remove();
       location.hash = '#settings';
     });

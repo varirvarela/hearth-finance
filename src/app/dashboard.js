@@ -1,4 +1,4 @@
-import { dbListen, auth } from '../shared/firebase.js';
+import { dbListen, auth, getPartnerUid } from '../shared/firebase.js';
 import { fmtCurrency, fmtMonth, fmtRelativeDate } from '../shared/format.js';
 import { getCategoryById } from '../shared/categories.js';
 
@@ -9,9 +9,11 @@ export function renderDashboard(container) {
 
   let selYear  = nowYear;
   let selMonth = nowMonth;
-  let latestTxns     = null;
-  let latestAccounts = null;
-  let latestBudgets  = null;
+  let latestTxns      = null;
+  let latestOwnerTxns  = null;
+  let latestPartnerTxns = null;
+  let latestAccounts  = null;
+  let latestBudgets   = null;
 
   container.innerHTML = `
     <style>
@@ -112,8 +114,19 @@ export function renderDashboard(container) {
   if (!uid) return;
 
   dbListen(`transactions/${uid}`, txns => {
-    latestTxns = txns;
+    latestOwnerTxns = txns;
+    latestTxns = { ...(latestOwnerTxns ?? {}), ...(latestPartnerTxns ?? {}) };
     render();
+  });
+
+  getPartnerUid(uid).then(p => {
+    if (p) {
+      dbListen(`transactions/${p}`, partnerTxns => {
+        latestPartnerTxns = partnerTxns;
+        latestTxns = { ...(latestOwnerTxns ?? {}), ...(latestPartnerTxns ?? {}) };
+        render();
+      });
+    }
   });
 
   dbListen(`accounts/${uid}`, accounts => {

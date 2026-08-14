@@ -1,4 +1,4 @@
-import { dbListen, dbSet, auth } from '../shared/firebase.js';
+import { dbListen, dbSet, auth, getPartnerUid } from '../shared/firebase.js';
 import { fmtCurrency, fmtMonth } from '../shared/format.js';
 import { CATEGORIES } from '../shared/categories.js';
 
@@ -22,8 +22,10 @@ export function renderBudgets(container) {
   const uid = auth.currentUser?.uid;
   if (!uid) return;
 
-  let latestBudgets = {};
-  let latestTxns    = {};
+  let latestBudgets      = {};
+  let latestOwnerTxns    = {};
+  let latestPartnerTxns  = {};
+  let latestTxns         = {};
 
   const refresh = () => renderBudgetList(uid, latestBudgets, latestTxns, year, month);
 
@@ -36,7 +38,21 @@ export function renderBudgets(container) {
   syncNextBtn();
 
   dbListen(`budgets/${uid}`, snap => { latestBudgets = snap ?? {}; refresh(); });
-  dbListen(`transactions/${uid}`, snap => { latestTxns = snap ?? {}; refresh(); });
+  dbListen(`transactions/${uid}`, snap => {
+    latestOwnerTxns = snap ?? {};
+    latestTxns = { ...latestOwnerTxns, ...latestPartnerTxns };
+    refresh();
+  });
+
+  getPartnerUid(uid).then(p => {
+    if (p) {
+      dbListen(`transactions/${p}`, snap => {
+        latestPartnerTxns = snap ?? {};
+        latestTxns = { ...latestOwnerTxns, ...latestPartnerTxns };
+        refresh();
+      });
+    }
+  });
 
   document.getElementById('budget-prev').addEventListener('click', () => {
     month--;

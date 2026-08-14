@@ -1,0 +1,72 @@
+{
+  "rules": {
+    ".read":  false,
+    ".write": false,
+
+    "accounts": {
+      "$uid": {
+        ".read":  "auth != null && (auth.uid === $uid || root.child('users').child(auth.uid).child('partnerUid').val() === $uid)",
+        ".write": "auth != null && auth.uid === $uid"
+      }
+    },
+    "transactions": {
+      "$uid": {
+        ".read":  "auth != null && (auth.uid === $uid || root.child('users').child(auth.uid).child('partnerUid').val() === $uid)",
+        ".write": "auth != null && auth.uid === $uid"
+      }
+    },
+    "budgets": {
+      "$uid": {
+        ".read":  "auth != null && (auth.uid === $uid || root.child('users').child(auth.uid).child('partnerUid').val() === $uid)",
+        ".write": "auth != null && auth.uid === $uid"
+      }
+    },
+    "rules": {
+      "$uid": {
+        ".read":  "auth != null && auth.uid === $uid",
+        ".write": "auth != null && auth.uid === $uid"
+      }
+    },
+    "users": {
+      "$uid": {
+        ".read":  "auth != null && (auth.uid === $uid || root.child('users').child(auth.uid).child('partnerUid').val() === $uid)",
+        ".write": "auth != null && auth.uid === $uid",
+        "partnerUid": {
+          ".write": "auth != null"
+        }
+      }
+    },
+    "invites": {
+      "$code": {
+        ".read":  "auth != null",
+        ".write": "auth != null"
+      }
+    },
+    "_dev": {
+      "accounts": {
+        "$uid": {
+          ".read":  "auth != null && auth.uid === $uid",
+          ".write": "auth != null && auth.uid === $uid"
+        }
+      },
+      "transactions": {
+        "$uid": {
+          ".read":  "auth != null && auth.uid === $uid",
+          ".write": "auth != null && auth.uid === $uid"
+        }
+      },
+      "budgets": {
+        "$uid": {
+          ".read":  "auth != null && auth.uid === $uid",
+          ".write": "auth != null && auth.uid === $uid"
+        }
+      },
+      "rules": {
+        "$uid": {
+          ".read":  "auth != null && auth.uid === $uid",
+          ".write": "auth != null && auth.uid === $uid"
+        }
+      }
+    }
+  }
+}

@@ -1,4 +1,4 @@
-import { dbListen, dbSet, auth } from '../shared/firebase.js';
+import { dbListen, dbSet, auth, getPartnerUid } from '../shared/firebase.js';
 import { fmtCurrency, fmtDate } from '../shared/format.js';
 
 const WORKER_URL = import.meta.env.VITE_WORKER_URL ?? 'http://localhost:8787';
@@ -27,8 +27,31 @@ export function renderAccounts(container) {
   const uid = auth.currentUser?.uid;
   if (!uid) return;
 
+  let latestOwnerAccounts  = null;
+  let latestPartnerAccounts = null;
+  let resolvedPartnerUid   = null;
+
+  const refreshAccounts = () => {
+    const merged = { ...(latestOwnerAccounts ?? {}), ...(latestPartnerAccounts ?? {}) };
+    renderAccountList(merged, uid, resolvedPartnerUid);
+  };
+
   dbListen(`accounts/${uid}`, accounts => {
-    renderAccountList(accounts ?? {}, uid);
+    latestOwnerAccounts = accounts ?? {};
+    refreshAccounts();
+  });
+
+  getPartnerUid(uid).then(p => {
+    resolvedPartnerUid = p;
+    if (p) {
+      dbListen(`accounts/${p}`, partnerAccounts => {
+        latestPartnerAccounts = {};
+        for (const [id, a] of Object.entries(partnerAccounts ?? {})) {
+          latestPartnerAccounts[id] = { ...a, _isPartner: true };
+        }
+        refreshAccounts();
+      });
+    }
   });
 
   document.getElementById('link-account').addEventListener('click', () => openPlaidLink(uid));
@@ -36,7 +59,7 @@ export function renderAccounts(container) {
   document.getElementById('sync-now').addEventListener('click', () => syncTransactions(uid));
 }
 
-function renderAccountList(accounts, uid) {
+function renderAccountList(accounts, uid, partnerUid) {
   const el = document.getElementById('account-list');
   const entries = Object.entries(accounts);
   if (!entries.length) {
@@ -53,21 +76,26 @@ function renderAccountList(accounts, uid) {
 
   el.innerHTML = Object.entries(grouped).map(([institution, accts]) => {
     const rep        = accts[0][1];
+    const isPartner  = !!rep._isPartner;
     const status     = rep.lastSyncStatus ?? null;
     const dotClass   = status === 'ok' ? 'ok' : status === 'error' ? 'error' : 'unknown';
     const itemId     = rep.plaidItemId ?? null;
     const slot       = rep.plaidSlot ?? 1;
-    const reconnectBtn = itemId
+    const reconnectBtn = (!isPartner && itemId)
       ? `<button class="btn-reconnect" data-item-id="${itemId}" data-slot="${slot}">Reconnect</button>`
       : '';
-    const unlinkBtn = itemId
+    const unlinkBtn = (!isPartner && itemId)
       ? `<button class="btn-unlink btn-ghost" style="font-size:0.75rem;padding:2px 8px;color:#ef4444;border-color:#ef4444" data-item-id="${itemId}" data-slot="${slot}">Unlink</button>`
+      : '';
+    const partnerBadge = isPartner
+      ? `<span style="background:#dbeafe;color:#1e40af;border-radius:10px;padding:1px 6px;font-size:0.75rem;font-weight:600">Partner</span>`
       : '';
     return `
     <div class="account-group">
       <div style="display:flex;align-items:center;gap:0.5rem;margin-bottom:0.5rem">
         <span class="sync-status-dot ${dotClass}"></span>
         <h3 class="account-institution" style="margin-bottom:0">${institution}</h3>
+        ${partnerBadge}
         ${reconnectBtn}
         ${unlinkBtn}
       </div>

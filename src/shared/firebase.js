@@ -29,3 +29,8 @@ export const dbPush   = (path, val) => push(dbRef(path), val);
 export const dbUpdate = (path, val) => update(dbRef(path), val);
 export const dbRemove = (path)      => remove(dbRef(path));
 export const dbListen = (path, cb)  => onValue(dbRef(path), s => cb(s.val()));
+
+export async function getPartnerUid(uid) {
+  const user = await dbGet(`users/${uid}`);
+  return user?.partnerUid ?? null;
+}
