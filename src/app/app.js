@@ -11,13 +11,15 @@ import { renderTransactions } from './transactions.js';
 import { renderBudgets }      from './budgets.js';
 import { renderAccounts }     from './accounts.js';
 import { renderSettings }     from './settings.js';
+import { renderAutomation }   from './automation.js';
 
-const TABS = ['dashboard', 'transactions', 'budgets', 'accounts', 'settings'];
+const TABS = ['dashboard', 'transactions', 'budgets', 'accounts', 'automation', 'settings'];
 const renderers = {
   dashboard:    renderDashboard,
   transactions: renderTransactions,
   budgets:      renderBudgets,
   accounts:     renderAccounts,
+  automation:   renderAutomation,
   settings:     renderSettings,
 };
 

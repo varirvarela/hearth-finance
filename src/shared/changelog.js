@@ -1,5 +1,16 @@
 export const CHANGELOG = [
   {
+    version: '1.1.0',
+    date:    '2026-08-16',
+    changes: [
+      'Automation tab: full rules management screen — rules grouped by category, semantic "when → then" cards, active/pause toggle per rule, add/edit modal with live preview.',
+      'Dashboard: Monthly/Annual view toggle — annual view shows YTD spend vs annual budget with pace bar indicating how much of the year has elapsed.',
+      'Budgets: Monthly/Annual view toggle — annual view shows all categories annualized (monthly × 12), with monthly goals and annual goals in separate sections, each with a pace tick.',
+      'Nav: replaced generic emoji icons with custom SVG icons across all five tabs.',
+      'Brand: custom hearth icon (pillars + arch + flame) replaces the generic house — applied to favicon, auth screen, and sidebar nav.',
+    ],
+  },
+  {
     version: '1.0.0',
     date:    '2026-08-14',
     changes: [

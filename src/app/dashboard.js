@@ -7,13 +7,15 @@ export function renderDashboard(container) {
   const nowYear  = now.getFullYear();
   const nowMonth = now.getMonth() + 1;
 
-  let selYear  = nowYear;
-  let selMonth = nowMonth;
-  let latestTxns      = null;
-  let latestOwnerTxns  = null;
+  let selYear   = nowYear;
+  let selMonth  = nowMonth;
+  let viewMode  = 'monthly'; // 'monthly' | 'annual'
+
+  let latestTxns        = null;
+  let latestOwnerTxns   = null;
   let latestPartnerTxns = null;
-  let latestAccounts  = null;
-  let latestBudgets   = null;
+  let latestAccounts    = null;
+  let latestBudgets     = null;
 
   container.innerHTML = `
     <style>
@@ -22,9 +24,15 @@ export function renderDashboard(container) {
       .dash-nav-btn:disabled { opacity:0.35; cursor:default; }
     </style>
     <div class="page dashboard">
+      <div class="view-toggle-row">
+        <div class="view-toggle" id="view-toggle">
+          <button class="view-toggle-btn active" data-mode="monthly">Monthly</button>
+          <button class="view-toggle-btn" data-mode="annual">Annual</button>
+        </div>
+      </div>
       <div class="dash-nav">
         <button class="dash-nav-btn" id="nav-prev">&#8592;</button>
-        <h2 class="page-title" id="month-title" style="margin:0;flex:1;text-align:center;"></h2>
+        <h2 class="page-title" id="period-title" style="margin:0;flex:1;text-align:center;"></h2>
         <button class="dash-nav-btn" id="nav-next">&#8594;</button>
       </div>
       <div class="card-grid">
@@ -33,21 +41,25 @@ export function renderDashboard(container) {
           <span class="card-value" id="net-worth">—</span>
         </div>
         <div class="card">
-          <span class="card-label">Spent This Month</span>
+          <span class="card-label" id="spent-label">Spent This Month</span>
           <span class="card-value" id="spent-month">—</span>
         </div>
         <div class="card">
-          <span class="card-label">Income This Month</span>
+          <span class="card-label" id="income-label">Income This Month</span>
           <span class="card-value" id="income-month">—</span>
         </div>
         <div class="card">
-          <span class="card-label">vs Budget</span>
+          <span class="card-label" id="vs-label">vs Budget</span>
           <span class="card-value" id="vs-budget">—</span>
         </div>
       </div>
       <section class="section">
-        <h3>Top Categories</h3>
+        <h3 id="top-cats-title">Top Categories</h3>
         <div id="top-categories"></div>
+      </section>
+      <section class="section" id="pace-section" style="display:none">
+        <h3>Annual Pace</h3>
+        <div id="pace-bar-wrap" class="pace-bar-wrap"></div>
       </section>
       <section class="section">
         <h3>Spending Trend</h3>
@@ -60,15 +72,37 @@ export function renderDashboard(container) {
     </div>
   `;
 
+  const toggleEl    = container.querySelector('#view-toggle');
+  const prevBtn     = container.querySelector('#nav-prev');
+  const nextBtn     = container.querySelector('#nav-next');
+  const titleEl     = container.querySelector('#period-title');
+  const spentLabel  = container.querySelector('#spent-label');
+  const incomeLabel = container.querySelector('#income-label');
+  const vsLabel     = container.querySelector('#vs-label');
+  const paceSection = container.querySelector('#pace-section');
+
   function updateNav() {
-    container.querySelector('#month-title').textContent =
-      fmtMonth(selYear, String(selMonth).padStart(2, '0'));
-    container.querySelector('#nav-next').disabled =
-      selYear === nowYear && selMonth === nowMonth;
+    if (viewMode === 'monthly') {
+      titleEl.textContent = fmtMonth(selYear, String(selMonth).padStart(2, '0'));
+      nextBtn.disabled = selYear === nowYear && selMonth === nowMonth;
+    } else {
+      titleEl.textContent = String(selYear);
+      nextBtn.disabled = selYear >= nowYear;
+    }
   }
 
   function render() {
     if (!container.isConnected) return;
+    if (viewMode === 'monthly') renderMonthly();
+    else renderAnnual();
+  }
+
+  function renderMonthly() {
+    spentLabel.textContent  = 'Spent This Month';
+    incomeLabel.textContent = 'Income This Month';
+    vsLabel.textContent     = 'vs Budget';
+    paceSection.style.display = 'none';
+    container.querySelector('#top-cats-title').textContent = 'Top Categories';
 
     const monthStr  = `${selYear}-${String(selMonth).padStart(2, '0')}`;
     const allTxns   = Object.values(latestTxns ?? {});
@@ -85,8 +119,70 @@ export function renderDashboard(container) {
     vsBudgetEl.textContent = fmtCurrency(Math.abs(budgetDiff));
     vsBudgetEl.style.color = budgetDiff >= 0 ? '#16a34a' : '#dc2626';
 
-    renderTopCategories(container, thisMonth.filter(t => t.amount > 0));
-    renderTrendChart(container, allTxns, selYear, selMonth);
+    renderTopCategories(container, thisMonth.filter(t => t.amount > 0 && !t.isTransfer && t.group !== 'transfer'));
+    renderTrendChart(container, allTxns, selYear, selMonth, 'monthly');
+
+    const recent = allTxns
+      .filter(t => t.date)
+      .sort((a, b) => b.date.localeCompare(a.date))
+      .slice(0, 10);
+    renderRecentTxns(container, recent);
+  }
+
+  function renderAnnual() {
+    spentLabel.textContent  = 'Spent YTD';
+    incomeLabel.textContent = 'Income YTD';
+    vsLabel.textContent     = 'vs Annual Budget';
+    container.querySelector('#top-cats-title').textContent = 'Top Categories (Year)';
+
+    const allTxns  = Object.values(latestTxns ?? {});
+    const yearStr  = String(selYear);
+
+    // For current year: include all months up to today; for past years: full year
+    const maxMonth = selYear === nowYear ? nowMonth : 12;
+    const yearTxns = allTxns.filter(t => {
+      if (!t.date?.startsWith(yearStr) || t.ignored || t.pending) return false;
+      const m = parseInt(t.date.slice(5, 7), 10);
+      return m <= maxMonth;
+    });
+
+    const income = yearTxns.filter(t => t.amount < 0).reduce((s, t) => s - t.amount, 0);
+    const spent  = yearTxns.filter(t => t.amount > 0 && !t.isTransfer && t.group !== 'transfer').reduce((s, t) => s + t.amount, 0);
+
+    container.querySelector('#spent-month').textContent  = fmtCurrency(spent);
+    container.querySelector('#income-month').textContent = fmtCurrency(income);
+
+    // Annual budget = sum of monthly * 12
+    const annualBudget = Object.values(latestBudgets ?? {}).reduce((s, b) => s + (b.monthly ?? 0), 0) * 12;
+    const budgetDiff   = annualBudget - spent;
+    const vsBudgetEl   = container.querySelector('#vs-budget');
+    vsBudgetEl.textContent = fmtCurrency(Math.abs(budgetDiff));
+    vsBudgetEl.style.color = budgetDiff >= 0 ? '#16a34a' : '#dc2626';
+
+    // Pace bar (only for current year)
+    if (selYear === nowYear && annualBudget > 0) {
+      paceSection.style.display = '';
+      const pace    = Math.round((nowMonth / 12) * 100);
+      const spentPct = Math.round((spent / annualBudget) * 100);
+      const barColor = spentPct > pace + 10 ? '#dc2626' : spentPct > pace ? '#f59e0b' : '#16a34a';
+      container.querySelector('#pace-bar-wrap').innerHTML = `
+        <div class="pace-labels">
+          <span>${fmtCurrency(spent)} spent</span>
+          <span style="color:var(--muted)">${pace}% of year elapsed</span>
+          <span>${fmtCurrency(annualBudget)} budget</span>
+        </div>
+        <div class="pace-track">
+          <div class="pace-fill" style="width:${Math.min(100, spentPct)}%;background:${barColor}"></div>
+          <div class="pace-tick" style="left:${pace}%"></div>
+        </div>
+        <div class="pace-pct-label" style="color:${barColor}">${spentPct}% of annual budget used</div>
+      `;
+    } else {
+      paceSection.style.display = 'none';
+    }
+
+    renderTopCategories(container, yearTxns.filter(t => t.amount > 0 && !t.isTransfer && t.group !== 'transfer'));
+    renderTrendChart(container, allTxns, selYear, selMonth, 'annual');
 
     const recent = allTxns
       .filter(t => t.date)
@@ -96,18 +192,37 @@ export function renderDashboard(container) {
   }
 
   function navigate(delta) {
-    let m = selMonth + delta;
-    let y = selYear;
-    if (m > 12) { m = 1;  y++; }
-    if (m < 1)  { m = 12; y--; }
-    selMonth = m;
-    selYear  = y;
+    if (viewMode === 'monthly') {
+      let m = selMonth + delta;
+      let y = selYear;
+      if (m > 12) { m = 1;  y++; }
+      if (m < 1)  { m = 12; y--; }
+      selMonth = m;
+      selYear  = y;
+    } else {
+      selYear = Math.min(nowYear, selYear + delta);
+    }
     updateNav();
     render();
   }
 
-  container.querySelector('#nav-prev').addEventListener('click', () => navigate(-1));
-  container.querySelector('#nav-next').addEventListener('click', () => navigate(1));
+  // View toggle
+  toggleEl.querySelectorAll('.view-toggle-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      viewMode = btn.dataset.mode;
+      toggleEl.querySelectorAll('.view-toggle-btn').forEach(b =>
+        b.classList.toggle('active', b.dataset.mode === viewMode)
+      );
+      // Reset to current period when switching
+      selYear  = nowYear;
+      selMonth = nowMonth;
+      updateNav();
+      render();
+    });
+  });
+
+  prevBtn.addEventListener('click', () => navigate(-1));
+  nextBtn.addEventListener('click', () => navigate(1));
   updateNav();
 
   const uid = auth.currentUser?.uid;
@@ -170,14 +285,26 @@ function renderTopCategories(container, txns) {
     `<div class="empty"><span class="empty-icon">📊</span><span>No spending data yet.</span></div>`;
 }
 
-function renderTrendChart(container, allTxns, selYear, selMonth) {
+function renderTrendChart(container, allTxns, selYear, selMonth, viewMode) {
   const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
-  const months = [];
-  for (let i = 11; i >= 0; i--) {
-    let m = selMonth - i;
-    let y = selYear;
-    while (m < 1) { m += 12; y--; }
-    months.push({ year: y, month: m, key: `${y}-${String(m).padStart(2, '0')}` });
+
+  let months;
+  if (viewMode === 'annual') {
+    // Show all 12 months of the selected year
+    months = Array.from({ length: 12 }, (_, i) => ({
+      year: selYear,
+      month: i + 1,
+      key: `${selYear}-${String(i + 1).padStart(2, '0')}`,
+    }));
+  } else {
+    // Last 12 months ending at selMonth
+    months = [];
+    for (let i = 11; i >= 0; i--) {
+      let m = selMonth - i;
+      let y = selYear;
+      while (m < 1) { m += 12; y--; }
+      months.push({ year: y, month: m, key: `${y}-${String(m).padStart(2, '0')}` });
+    }
   }
 
   const totals = months.map(({ key }) =>
@@ -187,7 +314,9 @@ function renderTrendChart(container, allTxns, selYear, selMonth) {
   );
 
   const maxSpend   = Math.max(...totals, 0);
-  const selKey     = `${selYear}-${String(selMonth).padStart(2, '0')}`;
+  const selKey     = viewMode === 'annual'
+    ? `${selYear}-${String(new Date().getMonth() + 1).padStart(2, '0')}`
+    : `${selYear}-${String(selMonth).padStart(2, '0')}`;
   const tallestIdx = totals.indexOf(Math.max(...totals));
   const slotW      = 340 / 12;
   const barW       = 16;

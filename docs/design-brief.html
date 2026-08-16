@@ -1,0 +1,2055 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Hearth Finance — Design Brief v1.0</title>
+  <style>
+    :root {
+      --brand:    #16a34a;
+      --brand-d:  #15803d;
+      --brand-l:  #dcfce7;
+      --brand-xl: #f0fdf4;
+      --amber:    #f59e0b;
+      --amber-l:  #fef3c7;
+      --red:      #ef4444;
+      --red-l:    #fee2e2;
+      --purple:   #8b5cf6;
+      --blue:     #3b82f6;
+      --blue-l:   #dbeafe;
+      --surface:  #ffffff;
+      --bg:       #f8fafc;
+      --border:   #e2e8f0;
+      --text:     #0f172a;
+      --muted:    #64748b;
+      --faint:    #94a3b8;
+    }
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      background: #0d1117;
+      color: #e2e8f0;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      line-height: 1.6;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    /* ── Document layout ── */
+    .doc { max-width: 1300px; margin: 0 auto; padding: 0 2rem 5rem; }
+
+    /* ── Header ── */
+    .doc-header {
+      background: linear-gradient(135deg, #16a34a 0%, #0f7232 60%, #0a4d22 100%);
+      margin: 0 -2rem 3.5rem;
+      padding: 3.5rem 3rem 2.5rem;
+      display: flex; align-items: flex-end; justify-content: space-between;
+      flex-wrap: wrap; gap: 1rem;
+    }
+    .doc-brand { display: flex; align-items: center; gap: 1rem; }
+    .doc-brand-icon { font-size: 3rem; line-height: 1; }
+    .doc-brand-name { font-size: 2rem; font-weight: 800; color: #fff; letter-spacing: -0.5px; }
+    .doc-brand-sub  { font-size: 1rem; color: rgba(255,255,255,0.75); margin-top: 3px; }
+    .doc-meta       { text-align: right; color: rgba(255,255,255,0.6); font-size: 0.82rem; line-height: 1.7; }
+
+    /* ── Section headers ── */
+    .section-header { display: flex; align-items: center; gap: 0.85rem; margin: 3.5rem 0 1.5rem; }
+    .section-num {
+      font-size: 0.7rem; font-weight: 700; text-transform: uppercase;
+      letter-spacing: 0.08em; color: var(--brand);
+      background: rgba(22,163,74,0.14); padding: 4px 12px; border-radius: 20px;
+    }
+    .section-num.future { color: var(--amber); background: rgba(245,158,11,0.14); }
+    .section-title { font-size: 1.45rem; font-weight: 800; color: #f1f5f9; letter-spacing: -0.4px; }
+
+    /* ── Divider ── */
+    hr.divider { border: none; border-top: 1px solid rgba(255,255,255,0.07); margin: 3rem 0; }
+
+    /* ── Design tokens ── */
+    .tokens-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px,1fr)); gap: 0.65rem; margin-bottom: 2rem; }
+    .token { background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.08); border-radius: 8px; overflow: hidden; }
+    .token-swatch { height: 44px; }
+    .token-info { padding: 7px 10px; }
+    .token-name  { font-size: 0.73rem; font-weight: 700; color: #f1f5f9; }
+    .token-value { font-size: 0.63rem; color: #64748b; font-family: monospace; margin-top: 1px; }
+
+    .type-row {
+      background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.08);
+      border-radius: 8px; padding: 0.9rem 1.25rem;
+      display: flex; align-items: baseline; gap: 1.25rem; margin-bottom: 0.5rem;
+    }
+    .type-spec { font-size: 0.63rem; color: #64748b; font-family: monospace; min-width: 180px; flex-shrink: 0; }
+
+    /* ── Principles ── */
+    .principles { display: grid; grid-template-columns: repeat(auto-fill,minmax(240px,1fr)); gap: 1rem; margin-bottom: 0.5rem; }
+    .principle {
+      background: rgba(22,163,74,0.07); border: 1px solid rgba(22,163,74,0.2);
+      border-radius: 12px; padding: 1.25rem;
+    }
+    .principle-icon  { font-size: 1.5rem; margin-bottom: 0.6rem; }
+    .principle-title { font-size: 0.9rem; font-weight: 700; color: #f1f5f9; margin-bottom: 0.35rem; }
+    .principle-text  { font-size: 0.78rem; color: #94a3b8; line-height: 1.55; }
+
+    /* ── Phone frame ── */
+    .phone {
+      width: 320px; flex-shrink: 0;
+      background: #1a1f2e; border-radius: 42px; padding: 10px;
+      box-shadow: 0 28px 90px rgba(0,0,0,0.65), 0 0 0 1px rgba(255,255,255,0.07);
+    }
+    .phone-inner {
+      background: var(--bg); border-radius: 33px;
+      overflow: hidden; height: 660px;
+      display: flex; flex-direction: column;
+    }
+    .phone-status {
+      background: var(--brand); padding: 12px 20px 8px;
+      display: flex; justify-content: space-between; align-items: center;
+      font-size: 11px; color: rgba(255,255,255,0.92); font-weight: 600; flex-shrink: 0;
+    }
+    .phone-content { flex: 1; overflow-y: auto; background: var(--bg); }
+    .phone-content::-webkit-scrollbar { display: none; }
+
+    /* ── Bottom nav ── */
+    .phone-nav {
+      background: var(--surface); border-top: 1px solid var(--border);
+      display: flex; flex-shrink: 0;
+    }
+    .nav-item {
+      flex: 1; display: flex; flex-direction: column; align-items: center;
+      padding: 7px 0 9px; font-size: 0.58rem; font-weight: 600;
+      color: var(--faint); gap: 2px; cursor: pointer;
+    }
+    .nav-item.active { color: var(--brand); }
+    .nav-icon { width: 21px; height: 21px; display: block; }
+
+    /* ── Rule cards (Automation screen) ── */
+    .rule-card { background: var(--surface); border-radius: 10px; padding: 10px 12px; margin-bottom: 6px; box-shadow: 0 1px 3px rgba(0,0,0,.06); }
+    .rule-when { display: flex; align-items: center; gap: 5px; margin-bottom: 5px; flex-wrap: wrap; }
+    .rule-field { font-size: 0.6rem; font-weight: 700; background: #e0e7ff; color: #3730a3; border-radius: 4px; padding: 2px 6px; }
+    .rule-op    { font-size: 0.62rem; color: var(--muted); }
+    .rule-pattern { font-size: 0.8rem; font-weight: 700; color: var(--text); }
+    .rule-then  { display: flex; align-items: center; gap: 6px; font-size: 0.76rem; }
+    .rule-arrow { color: var(--brand); font-weight: 800; }
+    .rule-meta  { display: flex; justify-content: space-between; align-items: center; margin-top: 7px; }
+    .rule-priority { font-size: 0.6rem; color: var(--faint); }
+    .rule-toggle { width: 28px; height: 16px; background: var(--brand); border-radius: 8px; position: relative; flex-shrink: 0; }
+    .rule-toggle::after { content:''; position: absolute; right: 2px; top: 2px; width: 12px; height: 12px; background: white; border-radius: 50%; }
+    .cat-group-hdr { display: flex; align-items: center; justify-content: space-between; padding: 9px 12px 4px; }
+    .cat-group-left { display: flex; align-items: center; gap: 7px; }
+    .cat-group-name { font-size: 0.82rem; font-weight: 700; color: var(--text); }
+    .cat-group-count { font-size: 0.68rem; font-weight: 600; color: var(--brand); background: var(--brand-xl); border-radius: 999px; padding: 2px 8px; }
+    .btn-add-sm { font-size: 0.68rem; color: var(--brand); font-weight: 700; background: none; border: none; cursor: pointer; }
+    .cat-group-body { padding: 0 12px 8px; }
+    .cat-group-collapsed { padding: 5px 12px 8px; font-size: 0.72rem; color: var(--muted); cursor: pointer; }
+    .rule-form-field { background: var(--bg); border: 1.5px solid var(--border); border-radius: 8px; padding: 8px 10px; font-size: 0.8rem; color: var(--text); width: 100%; margin-bottom: 8px; }
+    .rule-form-select { display: flex; gap: 5px; margin-bottom: 8px; }
+    .rule-sel { flex: 1; background: var(--bg); border: 1.5px solid var(--border); border-radius: 8px; padding: 7px 8px; font-size: 0.75rem; color: var(--text); }
+    .rule-cat-pick { display: flex; align-items: center; gap: 8px; background: var(--bg); border: 1.5px solid var(--border); border-radius: 8px; padding: 8px 10px; margin-bottom: 8px; }
+    .rule-cat-pick-text { flex: 1; font-size: 0.8rem; color: var(--text); font-weight: 600; }
+    .rule-cat-pick-clear { color: var(--faint); font-size: 0.85rem; cursor: pointer; }
+
+    /* ── App UI shared ── */
+    .app-header {
+      background: var(--surface); padding: 14px 14px 11px;
+      border-bottom: 1px solid var(--border); flex-shrink: 0;
+    }
+    .app-title    { font-size: 1.05rem; font-weight: 800; color: var(--text); letter-spacing: -0.3px; }
+    .app-subtitle { font-size: 0.72rem; color: var(--muted); margin-top: 2px; }
+    .app-page     { padding: 10px; }
+
+    /* Cards */
+    .card {
+      background: var(--surface); border-radius: 12px; padding: 12px;
+      margin-bottom: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.06);
+    }
+    .metric-label { font-size: 0.6rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; color: var(--faint); }
+    .metric-val   { font-size: 1.35rem; font-weight: 800; color: var(--text); letter-spacing: -0.4px; line-height: 1; margin-top: 4px; }
+    .metric-delta { font-size: 0.68rem; font-weight: 600; margin-top: 4px; }
+    .delta-red    { color: var(--red); }
+    .delta-green  { color: var(--brand); }
+    .delta-muted  { color: var(--muted); }
+
+    /* Alert banner */
+    .alert-banner {
+      background: #fffbeb; border: 1px solid #fcd34d; border-radius: 8px;
+      padding: 7px 10px; font-size: 0.75rem; font-weight: 600;
+      color: #92400e; display: flex; align-items: center; gap: 5px; margin-bottom: 8px;
+    }
+
+    /* Progress bar system */
+    .prog-row   { margin-bottom: 9px; }
+    .prog-hdr   { display: flex; justify-content: space-between; font-size: 0.76rem; font-weight: 500; margin-bottom: 3px; color: var(--text); }
+    .prog-hdr-r { font-size: 0.7rem; color: var(--muted); }
+    .prog-track { height: 7px; background: var(--border); border-radius: 4px; overflow: visible; position: relative; }
+    .prog-fill  { height: 100%; border-radius: 4px; }
+    .prog-pace  { position: absolute; top: -3px; width: 2px; height: 13px; background: rgba(100,116,139,0.6); border-radius: 1px; }
+    .prog-foot  { display: flex; justify-content: space-between; font-size: 0.65rem; color: var(--faint); margin-top: 3px; }
+
+    /* Transaction rows */
+    .txn {
+      display: flex; align-items: center; gap: 9px;
+      padding: 9px 12px; border-bottom: 1px solid var(--border);
+      background: var(--surface);
+    }
+    .txn:last-child { border-bottom: none; }
+    .txn-ico {
+      width: 36px; height: 36px; border-radius: 10px;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 1rem; flex-shrink: 0; position: relative;
+    }
+    .txn-dot {
+      position: absolute; top: 1px; right: 1px;
+      width: 9px; height: 9px; border-radius: 50%; border: 1.5px solid white;
+    }
+    .txn-meta  { flex: 1; min-width: 0; }
+    .txn-name  { font-size: 0.83rem; font-weight: 600; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .txn-sub   { font-size: 0.68rem; color: var(--muted); margin-top: 1px; }
+    .txn-cat   { font-weight: 500; }
+    .txn-amt   { font-size: 0.86rem; font-weight: 700; color: var(--text); flex-shrink: 0; }
+    .txn-income { color: var(--brand); }
+
+    /* Suggestion strip */
+    .sug-strip {
+      padding: 6px 12px 6px 57px; border-bottom: 1px solid var(--border);
+      display: flex; align-items: center; gap: 5px; font-size: 0.7rem;
+    }
+    .sug-strip.ai   { background: #fffbeb; }
+    .sug-strip.warn { background: #fff1f2; }
+    .sug-lbl  { font-weight: 700; }
+    .sug-lbl.ai   { color: var(--amber); }
+    .sug-lbl.warn { color: var(--red); }
+    .sug-cat  { color: var(--text); font-weight: 600; flex: 1; font-size: 0.72rem; }
+    .btn-confirm {
+      background: var(--brand-xl); border: 1.5px solid var(--brand);
+      color: var(--brand-d); border-radius: 5px; padding: 3px 8px;
+      font-size: 0.66rem; font-weight: 700; cursor: pointer; white-space: nowrap;
+    }
+    .btn-change {
+      border: 1.5px solid var(--border); color: var(--muted);
+      border-radius: 5px; padding: 3px 8px; font-size: 0.66rem;
+      cursor: pointer; background: white; white-space: nowrap;
+    }
+    .btn-cat {
+      border: 1.5px solid var(--border); color: var(--muted);
+      border-radius: 5px; padding: 3px 10px; font-size: 0.66rem;
+      cursor: pointer; background: white; margin-left: auto;
+    }
+
+    /* Rule prompt */
+    .rule-prompt {
+      padding: 7px 12px; background: var(--brand-xl); border-bottom: 1px solid var(--border);
+      display: flex; align-items: center; gap: 7px; font-size: 0.7rem;
+    }
+    .rule-text { flex: 1; color: var(--text); }
+    .btn-rule  { background: var(--brand); color: white; border-radius: 5px; padding: 4px 10px; font-size: 0.66rem; font-weight: 700; cursor: pointer; border: none; white-space: nowrap; }
+    .btn-skip  { color: var(--muted); font-size: 0.66rem; cursor: pointer; }
+
+    /* Budget leaf rows */
+    .bud-group-hdr {
+      font-size: 0.62rem; font-weight: 700; text-transform: uppercase;
+      letter-spacing: 0.08em; color: var(--faint);
+      padding: 9px 12px 3px; background: var(--bg);
+    }
+    .bud-leaf {
+      display: flex; align-items: center; gap: 7px;
+      padding: 7px 12px; border-bottom: 1px solid var(--border);
+      background: var(--surface);
+    }
+    .bud-leaf:last-child { border-bottom: none; }
+    .bud-icon { font-size: 0.9rem; }
+    .bud-name { font-size: 0.78rem; font-weight: 500; flex: 1; color: var(--text); }
+    .bud-bar  { width: 76px; height: 5px; background: var(--border); border-radius: 3px; overflow: visible; position: relative; flex-shrink: 0; }
+    .bud-fill { height: 100%; border-radius: 3px; }
+    .bud-tick { position: absolute; top: -3px; width: 1.5px; height: 11px; background: rgba(100,116,139,0.5); border-radius: 1px; }
+    .bud-amt  { font-size: 0.68rem; color: var(--muted); min-width: 78px; text-align: right; flex-shrink: 0; }
+
+    /* Account rows */
+    .acct-row {
+      display: flex; align-items: center; gap: 9px;
+      padding: 9px 12px; border-bottom: 1px solid var(--border);
+      background: var(--surface);
+    }
+    .acct-row:last-child { border-bottom: none; }
+    .acct-icon { width: 30px; height: 30px; border-radius: 8px; background: var(--bg); display: flex; align-items: center; justify-content: center; font-size: 0.95rem; flex-shrink: 0; }
+    .acct-info { flex: 1; min-width: 0; }
+    .acct-name { font-size: 0.8rem; font-weight: 600; color: var(--text); }
+    .acct-sub  { font-size: 0.65rem; color: var(--muted); }
+    .acct-bal  { font-size: 0.82rem; font-weight: 700; flex-shrink: 0; color: var(--text); }
+    .acct-debt { color: var(--red); }
+    .acct-sync { font-size: 0.58rem; color: var(--faint); text-align: right; }
+
+    /* Insight cards */
+    .insight {
+      background: var(--surface); border-radius: 10px; padding: 11px 12px;
+      margin-bottom: 7px; display: flex; gap: 9px; align-items: flex-start;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.06);
+    }
+    .insight-dot  { width: 8px; height: 8px; border-radius: 50%; margin-top: 5px; flex-shrink: 0; }
+    .insight-body { flex: 1; }
+    .insight-title{ font-size: 0.79rem; font-weight: 700; color: var(--text); margin-bottom: 2px; }
+    .insight-sub  { font-size: 0.68rem; color: var(--muted); line-height: 1.45; }
+    .insight-link { font-size: 0.68rem; color: var(--brand); font-weight: 600; margin-top: 5px; }
+
+    /* ── Screen layout helpers ── */
+    .screen-with-notes {
+      display: flex; gap: 2rem; align-items: flex-start; margin-bottom: 2rem; flex-wrap: wrap;
+    }
+    .screen-col { display: flex; flex-direction: column; gap: 0.6rem; }
+    .screen-label {
+      font-size: 0.68rem; font-weight: 700; text-transform: uppercase;
+      letter-spacing: 0.08em; color: var(--faint);
+    }
+    .screens { display: flex; gap: 2rem; align-items: flex-start; flex-wrap: wrap; margin-bottom: 2rem; }
+
+    .notes-col { flex: 1; min-width: 260px; display: flex; flex-direction: column; gap: 0.75rem; }
+    .note {
+      background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.08);
+      border-radius: 10px; padding: 1rem 1.15rem;
+    }
+    .note-tag   { font-size: 0.62rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 0.35rem; }
+    .note-tag.ux       { color: #60a5fa; }
+    .note-tag.data     { color: #a78bfa; }
+    .note-tag.future   { color: var(--amber); }
+    .note-tag.critical { color: #f87171; }
+    .note-title { font-size: 0.88rem; font-weight: 700; color: #f1f5f9; margin-bottom: 0.3rem; }
+    .note-text  { font-size: 0.78rem; color: #94a3b8; line-height: 1.55; }
+    .note-text strong { color: #cbd5e1; }
+    .note-text em     { font-style: italic; }
+
+    /* ── Flow diagram ── */
+    .flow { display: flex; align-items: stretch; gap: 0; flex-wrap: wrap; margin: 1.5rem 0; }
+    .flow-step {
+      background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1);
+      border-radius: 8px; padding: 0.75rem 1rem;
+      min-width: 130px; text-align: center;
+    }
+    .flow-step.hl    { border-color: var(--brand); background: rgba(22,163,74,0.1); }
+    .flow-step.hl2   { border-color: var(--blue);  background: rgba(59,130,246,0.1); }
+    .flow-step.dim   { opacity: 0.55; border-style: dashed; }
+    .flow-step-num   { font-size: 0.6rem; color: var(--brand); font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; }
+    .flow-step.hl2 .flow-step-num { color: var(--blue); }
+    .flow-step-text  { font-size: 0.8rem; color: #e2e8f0; font-weight: 700; margin-top: 3px; }
+    .flow-step-sub   { font-size: 0.68rem; color: #64748b; margin-top: 2px; }
+    .flow-arrow      { color: #475569; font-size: 1.1rem; display: flex; align-items: center; padding: 0 0.2rem; }
+
+    /* ── Annotations grid ── */
+    .ann-grid { display: grid; grid-template-columns: repeat(auto-fill,minmax(280px,1fr)); gap: 0.75rem; margin-top: 1.5rem; }
+    .ann {
+      background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.08);
+      border-radius: 10px; padding: 1rem 1.15rem;
+    }
+    .ann-tag   { font-size: 0.62rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em; color: var(--brand); margin-bottom: 0.35rem; }
+    .ann-title { font-size: 0.88rem; font-weight: 700; color: #f1f5f9; margin-bottom: 0.3rem; }
+    .ann-text  { font-size: 0.78rem; color: #94a3b8; line-height: 1.5; }
+    .ann-text code { font-family: monospace; color: #a5b4fc; background: rgba(99,102,241,0.12); padding: 1px 5px; border-radius: 3px; }
+
+    /* ── Desktop wireframe ── */
+    .desktop-frame {
+      background: #161b27; border-radius: 12px; overflow: hidden;
+      display: flex; height: 300px; border: 1px solid rgba(255,255,255,0.08);
+      margin-bottom: 1.25rem;
+    }
+    .dt-sidebar {
+      width: 196px; background: #0f1623; padding: 14px 0;
+      display: flex; flex-direction: column; gap: 1px; flex-shrink: 0;
+      border-right: 1px solid rgba(255,255,255,0.06);
+    }
+    .dt-brand {
+      display: flex; align-items: center; gap: 8px;
+      padding: 0 14px 14px; border-bottom: 1px solid rgba(255,255,255,0.07);
+      margin-bottom: 8px;
+    }
+    .dt-nav-item {
+      display: flex; align-items: center; gap: 9px;
+      padding: 7px 14px; font-size: 0.78rem; color: #64748b;
+    }
+    .dt-nav-item.active {
+      color: #fff; background: rgba(22,163,74,0.14);
+      border-left: 3px solid var(--brand); padding-left: 11px;
+    }
+    .dt-main { flex: 1; padding: 18px; overflow: hidden; }
+    .dt-topbar { display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px; }
+    .dt-title  { color: #f1f5f9; font-weight: 800; font-size: 0.95rem; }
+    .dt-search { background: rgba(255,255,255,0.08); border-radius: 6px; padding: 5px 14px; font-size: 0.75rem; color: #64748b; }
+    .dt-filter-active { background: rgba(22,163,74,0.15); border: 1px solid var(--brand); border-radius: 6px; padding: 5px 12px; font-size: 0.75rem; color: #86efac; font-weight: 700; }
+    .dt-filter-row {
+      background: rgba(255,255,255,0.04); border-radius: 8px; padding: 11px 14px;
+      display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 14px; margin-bottom: 12px;
+      border: 1px solid rgba(255,255,255,0.07);
+    }
+    .dt-filt-lbl { font-size: 0.58rem; font-weight: 700; text-transform: uppercase; letter-spacing: .08em; color: #475569; margin-bottom: 5px; }
+    .dt-pill-act { background: rgba(59,130,246,.25); border: 1px solid var(--blue); border-radius: 4px; padding: 3px 9px; font-size: 0.7rem; color: #93c5fd; font-weight: 700; display: inline-block; }
+    .dt-pill     { background: rgba(255,255,255,.06); border-radius: 4px; padding: 3px 9px; font-size: 0.7rem; color: #64748b; display: inline-block; margin-left: 4px; }
+    .dt-txn-list { background: rgba(255,255,255,0.04); border-radius: 8px; overflow: hidden; }
+    .dt-txn {
+      display: flex; align-items: center; gap: 9px;
+      padding: 7px 11px; border-bottom: 1px solid rgba(255,255,255,0.05);
+    }
+    .dt-txn:last-child { border-bottom: none; }
+    .dt-ico { width: 28px; height: 28px; border-radius: 7px; display: flex; align-items: center; justify-content: center; font-size: 0.85rem; flex-shrink: 0; }
+    .dt-txn-name { font-size: 0.78rem; font-weight: 600; color: #e2e8f0; }
+    .dt-txn-sub  { font-size: 0.63rem; color: #475569; }
+    .dt-txn-amt  { font-size: 0.82rem; font-weight: 700; color: #f1f5f9; margin-left: auto; }
+    .dt-confirm  { background: rgba(22,163,74,.15); border: 1px solid var(--brand); border-radius: 4px; padding: 2px 8px; font-size: 0.63rem; color: #86efac; font-weight: 700; margin-right: 6px; }
+
+    /* ── Desktop layout notes ── */
+    .dt-notes { display: grid; grid-template-columns: repeat(3,1fr); gap: 1rem; font-size: 0.78rem; color: #94a3b8; }
+    .dt-notes strong { color: #f1f5f9; display: block; margin-bottom: 3px; font-size: 0.82rem; }
+
+    /* ── Footer ── */
+    .doc-footer { text-align: center; color: #1e293b; font-size: 0.78rem; padding: 2.5rem 0 1rem; }
+  </style>
+</head>
+<body>
+<!-- ─── SVG icon symbols ─── -->
+<svg width="0" height="0" style="display:none;position:absolute" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <symbol id="ic-dash" viewBox="0 0 20 20">
+      <rect x="2" y="2" width="7.5" height="9" rx="1.5" fill="currentColor"/>
+      <rect x="10.5" y="2" width="7.5" height="4.5" rx="1.5" fill="currentColor" opacity="0.6"/>
+      <rect x="10.5" y="8" width="7.5" height="10" rx="1.5" fill="currentColor" opacity="0.6"/>
+      <rect x="2" y="12.5" width="7.5" height="5.5" rx="1.5" fill="currentColor" opacity="0.6"/>
+    </symbol>
+    <symbol id="ic-txn" viewBox="0 0 20 20">
+      <circle cx="3.5" cy="5.5" r="1.3" fill="currentColor"/>
+      <circle cx="3.5" cy="10" r="1.3" fill="currentColor"/>
+      <circle cx="3.5" cy="14.5" r="1.3" fill="currentColor" opacity="0.5"/>
+      <line x1="7" y1="5.5" x2="17" y2="5.5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>
+      <line x1="7" y1="10" x2="17" y2="10" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>
+      <line x1="7" y1="14.5" x2="13" y2="14.5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" opacity="0.5"/>
+    </symbol>
+    <symbol id="ic-bud" viewBox="0 0 20 20">
+      <rect x="2" y="13" width="4" height="6" rx="1" fill="currentColor" opacity="0.55"/>
+      <rect x="8" y="7" width="4" height="12" rx="1" fill="currentColor" opacity="0.8"/>
+      <rect x="14" y="3" width="4" height="16" rx="1" fill="currentColor"/>
+      <line x1="1" y1="10" x2="19" y2="10" stroke="currentColor" stroke-width="1.4" stroke-dasharray="2 1.5" stroke-linecap="round"/>
+    </symbol>
+    <symbol id="ic-acct" viewBox="0 0 20 20">
+      <rect x="4" y="4" width="14" height="8.5" rx="2" fill="currentColor" opacity="0.35"/>
+      <rect x="2" y="7" width="14" height="8.5" rx="2" fill="currentColor"/>
+      <rect x="4.5" y="10" width="3" height="2" rx="0.5" fill="white"/>
+      <line x1="2" y1="13" x2="16" y2="13" stroke="white" stroke-width="1.4" opacity="0.6"/>
+    </symbol>
+    <symbol id="ic-auto" viewBox="0 0 20 20">
+      <line x1="2" y1="5" x2="18" y2="5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+      <line x1="2" y1="10" x2="18" y2="10" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+      <line x1="2" y1="15" x2="18" y2="15" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+      <circle cx="7" cy="5" r="2.5" fill="white" stroke="currentColor" stroke-width="1.5"/>
+      <circle cx="13" cy="10" r="2.5" fill="white" stroke="currentColor" stroke-width="1.5"/>
+      <circle cx="9" cy="15" r="2.5" fill="white" stroke="currentColor" stroke-width="1.5"/>
+    </symbol>
+    <symbol id="ic-ins" viewBox="0 0 20 20">
+      <path d="M10 2L11.9 7.8H18L13 11.4L14.9 17.2L10 13.6L5.1 17.2L7 11.4L2 7.8H8.1L10 2Z" fill="currentColor"/>
+    </symbol>
+  </defs>
+</svg>
+<div class="doc">
+
+  <!-- ═══════════════ HEADER ═══════════════ -->
+  <div class="doc-header">
+    <div class="doc-brand">
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 44 44" width="58" height="58" style="flex-shrink:0">
+        <rect width="44" height="44" rx="11" fill="rgba(255,255,255,0.18)"/>
+        <rect x="8" y="21" width="6" height="17" rx="2.5" fill="white"/>
+        <rect x="30" y="21" width="6" height="17" rx="2.5" fill="white"/>
+        <path d="M11 24 Q11 7 22 7 Q33 7 33 24" fill="none" stroke="white" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/>
+        <path d="M22 35 C19 32 18.5 28 20.5 26 C21 28.5 22 27 22 24 C23.5 27 23 28.5 23.5 26 C25.5 28 25 32 22 35Z" fill="white"/>
+      </svg>
+      <div>
+        <div class="doc-brand-name">Hearth Finance</div>
+        <div class="doc-brand-sub">Design Brief — Screen Mockups &amp; UX Patterns</div>
+      </div>
+    </div>
+    <div class="doc-meta">
+      v1.0.0 · August 2026<br>
+      Internal design reference<br>
+      5 screens · 4 use cases
+    </div>
+  </div>
+
+  <!-- ═══════════════ PRINCIPLES ═══════════════ -->
+  <div class="section-header">
+    <span class="section-num">Foundation</span>
+    <span class="section-title">Design Principles</span>
+  </div>
+
+  <div class="principles">
+    <div class="principle">
+      <div class="principle-icon">⚡</div>
+      <div class="principle-title">Automation First</div>
+      <div class="principle-text">Rules (181 AutoCat patterns) and AI should categorize the vast majority of transactions without user input. Manual work is the exception, not the norm. Every manual action should ask "can we automate this next time?"</div>
+    </div>
+    <div class="principle">
+      <div class="principle-icon">⚠️</div>
+      <div class="principle-title">Surface Deviations</div>
+      <div class="principle-text">Don't make the user hunt for problems. Overspend, unusual patterns, and missed goals must be visible on first glance — not buried in tables. Green = good, amber = watch it, red = act now.</div>
+    </div>
+    <div class="principle">
+      <div class="principle-icon">🎯</div>
+      <div class="principle-title">Monthly &amp; Annual Goals</div>
+      <div class="principle-text">Budget tracking is dual-mode. Monthly categories (groceries, restaurants) are measured against a monthly target. Annual categories (travel, home repairs, insurance) are measured YTD vs the full-year budget. The UI must distinguish these clearly.</div>
+    </div>
+    <div class="principle">
+      <div class="principle-icon">📱</div>
+      <div class="principle-title">Mobile-First, Desktop-Capable</div>
+      <div class="principle-text">The primary experience is a phone: quick review and fast triage on the go. Desktop unlocks deeper analysis with more screen real estate. One codebase, adaptive layouts.</div>
+    </div>
+  </div>
+
+  <hr class="divider">
+
+  <!-- ═══════════════ DESIGN SYSTEM ═══════════════ -->
+  <div class="section-header">
+    <span class="section-num">Design System</span>
+    <span class="section-title">Tokens &amp; Typography</span>
+  </div>
+
+  <div class="tokens-grid">
+    <div class="token">
+      <div class="token-swatch" style="background:#16a34a"></div>
+      <div class="token-info"><div class="token-name">Brand</div><div class="token-value">--brand · #16a34a</div></div>
+    </div>
+    <div class="token">
+      <div class="token-swatch" style="background:#f0fdf4"></div>
+      <div class="token-info"><div class="token-name">Brand XL</div><div class="token-value">--brand-xl · #f0fdf4</div></div>
+    </div>
+    <div class="token">
+      <div class="token-swatch" style="background:#ef4444"></div>
+      <div class="token-info"><div class="token-name">Danger</div><div class="token-value">--red · #ef4444</div></div>
+    </div>
+    <div class="token">
+      <div class="token-swatch" style="background:#f59e0b"></div>
+      <div class="token-info"><div class="token-name">Warning</div><div class="token-value">--amber · #f59e0b</div></div>
+    </div>
+    <div class="token">
+      <div class="token-swatch" style="background:#8b5cf6"></div>
+      <div class="token-info"><div class="token-name">Anomaly</div><div class="token-value">--purple · #8b5cf6</div></div>
+    </div>
+    <div class="token">
+      <div class="token-swatch" style="background:#f8fafc"></div>
+      <div class="token-info"><div class="token-name">Background</div><div class="token-value">--bg · #f8fafc</div></div>
+    </div>
+    <div class="token">
+      <div class="token-swatch" style="background:#ffffff;border-bottom:1px solid #e2e8f0"></div>
+      <div class="token-info"><div class="token-name">Surface</div><div class="token-value">--surface · #ffffff</div></div>
+    </div>
+    <div class="token">
+      <div class="token-swatch" style="background:#0f172a"></div>
+      <div class="token-info"><div class="token-name">Text</div><div class="token-value">--text · #0f172a</div></div>
+    </div>
+  </div>
+
+  <div class="type-row">
+    <span class="type-spec">2rem / 800 / −0.5px · Net worth, hero numbers</span>
+    <span style="font-size:2rem;font-weight:800;color:#f1f5f9;letter-spacing:-0.5px;line-height:1">$423,840</span>
+  </div>
+  <div class="type-row">
+    <span class="type-spec">1.35rem / 800 / −0.4px · Section title, card metric</span>
+    <span style="font-size:1.35rem;font-weight:800;color:#f1f5f9;letter-spacing:-0.4px">Monthly Overview</span>
+  </div>
+  <div class="type-row">
+    <span class="type-spec">0.88rem / 700 / 0 · Transaction amount</span>
+    <span style="font-size:0.88rem;font-weight:700;color:#f1f5f9">$124.80</span>
+  </div>
+  <div class="type-row">
+    <span class="type-spec">0.83rem / 600 / 0 · Merchant name</span>
+    <span style="font-size:0.83rem;font-weight:600;color:#f1f5f9">Whole Foods Market</span>
+  </div>
+  <div class="type-row">
+    <span class="type-spec">0.68rem / 400 / 0 · Date, account, category label</span>
+    <span style="font-size:0.68rem;color:#94a3b8">Aug 14, 2026 · Citi Savings · Super &amp; Farmacia</span>
+  </div>
+  <div class="type-row">
+    <span class="type-spec">0.62rem / 700 / +0.08em CAPS · Section headers</span>
+    <span style="font-size:0.62rem;font-weight:700;text-transform:uppercase;letter-spacing:0.08em;color:#94a3b8">Casa &amp; Hogar</span>
+  </div>
+
+  <hr class="divider">
+
+  <!-- ═══════════════ SCREEN 1: DASHBOARD ═══════════════ -->
+  <div class="section-header">
+    <span class="section-num">Screen 1</span>
+    <span class="section-title">Dashboard — Monthly Health at a Glance</span>
+  </div>
+
+  <div class="screen-with-notes">
+    <div class="screen-col">
+      <div class="screen-label">August 2026 · Day 14 of 31</div>
+      <div class="phone">
+        <div class="phone-inner">
+          <div class="phone-status">
+            <span>9:41</span><span>Hearth</span><span>●●●</span>
+          </div>
+          <div class="phone-content">
+            <!-- Month nav bar -->
+            <div style="background:var(--brand);padding:8px 16px 12px;display:flex;justify-content:space-between;align-items:center">
+              <span style="color:rgba(255,255,255,0.6);font-size:1.1rem">‹</span>
+              <span style="color:white;font-size:0.95rem;font-weight:800;letter-spacing:-0.3px">August 2026</span>
+              <span style="color:rgba(255,255,255,0.6);font-size:1.1rem">›</span>
+            </div>
+            <div class="app-page">
+
+              <!-- Net worth hero card -->
+              <div class="card" style="background:linear-gradient(135deg,#16a34a,#14532d);color:white;margin-bottom:8px">
+                <div class="metric-label" style="color:rgba(255,255,255,0.65)">Net Worth</div>
+                <div class="metric-val" style="color:white;font-size:1.7rem">$423,840</div>
+                <div style="font-size:0.68rem;color:rgba(255,255,255,0.65);margin-top:5px">↑ $2,340 vs July &nbsp;·&nbsp; $435,920 assets &nbsp;·&nbsp; $12,080 debt</div>
+              </div>
+
+              <!-- 3 mini metrics -->
+              <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;margin-bottom:8px">
+                <div class="card" style="margin:0;padding:9px 8px">
+                  <div class="metric-label" style="font-size:0.56rem">Spent</div>
+                  <div class="metric-val" style="font-size:0.95rem">$18,420</div>
+                  <div class="metric-delta delta-muted">of $32k budget</div>
+                </div>
+                <div class="card" style="margin:0;padding:9px 8px">
+                  <div class="metric-label" style="font-size:0.56rem">vs Budget</div>
+                  <div class="metric-val" style="font-size:0.95rem;color:var(--red)">+8%</div>
+                  <div class="metric-delta delta-muted">over pace</div>
+                </div>
+                <div class="card" style="margin:0;padding:9px 8px">
+                  <div class="metric-label" style="font-size:0.56rem">vs Aug '25</div>
+                  <div class="metric-val" style="font-size:0.95rem;color:var(--brand)">−12%</div>
+                  <div class="metric-delta delta-green">better ✓</div>
+                </div>
+              </div>
+
+              <!-- Alert -->
+              <div class="alert-banner">⚠ 2 categories over pace &nbsp;·&nbsp; 12 to review</div>
+
+              <!-- Spending breakdown card -->
+              <div class="card" style="padding:11px 11px 6px">
+                <div style="font-size:0.62rem;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--faint);margin-bottom:10px">
+                  Spend vs Budget — Day 14 of 31 &nbsp;
+                  <span style="font-weight:500;text-transform:none;letter-spacing:0">│ pace</span>
+                </div>
+
+                <!-- Shopping: OVER BUDGET -->
+                <div class="prog-row">
+                  <div class="prog-hdr">
+                    <span style="color:var(--red);font-weight:700">🛍 Shopping</span>
+                    <span class="prog-hdr-r" style="color:var(--red)">$2,847 / $2,000</span>
+                  </div>
+                  <div class="prog-track">
+                    <div class="prog-fill" style="width:100%;background:#fca5a5"></div>
+                    <div class="prog-pace" style="left:45%"></div>
+                  </div>
+                  <div class="prog-foot"><span style="color:var(--red);font-weight:600">142% — $847 over</span></div>
+                </div>
+
+                <!-- Salidas: over pace -->
+                <div class="prog-row">
+                  <div class="prog-hdr">
+                    <span>🍴 Salidas &amp; Ocio</span>
+                    <span class="prog-hdr-r">$1,580 / $1,800</span>
+                  </div>
+                  <div class="prog-track">
+                    <div class="prog-fill" style="width:88%;background:#fcd34d"></div>
+                    <div class="prog-pace" style="left:45%"></div>
+                  </div>
+                  <div class="prog-foot"><span style="color:#b45309;font-weight:600">88% · on pace to overspend</span></div>
+                </div>
+
+                <!-- Casa Fijo: fixed -->
+                <div class="prog-row">
+                  <div class="prog-hdr">
+                    <span>🔑 Hipoteca &amp; HOA</span>
+                    <span class="prog-hdr-r">$10,300 / $10,300</span>
+                  </div>
+                  <div class="prog-track">
+                    <div class="prog-fill" style="width:100%;background:#86efac"></div>
+                  </div>
+                  <div class="prog-foot"><span style="color:var(--muted)">Fixed — paid ✓</span></div>
+                </div>
+
+                <!-- Super: on track -->
+                <div class="prog-row">
+                  <div class="prog-hdr">
+                    <span>🛒 Super &amp; Farmacia</span>
+                    <span class="prog-hdr-r">$1,235 / $2,000</span>
+                  </div>
+                  <div class="prog-track">
+                    <div class="prog-fill" style="width:62%;background:#86efac"></div>
+                    <div class="prog-pace" style="left:45%"></div>
+                  </div>
+                  <div class="prog-foot"><span>62% · on track</span></div>
+                </div>
+
+                <!-- Kids: under pace -->
+                <div class="prog-row">
+                  <div class="prog-hdr">
+                    <span>⚽ Kids Activities</span>
+                    <span class="prog-hdr-r">$900 / $1,875</span>
+                  </div>
+                  <div class="prog-track">
+                    <div class="prog-fill" style="width:48%;background:#86efac"></div>
+                    <div class="prog-pace" style="left:45%"></div>
+                  </div>
+                  <div class="prog-foot"><span>48% · under pace ✓</span></div>
+                </div>
+              </div>
+
+              <!-- Quick action -->
+              <button style="width:100%;background:var(--brand);color:white;border:none;border-radius:10px;padding:10px;font-size:0.82rem;font-weight:700;cursor:pointer">
+                Review 12 transactions →
+              </button>
+            </div>
+          </div>
+          <div class="phone-nav">
+            <div class="nav-item active"><svg class="nav-icon"><use href="#ic-dash"/></svg>Dashboard</div>
+            <div class="nav-item"><svg class="nav-icon"><use href="#ic-txn"/></svg>Txns</div>
+            <div class="nav-item"><svg class="nav-icon"><use href="#ic-bud"/></svg>Budget</div>
+            <div class="nav-item"><svg class="nav-icon"><use href="#ic-acct"/></svg>Accounts</div>
+            <div class="nav-item"><svg class="nav-icon"><use href="#ic-auto"/></svg>Automation</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="notes-col">
+      <div class="note">
+        <div class="note-tag ux">UX Pattern · Pace Indicator</div>
+        <div class="note-title">The Pace Tick</div>
+        <div class="note-text">The thin vertical bar on each progress track marks the <strong>expected spend at today's date</strong>. Day 14 of 31 = 45% mark. A filled bar extending past the tick = over pace (bad for expenses). A filled bar stopping before the tick = under pace (good). Fixed expenses skip the tick — they're binary (paid / not paid).</div>
+      </div>
+      <div class="note">
+        <div class="note-tag critical">Critical · Data Model</div>
+        <div class="note-title">Annual Categories Excluded from Dashboard</div>
+        <div class="note-text">Categories tagged <strong>isAnnual</strong> (Travel, Casa Fijo Anual, Seguros, etc.) do <em>not</em> appear in the monthly progress bars — they'd be falsely "under budget" every non-event month. They live in the Annual view on Screen 3.</div>
+      </div>
+      <div class="note">
+        <div class="note-tag ux">UX · Alert Priority</div>
+        <div class="note-title">Alert Banner Logic</div>
+        <div class="note-text">Banner triggers when: (1) any category exceeds 100% of monthly budget, (2) any category is on pace to exceed by >15%, or (3) unreviewed transaction count &gt; 0. Tapping navigates directly to the problem — not a generic list.</div>
+      </div>
+      <div class="note">
+        <div class="note-tag future">Future</div>
+        <div class="note-title">Trend Sparkline</div>
+        <div class="note-text">Below the spending bars, a 12-month SVG line chart showing total spend vs budget over the year provides longitudinal context. Already implemented in v0.6.0 — this brief proposes moving it to a collapsible section to reduce initial scroll depth.</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Screen 1B: Annual Dashboard ── -->
+  <div class="section-header" style="margin-top:2rem">
+    <span class="section-num">Screen 1B</span>
+    <span class="section-title">Dashboard — Annual View (All Categories)</span>
+  </div>
+
+  <div class="screen-with-notes">
+    <div class="screen-col">
+      <div class="screen-label">B · Annual toggle — 2026 YTD through August</div>
+      <div class="phone">
+        <div class="phone-inner">
+          <div class="phone-status"><span>9:41</span><span>Hearth</span><span>●●●</span></div>
+          <div class="phone-content">
+            <!-- Year nav + toggle -->
+            <div style="background:var(--brand);padding:8px 16px 12px;display:flex;justify-content:space-between;align-items:center">
+              <span style="color:rgba(255,255,255,0.6);font-size:1.1rem">‹</span>
+              <span style="color:white;font-size:0.9rem;font-weight:800;letter-spacing:-0.3px">2026 Annual</span>
+              <span style="color:rgba(255,255,255,0.6);font-size:1.1rem">›</span>
+            </div>
+            <!-- Month/Annual toggle -->
+            <div style="background:var(--brand);padding:0 16px 10px;display:flex;justify-content:center">
+              <div style="background:rgba(0,0,0,0.2);border-radius:8px;padding:2px;display:flex;gap:2px">
+                <span style="padding:4px 16px;font-size:0.75rem;color:rgba(255,255,255,0.6);cursor:pointer">Monthly</span>
+                <span style="padding:4px 16px;font-size:0.75rem;font-weight:700;background:rgba(255,255,255,0.2);border-radius:6px;color:white">Annual</span>
+              </div>
+            </div>
+            <div class="app-page">
+              <!-- YTD summary card -->
+              <div class="card" style="background:linear-gradient(135deg,#16a34a,#14532d);color:white;margin-bottom:8px">
+                <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+                  <div>
+                    <div style="font-size:0.58rem;color:rgba(255,255,255,0.65);font-weight:700;text-transform:uppercase;letter-spacing:.05em">YTD Spend</div>
+                    <div style="font-size:1.25rem;font-weight:800;color:white;letter-spacing:-0.4px;margin-top:3px">$168,400</div>
+                    <div style="font-size:0.65rem;color:rgba(255,255,255,0.65);margin-top:3px">of $251,200 budget</div>
+                  </div>
+                  <div>
+                    <div style="font-size:0.58rem;color:rgba(255,255,255,0.65);font-weight:700;text-transform:uppercase;letter-spacing:.05em">Year Progress</div>
+                    <div style="font-size:1.25rem;font-weight:800;color:white;letter-spacing:-0.4px;margin-top:3px">67%</div>
+                    <div style="font-size:0.65rem;color:rgba(255,255,255,0.65);margin-top:3px">month 8 of 12</div>
+                  </div>
+                </div>
+                <div style="margin-top:10px;height:5px;background:rgba(0,0,0,0.2);border-radius:3px;overflow:visible;position:relative">
+                  <div style="width:67%;height:100%;background:rgba(255,255,255,0.7);border-radius:3px"></div>
+                  <div style="position:absolute;left:67%;top:-3px;width:2px;height:11px;background:white;border-radius:1px;opacity:0.5"></div>
+                </div>
+                <div style="font-size:0.65rem;color:rgba(255,255,255,0.65);margin-top:4px">67% spent of annual budget · on pace overall ✓</div>
+              </div>
+
+              <!-- Annual progress bars -->
+              <div class="card" style="padding:11px 11px 6px">
+                <div style="font-size:0.62rem;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--faint);margin-bottom:10px">All categories · pace tick = 67% (Aug)</div>
+
+                <!-- Hipoteca: fixed, on pace -->
+                <div class="prog-row">
+                  <div class="prog-hdr"><span>🔑 Hipoteca &amp; HOA</span><span class="prog-hdr-r">$82,400/$123,600</span></div>
+                  <div class="prog-track">
+                    <div class="prog-fill" style="width:67%;background:#86efac"></div>
+                  </div>
+                  <div class="prog-foot"><span style="color:var(--muted)">Fixed · 8 payments ✓</span></div>
+                </div>
+
+                <!-- Shopping: slightly over annual pace -->
+                <div class="prog-row">
+                  <div class="prog-hdr"><span>🛍 Shopping</span><span class="prog-hdr-r" style="color:#b45309">$16,200/$24,000</span></div>
+                  <div class="prog-track">
+                    <div class="prog-fill" style="width:68%;background:#fcd34d"></div>
+                    <div class="prog-pace" style="left:67%"></div>
+                  </div>
+                  <div class="prog-foot"><span style="color:#b45309">68% · slightly over annual pace</span></div>
+                </div>
+
+                <!-- Super: under pace -->
+                <div class="prog-row">
+                  <div class="prog-hdr"><span>🛒 Super &amp; Farmacia</span><span class="prog-hdr-r">$13,500/$24,000</span></div>
+                  <div class="prog-track">
+                    <div class="prog-fill" style="width:56%;background:#86efac"></div>
+                    <div class="prog-pace" style="left:67%"></div>
+                  </div>
+                  <div class="prog-foot"><span>56% · under pace ✓</span></div>
+                </div>
+
+                <!-- Restaurantes: under pace -->
+                <div class="prog-row">
+                  <div class="prog-hdr"><span>🍴 Restaurantes</span><span class="prog-hdr-r">$12,800/$21,600</span></div>
+                  <div class="prog-track">
+                    <div class="prog-fill" style="width:59%;background:#86efac"></div>
+                    <div class="prog-pace" style="left:67%"></div>
+                  </div>
+                  <div class="prog-foot"><span>59% · under pace ✓</span></div>
+                </div>
+
+                <!-- Travel: way under (planned later) -->
+                <div class="prog-row">
+                  <div class="prog-hdr"><span style="color:var(--muted)">✈️ Travel Family</span><span class="prog-hdr-r" style="color:var(--muted)">$1,450/$11,500</span></div>
+                  <div class="prog-track">
+                    <div class="prog-fill" style="width:13%;background:#86efac"></div>
+                    <div class="prog-pace" style="left:67%"></div>
+                  </div>
+                  <div class="prog-foot"><span style="color:var(--faint)">13% · low (planned for later)</span></div>
+                </div>
+
+                <!-- Mejoras: slightly under -->
+                <div class="prog-row">
+                  <div class="prog-hdr"><span>🪚 Mejoras Casa</span><span class="prog-hdr-r">$3,200/$5,500</span></div>
+                  <div class="prog-track">
+                    <div class="prog-fill" style="width:58%;background:#86efac"></div>
+                    <div class="prog-pace" style="left:67%"></div>
+                  </div>
+                  <div class="prog-foot"><span>58% · under pace ✓</span></div>
+                </div>
+
+                <div style="text-align:center;padding:6px 0 4px;font-size:0.68rem;color:var(--brand);font-weight:600">View all 12 categories ↓</div>
+              </div>
+            </div>
+          </div>
+          <div class="phone-nav">
+            <div class="nav-item active"><svg class="nav-icon"><use href="#ic-dash"/></svg>Dashboard</div>
+            <div class="nav-item"><svg class="nav-icon"><use href="#ic-txn"/></svg>Txns</div>
+            <div class="nav-item"><svg class="nav-icon"><use href="#ic-bud"/></svg>Budget</div>
+            <div class="nav-item"><svg class="nav-icon"><use href="#ic-acct"/></svg>Accounts</div>
+            <div class="nav-item"><svg class="nav-icon"><use href="#ic-auto"/></svg>Automation</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="notes-col">
+      <div class="note">
+        <div class="note-tag ux">UX · Toggle</div>
+        <div class="note-title">Monthly ↔ Annual Toggle</div>
+        <div class="note-text">The toggle lives inside the green header bar — same green background as the month navigation. Switching to Annual changes the context from "August 2026" to "2026 Annual" and updates all bars to YTD vs annualized targets. The pace tick shifts from 45% (day 14/31) to 67% (month 8/12).</div>
+      </div>
+      <div class="note">
+        <div class="note-tag data">Data · Annualization</div>
+        <div class="note-title">How Monthly Categories Are Annualized</div>
+        <div class="note-text"><strong>Annual target = monthly budget × 12.</strong> YTD actual = sum of all transactions Jan–Aug in that category. This gives a true apples-to-apples comparison on the annual scale. Categories tagged <code>isAnnual</code> use their explicit annual budget — no multiplication needed.</div>
+      </div>
+      <div class="note">
+        <div class="note-tag ux">UX · Travel Pattern</div>
+        <div class="note-title">Intentionally Under-Pace = OK</div>
+        <div class="note-text">Travel at 13% of annual budget by August isn't alarming — it may be planned for December. The annual view should let the user add a note like "planned for Q4" to suppress false alerts. For now, the muted color treatment (grey text) signals awareness without urgency.</div>
+      </div>
+    </div>
+  </div>
+
+  <hr class="divider">
+
+  <!-- ═══════════════ SCREEN 2: TRANSACTIONS ═══════════════ -->
+  <div class="section-header">
+    <span class="section-num">Screen 2</span>
+    <span class="section-title">Transactions — Triage, Quick-Edit &amp; Rule Creation</span>
+  </div>
+
+  <div class="screens">
+    <!-- State A: normal list -->
+    <div class="screen-col">
+      <div class="screen-label">A · Transaction list with review states</div>
+      <div class="phone">
+        <div class="phone-inner">
+          <div class="phone-status"><span>9:41</span><span>Hearth</span><span>●●●</span></div>
+          <div class="phone-content">
+            <!-- Search + filter bar -->
+            <div style="background:var(--surface);padding:9px 11px;border-bottom:1px solid var(--border);display:flex;gap:7px">
+              <div style="flex:1;border:1.5px solid var(--border);border-radius:8px;padding:6px 10px;font-size:0.78rem;color:var(--faint)">Search transactions…</div>
+              <div style="border:1.5px solid var(--border);border-radius:8px;padding:6px 11px;font-size:0.78rem;font-weight:600;color:var(--brand)">Filters</div>
+            </div>
+            <div style="font-size:0.68rem;color:var(--faint);text-align:right;padding:3px 11px;background:var(--bg)">7,189 transactions · 100 shown</div>
+
+            <div style="background:var(--surface)">
+
+              <!-- Txn 1: categorized by rule -->
+              <div class="txn">
+                <div class="txn-ico" style="background:#f0fdf4">🛒</div>
+                <div class="txn-meta">
+                  <div class="txn-name">Whole Foods Market</div>
+                  <div class="txn-sub">Aug 14 · Citi Savings · <span class="txn-cat" style="color:#15803d">Super &amp; Farmacia</span></div>
+                </div>
+                <div class="txn-amt">$124.80</div>
+              </div>
+
+              <!-- Txn 2: income -->
+              <div class="txn">
+                <div class="txn-ico" style="background:#f0fdf4">💼</div>
+                <div class="txn-meta">
+                  <div class="txn-name">Accenture Payroll</div>
+                  <div class="txn-sub">Aug 15 · Chase · <span class="txn-cat" style="color:#15803d">Paycheck</span></div>
+                </div>
+                <div class="txn-amt txn-income">+$8,430</div>
+              </div>
+
+              <!-- Txn 3: needs review (AI suggestion shown) -->
+              <div class="txn" style="background:#fffbeb">
+                <div class="txn-ico" style="background:#fef3c7">
+                  ⛽
+                  <div class="txn-dot" style="background:var(--amber)"></div>
+                </div>
+                <div class="txn-meta">
+                  <div class="txn-name">Exxon Mobil #7821</div>
+                  <div class="txn-sub">Aug 14 · AmEx · <span style="color:var(--amber);font-weight:600">revisar</span></div>
+                </div>
+                <div class="txn-amt">$68.40</div>
+              </div>
+              <div class="sug-strip ai">
+                <span class="sug-lbl ai">AI:</span>
+                <span class="sug-cat">⛽ Combustible &amp; Peajes</span>
+                <button class="btn-confirm">✓ Confirm</button>
+                <button class="btn-change">Change</button>
+              </div>
+
+              <!-- Txn 4: just confirmed → rule prompt appears -->
+              <div class="txn" style="background:#f0fdf4">
+                <div class="txn-ico" style="background:#dcfce7">🧹</div>
+                <div class="txn-meta">
+                  <div class="txn-name">Merry Maids</div>
+                  <div class="txn-sub">Aug 12 · Citi · <span style="color:var(--brand);font-weight:600">Limpieza ✓</span></div>
+                </div>
+                <div class="txn-amt">$185.00</div>
+              </div>
+              <div class="rule-prompt">
+                <span class="rule-text">Always categorize <strong>Merry Maids</strong> as Limpieza?</span>
+                <button class="btn-rule">Add rule</button>
+                <button class="btn-skip">Skip</button>
+              </div>
+
+              <!-- Txn 5: normal -->
+              <div class="txn">
+                <div class="txn-ico" style="background:#fef3c7">🍴</div>
+                <div class="txn-meta">
+                  <div class="txn-name">Roost Cos Cob</div>
+                  <div class="txn-sub">Aug 13 · Chase CC · <span class="txn-cat" style="color:#b45309">Restaurantes</span></div>
+                </div>
+                <div class="txn-amt">$87.50</div>
+              </div>
+
+              <!-- Txn 6: fully uncategorized -->
+              <div class="txn" style="background:#fff1f2">
+                <div class="txn-ico" style="background:#fee2e2">
+                  ❓
+                  <div class="txn-dot" style="background:var(--red)"></div>
+                </div>
+                <div class="txn-meta">
+                  <div class="txn-name">ACH Debit — AQUAR…</div>
+                  <div class="txn-sub">Aug 11 · Citi Savings · <span style="color:var(--red);font-weight:600">⚠ Sin categoría</span></div>
+                </div>
+                <div class="txn-amt">$190.73</div>
+              </div>
+              <div class="sug-strip warn">
+                <span class="sug-lbl warn">⚠ Sin categoría</span>
+                <button class="btn-cat">Categorize →</button>
+              </div>
+
+              <!-- Txn 7 + 8: more normal rows -->
+              <div class="txn">
+                <div class="txn-ico" style="background:#ede9fe">🔧</div>
+                <div class="txn-meta">
+                  <div class="txn-name">Shell Oil Company</div>
+                  <div class="txn-sub">Aug 10 · Discover · <span class="txn-cat" style="color:#5b21b6">Combustible</span></div>
+                </div>
+                <div class="txn-amt">$52.18</div>
+              </div>
+              <div class="txn">
+                <div class="txn-ico" style="background:#f0fdf4">🛒</div>
+                <div class="txn-meta">
+                  <div class="txn-name">Stop &amp; Shop</div>
+                  <div class="txn-sub">Aug 10 · Chase CC · <span class="txn-cat" style="color:#15803d">Super &amp; Farmacia</span></div>
+                </div>
+                <div class="txn-amt">$213.40</div>
+              </div>
+            </div>
+          </div>
+          <div class="phone-nav">
+            <div class="nav-item"><svg class="nav-icon"><use href="#ic-dash"/></svg>Dashboard</div>
+            <div class="nav-item active"><svg class="nav-icon"><use href="#ic-txn"/></svg>Txns</div>
+            <div class="nav-item"><svg class="nav-icon"><use href="#ic-bud"/></svg>Budget</div>
+            <div class="nav-item"><svg class="nav-icon"><use href="#ic-acct"/></svg>Accounts</div>
+            <div class="nav-item"><svg class="nav-icon"><use href="#ic-auto"/></svg>Automation</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- State B: filter panel open -->
+    <div class="screen-col">
+      <div class="screen-label">B · Filter panel (source + category active)</div>
+      <div class="phone">
+        <div class="phone-inner">
+          <div class="phone-status"><span>9:41</span><span>Hearth</span><span>●●●</span></div>
+          <div class="phone-content">
+            <div style="background:var(--surface);padding:9px 11px;border-bottom:1px solid var(--border);display:flex;gap:7px">
+              <div style="flex:1;border:1.5px solid var(--border);border-radius:8px;padding:6px 10px;font-size:0.78rem;color:var(--faint)">Search…</div>
+              <div style="background:var(--brand-xl);border:1.5px solid var(--brand);border-radius:8px;padding:6px 10px;font-size:0.78rem;font-weight:700;color:var(--brand);display:flex;align-items:center;gap:5px">
+                Filters
+                <span style="background:var(--red);color:white;border-radius:50%;width:15px;height:15px;display:inline-flex;align-items:center;justify-content:center;font-size:0.6rem;font-weight:800">2</span>
+              </div>
+            </div>
+
+            <!-- Filter panel content -->
+            <div style="background:var(--surface)">
+              <!-- Date section -->
+              <div style="padding:9px 11px;border-bottom:1px solid var(--border)">
+                <div style="font-size:0.6rem;font-weight:700;text-transform:uppercase;letter-spacing:.09em;color:var(--faint);margin-bottom:7px">Date</div>
+                <div style="display:inline-flex;background:var(--bg);border:1.5px solid var(--border);border-radius:7px;padding:2px;gap:1px">
+                  <span style="background:var(--surface);border-radius:5px;padding:4px 11px;font-size:0.75rem;font-weight:700;color:var(--text);box-shadow:0 1px 3px rgba(0,0,0,.08)">Month</span>
+                  <span style="padding:4px 11px;font-size:0.75rem;color:var(--muted)">All time</span>
+                  <span style="padding:4px 11px;font-size:0.75rem;color:var(--muted)">Range</span>
+                </div>
+                <div style="display:flex;gap:5px;margin-top:6px">
+                  <select style="flex:1;border:1.5px solid var(--border);border-radius:6px;padding:4px 7px;font-size:0.75rem;background:var(--bg);color:var(--text)"><option>August</option></select>
+                  <select style="flex:1;border:1.5px solid var(--border);border-radius:6px;padding:4px 7px;font-size:0.75rem;background:var(--bg);color:var(--text)"><option>2026</option></select>
+                </div>
+              </div>
+
+              <!-- Source section (active: AI) -->
+              <div style="padding:9px 11px;border-bottom:1px solid var(--border)">
+                <div style="font-size:0.6rem;font-weight:700;text-transform:uppercase;letter-spacing:.09em;color:var(--faint);margin-bottom:7px">Source</div>
+                <div style="display:flex;flex-wrap:wrap;gap:5px">
+                  <span style="border-radius:999px;padding:4px 12px;font-size:0.76rem;font-weight:700;background:var(--blue-l);color:#1d4ed8;border:1.5px solid var(--blue)">AI</span>
+                  <span style="border-radius:999px;padding:4px 12px;font-size:0.76rem;border:1.5px solid var(--border);color:var(--muted)">Rule</span>
+                  <span style="border-radius:999px;padding:4px 12px;font-size:0.76rem;border:1.5px solid var(--border);color:var(--muted)">Manual</span>
+                  <span style="border-radius:999px;padding:4px 12px;font-size:0.76rem;border:1.5px solid var(--border);color:var(--muted)">Import</span>
+                  <span style="border-radius:999px;padding:4px 12px;font-size:0.76rem;border:1.5px solid var(--border);color:var(--muted)">Plaid</span>
+                </div>
+              </div>
+
+              <!-- Category section (active: Casa) -->
+              <div style="padding:9px 11px;border-bottom:1px solid var(--border)">
+                <div style="font-size:0.6rem;font-weight:700;text-transform:uppercase;letter-spacing:.09em;color:var(--faint);margin-bottom:7px">Category</div>
+                <div style="display:flex;flex-wrap:wrap;gap:5px">
+                  <span style="border-radius:999px;padding:4px 12px;font-size:0.76rem;font-weight:700;background:#dbeafe;color:#1e40af;border:1.5px solid #2563eb">🏡 Casa</span>
+                  <span style="border-radius:999px;padding:4px 12px;font-size:0.76rem;border:1.5px solid var(--border);color:var(--muted)">🍴 Salidas</span>
+                  <span style="border-radius:999px;padding:4px 12px;font-size:0.76rem;border:1.5px solid var(--border);color:var(--muted)">🛍 Shopping</span>
+                  <span style="border-radius:999px;padding:4px 12px;font-size:0.76rem;border:1.5px solid var(--border);color:var(--muted)">🚗 Auto</span>
+                  <span style="border-radius:999px;padding:4px 12px;font-size:0.76rem;border:1.5px solid var(--border);color:var(--muted)">🛒 Super</span>
+                  <span style="border-radius:999px;padding:4px 12px;font-size:0.76rem;border:1.5px solid var(--border);color:var(--muted)">✈️ Travel</span>
+                </div>
+              </div>
+
+              <!-- Account section (scrollable) -->
+              <div style="padding:9px 11px;border-bottom:1px solid var(--border)">
+                <div style="font-size:0.6rem;font-weight:700;text-transform:uppercase;letter-spacing:.09em;color:var(--faint);margin-bottom:7px">Account</div>
+                <div style="display:flex;flex-wrap:wrap;gap:5px;max-height:62px;overflow-y:auto">
+                  <span style="border-radius:999px;padding:4px 10px;font-size:0.73rem;border:1.5px solid var(--border);color:var(--muted)">Citi Savings</span>
+                  <span style="border-radius:999px;padding:4px 10px;font-size:0.73rem;border:1.5px solid var(--border);color:var(--muted)">AmEx Platinum</span>
+                  <span style="border-radius:999px;padding:4px 10px;font-size:0.73rem;border:1.5px solid var(--border);color:var(--muted)">Chase Checking</span>
+                  <span style="border-radius:999px;padding:4px 10px;font-size:0.73rem;border:1.5px solid var(--border);color:var(--muted)">Chase CC</span>
+                  <span style="border-radius:999px;padding:4px 10px;font-size:0.73rem;border:1.5px solid var(--border);color:var(--muted)">Discover</span>
+                </div>
+              </div>
+
+              <!-- Status -->
+              <div style="padding:9px 11px">
+                <div style="font-size:0.6rem;font-weight:700;text-transform:uppercase;letter-spacing:.09em;color:var(--faint);margin-bottom:7px">Status</div>
+                <div style="display:flex;gap:14px;flex-wrap:wrap">
+                  <label style="display:flex;align-items:center;gap:5px;font-size:0.8rem;color:var(--text)"><input type="checkbox"> Needs review</label>
+                  <label style="display:flex;align-items:center;gap:5px;font-size:0.8rem;color:var(--text)"><input type="checkbox" checked> Hide transfers</label>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="phone-nav">
+            <div class="nav-item"><svg class="nav-icon"><use href="#ic-dash"/></svg>Dashboard</div>
+            <div class="nav-item active"><svg class="nav-icon"><use href="#ic-txn"/></svg>Txns</div>
+            <div class="nav-item"><svg class="nav-icon"><use href="#ic-bud"/></svg>Budget</div>
+            <div class="nav-item"><svg class="nav-icon"><use href="#ic-acct"/></svg>Accounts</div>
+            <div class="nav-item"><svg class="nav-icon"><use href="#ic-auto"/></svg>Automation</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Categorization flow -->
+  <div style="margin-bottom:1.5rem">
+    <div style="font-size:0.68rem;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--faint);margin-bottom:0.75rem">Categorization Flow — New Transaction</div>
+    <div class="flow">
+      <div class="flow-step">
+        <div class="flow-step-num">Arrives</div>
+        <div class="flow-step-text">New transaction</div>
+        <div class="flow-step-sub">Plaid or import</div>
+      </div>
+      <div class="flow-arrow">→</div>
+      <div class="flow-step hl">
+        <div class="flow-step-num">Auto · priority 10–50</div>
+        <div class="flow-step-text">181 rules checked</div>
+        <div class="flow-step-sub">Match = done instantly</div>
+      </div>
+      <div class="flow-arrow">→</div>
+      <div class="flow-step">
+        <div class="flow-step-num">No rule match</div>
+        <div class="flow-step-text">AI categorizes</div>
+        <div class="flow-step-sub">Confidence scored 0–1</div>
+      </div>
+      <div class="flow-arrow">→</div>
+      <div class="flow-step hl">
+        <div class="flow-step-num">Confidence &lt; 0.75</div>
+        <div class="flow-step-text">Review queue</div>
+        <div class="flow-step-sub">Inline AI suggestion</div>
+      </div>
+      <div class="flow-arrow">→</div>
+      <div class="flow-step hl2">
+        <div class="flow-step-num">User confirms</div>
+        <div class="flow-step-text">Rule offered</div>
+        <div class="flow-step-sub">One tap → permanent</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="ann-grid">
+    <div class="ann">
+      <div class="ann-tag">UX · Visual State</div>
+      <div class="ann-title">Three Categorization States</div>
+      <div class="ann-text">Each row communicates its state through background color and a dot badge: clean white = fully categorized; amber background + amber dot = AI suggestion waiting for confirmation; red background + red dot = fully uncategorized. No icons needed beyond color.</div>
+    </div>
+    <div class="ann">
+      <div class="ann-tag">UX · Rule Creation</div>
+      <div class="ann-title">Inline Rule Prompt</div>
+      <div class="ann-text">After any category change (confirm or manual pick), a prompt appears immediately below the row offering to create a permanent rule. Dismisses automatically after 2 seconds or on Skip. No navigation to Settings required — the whole flow stays in context.</div>
+    </div>
+    <div class="ann">
+      <div class="ann-tag">Data · Source Filter</div>
+      <div class="ann-title">Source Filter Values</div>
+      <div class="ann-text">Five source buckets: <code>ai</code> (AI Worker), <code>rule</code> (AutoCat engine), <code>manual</code> (user-set), <code>import</code> (Tiller CSV — normalized from "tiller"), <code>plaid</code> (live bank sync). Useful for auditing: e.g. show only <code>rule</code> to verify AutoCat is firing correctly.</div>
+    </div>
+  </div>
+
+  <hr class="divider">
+
+  <!-- ═══════════════ SCREEN 3: BUDGETS ═══════════════ -->
+  <div class="section-header">
+    <span class="section-num">Screen 3</span>
+    <span class="section-title">Budgets — Monthly Targets &amp; Annual Goals</span>
+  </div>
+
+  <div class="screens">
+    <!-- Monthly view -->
+    <div class="screen-col">
+      <div class="screen-label">A · Monthly goals (isAnnual = false)</div>
+      <div class="phone">
+        <div class="phone-inner">
+          <div class="phone-status"><span>9:41</span><span>Hearth</span><span>●●●</span></div>
+          <div class="phone-content">
+            <div class="app-header" style="display:flex;justify-content:space-between;align-items:center">
+              <div class="app-title">Budgets</div>
+              <div style="display:flex;gap:5px">
+                <span style="border-radius:999px;padding:3px 11px;font-size:0.75rem;font-weight:700;background:var(--text);color:white">Monthly</span>
+                <span style="border-radius:999px;padding:3px 11px;font-size:0.75rem;color:var(--muted)">Annual</span>
+              </div>
+            </div>
+            <!-- Month nav -->
+            <div style="background:var(--bg);padding:6px 12px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;font-size:0.72rem;color:var(--muted)">
+              <span>← July</span>
+              <span style="font-weight:700;color:var(--text)">August 2026</span>
+              <span>Sep →</span>
+            </div>
+            <!-- Summary row -->
+            <div style="background:var(--surface);padding:8px 11px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;font-size:0.75rem">
+              <span style="color:var(--muted)">Budgeted: <strong style="color:var(--text)">$32,000</strong></span>
+              <span style="color:var(--red)">Spent: <strong>$18,420</strong></span>
+              <span style="color:var(--brand)">Left: <strong>$13,580</strong></span>
+            </div>
+            <!-- Pace legend -->
+            <div style="background:var(--surface);padding:5px 11px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:6px;font-size:0.65rem;color:var(--muted)">
+              <div style="width:2px;height:12px;background:rgba(100,116,139,0.5);border-radius:1px;flex-shrink:0"></div>
+              <span>Tick = budget pace · day 14 of 31 (45%)</span>
+            </div>
+
+            <!-- Casa group -->
+            <div class="bud-group-hdr">🏡 Casa</div>
+            <div class="bud-leaf">
+              <span class="bud-icon">🔑</span>
+              <span class="bud-name">Hipoteca &amp; HOA</span>
+              <div class="bud-bar"><div class="bud-fill" style="width:100%;background:#86efac"></div></div>
+              <span class="bud-amt" style="color:var(--brand)">$10,300/$10,300</span>
+            </div>
+            <div class="bud-leaf">
+              <span class="bud-icon">🧹</span>
+              <span class="bud-name">Limpieza &amp; Servicio</span>
+              <div class="bud-bar"><div class="bud-fill" style="width:68%;background:#fcd34d"></div><div class="bud-tick" style="left:45%"></div></div>
+              <span class="bud-amt" style="color:#b45309">$1,840/$2,692</span>
+            </div>
+
+            <!-- Salidas group -->
+            <div class="bud-group-hdr">🍽️ Salidas &amp; Ocio</div>
+            <div class="bud-leaf">
+              <span class="bud-icon">🍴</span>
+              <span class="bud-name">Restaurantes &amp; Bares</span>
+              <div class="bud-bar"><div class="bud-fill" style="width:88%;background:#fcd34d"></div><div class="bud-tick" style="left:45%"></div></div>
+              <span class="bud-amt" style="color:#b45309">$1,580/$1,800</span>
+            </div>
+            <div class="bud-leaf">
+              <span class="bud-icon">🛵</span>
+              <span class="bud-name">Delivery</span>
+              <div class="bud-bar"><div class="bud-fill" style="width:40%;background:#86efac"></div><div class="bud-tick" style="left:45%"></div></div>
+              <span class="bud-amt" style="color:var(--brand)">$200/$500</span>
+            </div>
+
+            <!-- Shopping group -->
+            <div class="bud-group-hdr">🛍️ Shopping</div>
+            <div class="bud-leaf">
+              <span class="bud-icon">🛍️</span>
+              <span class="bud-name">Shopping Comunes</span>
+              <div class="bud-bar"><div class="bud-fill" style="width:100%;background:#fca5a5"></div><div class="bud-tick" style="left:45%"></div></div>
+              <span class="bud-amt" style="color:var(--red)">$2,847/$2,000 ↑</span>
+            </div>
+
+            <!-- Super group -->
+            <div class="bud-group-hdr">🛒 Super &amp; Farmacia</div>
+            <div class="bud-leaf">
+              <span class="bud-icon">🛒</span>
+              <span class="bud-name">Super y Farmacia</span>
+              <div class="bud-bar"><div class="bud-fill" style="width:62%;background:#86efac"></div><div class="bud-tick" style="left:45%"></div></div>
+              <span class="bud-amt" style="color:var(--brand)">$1,235/$2,000</span>
+            </div>
+
+            <!-- Kids group -->
+            <div class="bud-group-hdr">👶 Kids</div>
+            <div class="bud-leaf">
+              <span class="bud-icon">⚽</span>
+              <span class="bud-name">Actividades Kids</span>
+              <div class="bud-bar"><div class="bud-fill" style="width:48%;background:#86efac"></div><div class="bud-tick" style="left:45%"></div></div>
+              <span class="bud-amt" style="color:var(--brand)">$900/$1,875</span>
+            </div>
+            <div class="bud-leaf">
+              <span class="bud-icon">🎒</span>
+              <span class="bud-name">Colegio &amp; Tuition</span>
+              <div class="bud-bar"><div class="bud-fill" style="width:100%;background:#86efac"></div></div>
+              <span class="bud-amt" style="color:var(--brand)">$900/$900</span>
+            </div>
+          </div>
+          <div class="phone-nav">
+            <div class="nav-item"><svg class="nav-icon"><use href="#ic-dash"/></svg>Dashboard</div>
+            <div class="nav-item"><svg class="nav-icon"><use href="#ic-txn"/></svg>Txns</div>
+            <div class="nav-item active"><svg class="nav-icon"><use href="#ic-bud"/></svg>Budget</div>
+            <div class="nav-item"><svg class="nav-icon"><use href="#ic-acct"/></svg>Accounts</div>
+            <div class="nav-item"><svg class="nav-icon"><use href="#ic-auto"/></svg>Automation</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Annual combined view -->
+    <div class="screen-col">
+      <div class="screen-label">B · Annual view — monthly (×12) + annual goals combined</div>
+      <div class="phone">
+        <div class="phone-inner">
+          <div class="phone-status"><span>9:41</span><span>Hearth</span><span>●●●</span></div>
+          <div class="phone-content">
+            <div class="app-header" style="display:flex;justify-content:space-between;align-items:center">
+              <div class="app-title">Budgets</div>
+              <div style="display:flex;gap:5px">
+                <span style="border-radius:999px;padding:3px 11px;font-size:0.75rem;color:var(--muted)">Monthly</span>
+                <span style="border-radius:999px;padding:3px 11px;font-size:0.75rem;font-weight:700;background:var(--text);color:white">Annual</span>
+              </div>
+            </div>
+            <!-- Year context bar -->
+            <div style="background:var(--bg);padding:6px 12px;border-bottom:1px solid var(--border);text-align:center;font-size:0.72rem">
+              <span style="font-weight:700;color:var(--text)">2026 · Month 8 of 12 · pace tick = 67%</span>
+            </div>
+
+            <!-- Section A: Monthly categories annualized -->
+            <div style="font-size:0.6rem;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--brand-d);padding:8px 11px 3px;background:var(--brand-xl);border-bottom:1px solid var(--border)">
+              Monthly goals (×12 annual) &nbsp;<span style="font-weight:400;color:var(--brand);text-transform:none;letter-spacing:0">target = monthly × 12</span>
+            </div>
+
+            <div class="bud-leaf">
+              <span class="bud-icon">🔑</span>
+              <span class="bud-name">Hipoteca &amp; HOA</span>
+              <div class="bud-bar"><div class="bud-fill" style="width:67%;background:#86efac"></div></div>
+              <span class="bud-amt" style="color:var(--brand)">$82,400/$123,600</span>
+            </div>
+            <div class="bud-leaf">
+              <span class="bud-icon">🧹</span>
+              <span class="bud-name">Limpieza &amp; Servicio</span>
+              <div class="bud-bar"><div class="bud-fill" style="width:53%;background:#86efac"></div><div class="bud-tick" style="left:67%"></div></div>
+              <span class="bud-amt" style="color:var(--brand)">$17,200/$32,304</span>
+            </div>
+            <div class="bud-leaf">
+              <span class="bud-icon">🍴</span>
+              <span class="bud-name">Restaurantes</span>
+              <div class="bud-bar"><div class="bud-fill" style="width:59%;background:#86efac"></div><div class="bud-tick" style="left:67%"></div></div>
+              <span class="bud-amt" style="color:var(--brand)">$12,800/$21,600</span>
+            </div>
+            <div class="bud-leaf">
+              <span class="bud-icon">🛍️</span>
+              <span class="bud-name">Shopping</span>
+              <div class="bud-bar"><div class="bud-fill" style="width:68%;background:#fcd34d"></div><div class="bud-tick" style="left:67%"></div></div>
+              <span class="bud-amt" style="color:#b45309">$16,200/$24,000</span>
+            </div>
+            <div class="bud-leaf">
+              <span class="bud-icon">🛒</span>
+              <span class="bud-name">Super &amp; Farmacia</span>
+              <div class="bud-bar"><div class="bud-fill" style="width:56%;background:#86efac"></div><div class="bud-tick" style="left:67%"></div></div>
+              <span class="bud-amt" style="color:var(--brand)">$13,500/$24,000</span>
+            </div>
+            <div class="bud-leaf">
+              <span class="bud-icon">⚽</span>
+              <span class="bud-name">Kids Activities</span>
+              <div class="bud-bar"><div class="bud-fill" style="width:37%;background:#86efac"></div><div class="bud-tick" style="left:67%"></div></div>
+              <span class="bud-amt" style="color:var(--brand)">$8,400/$22,500</span>
+            </div>
+
+            <!-- Section B: Annual goals -->
+            <div style="font-size:0.6rem;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:#0e7490;padding:8px 11px 3px;background:#ecfeff;border-top:1px solid var(--border);border-bottom:1px solid var(--border)">
+              Annual goals &nbsp;<span style="font-weight:400;color:#0e7490;text-transform:none;letter-spacing:0">explicit annual budget</span>
+            </div>
+
+            <div class="bud-leaf">
+              <span class="bud-icon">🛡️</span>
+              <span class="bud-name">Seguros del Hogar</span>
+              <div class="bud-bar"><div class="bud-fill" style="width:46%;background:#86efac"></div><div class="bud-tick" style="left:67%"></div></div>
+              <span class="bud-amt" style="color:var(--brand)">$4,200/$9,104</span>
+            </div>
+            <div class="bud-leaf">
+              <span class="bud-icon">🪚</span>
+              <span class="bud-name">Mejoras &amp; Reparaciones</span>
+              <div class="bud-bar"><div class="bud-fill" style="width:58%;background:#fcd34d"></div><div class="bud-tick" style="left:67%"></div></div>
+              <span class="bud-amt" style="color:#b45309">$3,200/$5,500</span>
+            </div>
+            <div class="bud-leaf">
+              <span class="bud-icon">👨‍👩‍👧</span>
+              <span class="bud-name">Travel Family</span>
+              <div class="bud-bar"><div class="bud-fill" style="width:13%;background:#86efac"></div><div class="bud-tick" style="left:67%"></div></div>
+              <span class="bud-amt" style="color:var(--muted)">$1,450/$11,500</span>
+            </div>
+            <div class="bud-leaf">
+              <span class="bud-icon">🏔</span>
+              <span class="bud-name">Travel Montaña</span>
+              <div class="bud-bar"><div class="bud-fill" style="width:100%;background:#86efac"></div></div>
+              <span class="bud-amt" style="color:var(--brand)">$3,000/$3,000 ✓</span>
+            </div>
+            <div class="bud-leaf">
+              <span class="bud-icon">🎂</span>
+              <span class="bud-name">Cumpleaños</span>
+              <div class="bud-bar"><div class="bud-fill" style="width:92%;background:#fcd34d"></div><div class="bud-tick" style="left:67%"></div></div>
+              <span class="bud-amt" style="color:#b45309">$2,760/$3,000</span>
+            </div>
+          </div>
+          <div class="phone-nav">
+            <div class="nav-item"><svg class="nav-icon"><use href="#ic-dash"/></svg>Dashboard</div>
+            <div class="nav-item"><svg class="nav-icon"><use href="#ic-txn"/></svg>Txns</div>
+            <div class="nav-item active"><svg class="nav-icon"><use href="#ic-bud"/></svg>Budget</div>
+            <div class="nav-item"><svg class="nav-icon"><use href="#ic-acct"/></svg>Accounts</div>
+            <div class="nav-item"><svg class="nav-icon"><use href="#ic-auto"/></svg>Automation</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="ann-grid">
+    <div class="ann">
+      <div class="ann-tag">Data Model · Monthly vs Annual</div>
+      <div class="ann-title">Why Two Separate Views?</div>
+      <div class="ann-text">Categories with <code>isAnnual: true</code> behave differently: Travel might be $0 for 10 months then $11,500 in December. Showing that on a monthly bar chart would constantly show "under budget" as a false positive. Annual view measures YTD spend vs the full-year budget, with the pace tick at <code>currentMonth / 12</code>.</div>
+    </div>
+    <div class="ann">
+      <div class="ann-tag">Future · Drill-Down</div>
+      <div class="ann-title">Tap Row → Filtered Transactions</div>
+      <div class="ann-text">Tapping any budget row should deep-link to the transaction list pre-filtered for that category and period (current month for monthly view, YTD for annual). This is the fastest way to investigate an over-budget number without rebuilding filters manually.</div>
+    </div>
+    <div class="ann">
+      <div class="ann-tag">UX · Color Scale</div>
+      <div class="ann-title">Progress Bar Color Thresholds</div>
+      <div class="ann-text">
+        🟢 Green fill = at or under pace (spend% ≤ pace% + 10%)<br>
+        🟡 Amber fill = over pace but under 100% budget<br>
+        🔴 Red fill = over 100% of budget<br>
+        Row amounts use the same color so the number and bar always agree at a glance.
+      </div>
+    </div>
+  </div>
+
+  <hr class="divider">
+
+  <!-- ═══════════════ SCREEN 4: ACCOUNTS ═══════════════ -->
+  <div class="section-header">
+    <span class="section-num">Screen 4</span>
+    <span class="section-title">Accounts — Financial Health Summary</span>
+  </div>
+
+  <div class="screen-with-notes">
+    <div class="screen-col">
+      <div class="screen-label">Account list with sync status &amp; net worth</div>
+      <div class="phone">
+        <div class="phone-inner">
+          <div class="phone-status"><span>9:41</span><span>Hearth</span><span>●●●</span></div>
+          <div class="phone-content">
+            <div class="app-header" style="display:flex;justify-content:space-between;align-items:center">
+              <div class="app-title">Accounts</div>
+              <button style="font-size:0.78rem;font-weight:600;color:var(--brand);border:none;background:none;cursor:pointer">+ Add</button>
+            </div>
+
+            <!-- Summary hero -->
+            <div style="background:linear-gradient(135deg,#1e293b,#0f172a);padding:16px;display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;text-align:center">
+              <div>
+                <div style="font-size:0.58rem;color:rgba(255,255,255,.5);font-weight:700;text-transform:uppercase;letter-spacing:.05em">Assets</div>
+                <div style="font-size:1rem;font-weight:800;color:#86efac;margin-top:3px">$435,920</div>
+              </div>
+              <div style="border-left:1px solid rgba(255,255,255,.1);border-right:1px solid rgba(255,255,255,.1)">
+                <div style="font-size:0.58rem;color:rgba(255,255,255,.5);font-weight:700;text-transform:uppercase;letter-spacing:.05em">Debt</div>
+                <div style="font-size:1rem;font-weight:800;color:#fca5a5;margin-top:3px">$12,080</div>
+              </div>
+              <div>
+                <div style="font-size:0.58rem;color:rgba(255,255,255,.5);font-weight:700;text-transform:uppercase;letter-spacing:.05em">Net Worth</div>
+                <div style="font-size:1rem;font-weight:800;color:white;margin-top:3px">$423,840</div>
+              </div>
+            </div>
+
+            <div style="padding-bottom:10px">
+              <!-- Citi group -->
+              <div style="font-size:0.6rem;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--faint);padding:9px 11px 3px">Citi</div>
+              <div class="acct-row">
+                <div class="acct-icon">🏦</div>
+                <div class="acct-info">
+                  <div class="acct-name">Citi® Savings Account</div>
+                  <div class="acct-sub">Savings · <span style="color:#22c55e">●</span> 2h ago</div>
+                </div>
+                <div style="text-align:right"><div class="acct-bal">$45,234</div><div class="acct-sync">synced ✓</div></div>
+              </div>
+              <div class="acct-row">
+                <div class="acct-icon">💳</div>
+                <div class="acct-info">
+                  <div class="acct-name">Corporate Platinum</div>
+                  <div class="acct-sub">Credit · <span style="color:#22c55e">●</span> 2h ago</div>
+                </div>
+                <div style="text-align:right"><div class="acct-bal acct-debt">−$4,821</div><div class="acct-sync">synced ✓</div></div>
+              </div>
+
+              <!-- Fidelity group -->
+              <div style="font-size:0.6rem;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--faint);padding:9px 11px 3px">Fidelity</div>
+              <div class="acct-row">
+                <div class="acct-icon">📈</div>
+                <div class="acct-info">
+                  <div class="acct-name">Brokerage Account</div>
+                  <div class="acct-sub">Investment · <span style="color:#22c55e">●</span> 2h ago</div>
+                </div>
+                <div style="text-align:right"><div class="acct-bal">$287,432</div><div class="acct-sync">synced ✓</div></div>
+              </div>
+              <div class="acct-row">
+                <div class="acct-icon">🔒</div>
+                <div class="acct-info">
+                  <div class="acct-name">Restricted Stock (RSU)</div>
+                  <div class="acct-sub">Manual entry · <span style="color:var(--faint)">●</span> manual</div>
+                </div>
+                <div style="text-align:right"><div class="acct-bal">$45,200</div><div class="acct-sync">manual</div></div>
+              </div>
+
+              <!-- Chase group -->
+              <div style="font-size:0.6rem;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--faint);padding:9px 11px 3px">Chase</div>
+              <div class="acct-row">
+                <div class="acct-icon">🏦</div>
+                <div class="acct-info">
+                  <div class="acct-name">Everyday Checking</div>
+                  <div class="acct-sub">Checking · <span style="color:#22c55e">●</span> 1h ago</div>
+                </div>
+                <div style="text-align:right"><div class="acct-bal">$8,432</div><div class="acct-sync">synced ✓</div></div>
+              </div>
+              <div class="acct-row">
+                <div class="acct-icon">💳</div>
+                <div class="acct-info">
+                  <div class="acct-name">Sapphire Reserve</div>
+                  <div class="acct-sub">Credit · <span style="color:#22c55e">●</span> 1h ago</div>
+                </div>
+                <div style="text-align:right"><div class="acct-bal acct-debt">−$2,847</div><div class="acct-sync">synced ✓</div></div>
+              </div>
+
+              <!-- Discover group -->
+              <div style="font-size:0.6rem;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--faint);padding:9px 11px 3px">Discover</div>
+              <div class="acct-row">
+                <div class="acct-icon">💳</div>
+                <div class="acct-info">
+                  <div class="acct-name">Discover it Chrome</div>
+                  <div class="acct-sub">Credit · <span style="color:var(--amber)">●</span> 1 day ago</div>
+                </div>
+                <div style="text-align:right"><div class="acct-bal acct-debt">−$1,234</div><div class="acct-sync" style="color:var(--amber)">stale</div></div>
+              </div>
+            </div>
+          </div>
+          <div class="phone-nav">
+            <div class="nav-item"><svg class="nav-icon"><use href="#ic-dash"/></svg>Dashboard</div>
+            <div class="nav-item"><svg class="nav-icon"><use href="#ic-txn"/></svg>Txns</div>
+            <div class="nav-item"><svg class="nav-icon"><use href="#ic-bud"/></svg>Budget</div>
+            <div class="nav-item active"><svg class="nav-icon"><use href="#ic-acct"/></svg>Accounts</div>
+            <div class="nav-item"><svg class="nav-icon"><use href="#ic-auto"/></svg>Automation</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="notes-col">
+      <div class="note">
+        <div class="note-tag ux">UX · Dark Hero</div>
+        <div class="note-title">Balance Sheet in 3 Numbers</div>
+        <div class="note-text">The dark header contrasts the list below to signal "this is a financial snapshot." Three numbers: assets (green), liabilities (red), net worth (white). A user can read their financial position in under 2 seconds before scrolling to account details.</div>
+      </div>
+      <div class="note">
+        <div class="note-tag data">Data · Sync Status</div>
+        <div class="note-title">Freshness Color Coding</div>
+        <div class="note-text">
+          🟢 Green dot = synced within last 4h<br>
+          🟡 Amber dot = 4–48h since last sync (stale)<br>
+          🔴 Red dot = sync error or &gt;48h<br>
+          ⚪ Grey dot = manual entry, no sync<br><br>
+          The stale state should also offer an inline "Reconnect" nudge on the account row.
+        </div>
+      </div>
+      <div class="note">
+        <div class="note-tag future">Future · Account Reports</div>
+        <div class="note-title">Tap Account → Detail View</div>
+        <div class="note-text">Tapping an account should show: 30/90-day balance sparkline, top 5 merchants on this card this month, total spend for current period, and a button to filter transactions by this account. This makes it easy to understand "what did I put on my AmEx this month?"</div>
+      </div>
+      <div class="note">
+        <div class="note-tag future">Future · Net Worth Trend</div>
+        <div class="note-title">Monthly Net Worth Chart</div>
+        <div class="note-text">A 12-month line chart showing net worth over time (assets vs liabilities stacked area) would turn the Accounts tab from a snapshot into a progress tracker. This requires monthly balance snapshots stored in RTDB — not yet implemented.</div>
+      </div>
+    </div>
+  </div>
+
+  <hr class="divider">
+
+  <!-- ═══════════════ SCREEN 5: AUTOMATION / RULES ═══════════════ -->
+  <div class="section-header">
+    <span class="section-num">Screen 5</span>
+    <span class="section-title">Automation — Rules Management</span>
+  </div>
+
+  <div class="screens">
+    <!-- Rules list -->
+    <div class="screen-col">
+      <div class="screen-label">A · Rules grouped by outcome category</div>
+      <div class="phone">
+        <div class="phone-inner">
+          <div class="phone-status"><span>9:41</span><span>Hearth</span><span>●●●</span></div>
+          <div class="phone-content">
+            <div class="app-header">
+              <div class="app-title">Automation</div>
+              <div class="app-subtitle">181 active rules · 3 paused</div>
+            </div>
+            <!-- Search bar -->
+            <div style="background:var(--surface);padding:8px 11px;border-bottom:1px solid var(--border);display:flex;gap:7px">
+              <div style="flex:1;border:1.5px solid var(--border);border-radius:8px;padding:6px 10px;font-size:0.76rem;color:var(--faint)">Search merchant or pattern…</div>
+              <button style="background:var(--brand);color:white;border:none;border-radius:8px;padding:6px 12px;font-size:0.75rem;font-weight:700;cursor:pointer">+ Rule</button>
+            </div>
+            <!-- Sort chip -->
+            <div style="padding:6px 11px;background:var(--bg);border-bottom:1px solid var(--border);font-size:0.7rem;color:var(--muted)">
+              Sort: <span style="font-weight:700;color:var(--text)">By category</span> &nbsp;·&nbsp; <span style="color:var(--brand)">Most rules first</span>
+            </div>
+
+            <div style="background:var(--surface)">
+              <!-- Super & Farmacia group: EXPANDED -->
+              <div class="cat-group-hdr">
+                <div class="cat-group-left">
+                  <span style="font-size:1rem">🛒</span>
+                  <span class="cat-group-name">Super &amp; Farmacia</span>
+                  <span class="cat-group-count">22</span>
+                </div>
+                <button class="btn-add-sm">+ Add</button>
+              </div>
+              <div class="cat-group-body">
+                <div class="rule-card">
+                  <div class="rule-when">
+                    <span class="rule-field">description</span>
+                    <span class="rule-op">contains</span>
+                    <span class="rule-pattern">"whole foods"</span>
+                  </div>
+                  <div class="rule-then">
+                    <span class="rule-arrow">→</span>
+                    <span style="font-size:0.9rem">🛒</span>
+                    <span style="font-size:0.78rem;font-weight:600;color:var(--text)">Super &amp; Farmacia</span>
+                  </div>
+                  <div class="rule-meta">
+                    <span class="rule-priority">Priority 30 · 47 matches</span>
+                    <div style="display:flex;align-items:center;gap:8px">
+                      <span style="font-size:0.68rem;color:var(--muted)">Edit</span>
+                      <div class="rule-toggle"></div>
+                    </div>
+                  </div>
+                </div>
+                <div class="rule-card">
+                  <div class="rule-when">
+                    <span class="rule-field">description</span>
+                    <span class="rule-op">contains</span>
+                    <span class="rule-pattern">"stop &amp; shop"</span>
+                  </div>
+                  <div class="rule-then">
+                    <span class="rule-arrow">→</span>
+                    <span style="font-size:0.9rem">🛒</span>
+                    <span style="font-size:0.78rem;font-weight:600;color:var(--text)">Super &amp; Farmacia</span>
+                  </div>
+                  <div class="rule-meta">
+                    <span class="rule-priority">Priority 30 · 31 matches</span>
+                    <div style="display:flex;align-items:center;gap:8px">
+                      <span style="font-size:0.68rem;color:var(--muted)">Edit</span>
+                      <div class="rule-toggle"></div>
+                    </div>
+                  </div>
+                </div>
+                <div class="rule-card">
+                  <div class="rule-when">
+                    <span class="rule-field">description</span>
+                    <span class="rule-op">contains</span>
+                    <span class="rule-pattern">"costco"</span>
+                  </div>
+                  <div class="rule-then">
+                    <span class="rule-arrow">→</span>
+                    <span style="font-size:0.9rem">🛒</span>
+                    <span style="font-size:0.78rem;font-weight:600;color:var(--text)">Super &amp; Farmacia</span>
+                  </div>
+                  <div class="rule-meta">
+                    <span class="rule-priority">Priority 30 · 18 matches</span>
+                    <div style="display:flex;align-items:center;gap:8px">
+                      <span style="font-size:0.68rem;color:var(--muted)">Edit</span>
+                      <div class="rule-toggle"></div>
+                    </div>
+                  </div>
+                </div>
+                <button style="width:100%;padding:6px;font-size:0.72rem;color:var(--brand);font-weight:600;background:var(--brand-xl);border:1.5px dashed var(--brand-l);border-radius:8px;cursor:pointer">+ Add rule to Super &amp; Farmacia</button>
+              </div>
+
+              <!-- Combustible group: collapsed -->
+              <div style="border-top:1px solid var(--border)">
+                <div class="cat-group-hdr">
+                  <div class="cat-group-left">
+                    <span style="font-size:1rem">⛽</span>
+                    <span class="cat-group-name">Combustible &amp; Peajes</span>
+                    <span class="cat-group-count">18</span>
+                  </div>
+                  <button class="btn-add-sm">+ Add</button>
+                </div>
+                <div class="cat-group-collapsed">exxon, shell oil, bp station, sunoco… <span style="color:var(--brand)">Show all →</span></div>
+              </div>
+
+              <!-- Restaurantes group: collapsed -->
+              <div style="border-top:1px solid var(--border)">
+                <div class="cat-group-hdr">
+                  <div class="cat-group-left">
+                    <span style="font-size:1rem">🍴</span>
+                    <span class="cat-group-name">Restaurantes &amp; Bares</span>
+                    <span class="cat-group-count">15</span>
+                  </div>
+                  <button class="btn-add-sm">+ Add</button>
+                </div>
+                <div class="cat-group-collapsed">roost, morello, tarry lodge, donut… <span style="color:var(--brand)">Show all →</span></div>
+              </div>
+
+              <!-- Limpieza group: collapsed -->
+              <div style="border-top:1px solid var(--border)">
+                <div class="cat-group-hdr">
+                  <div class="cat-group-left">
+                    <span style="font-size:1rem">🧹</span>
+                    <span class="cat-group-name">Limpieza &amp; Servicio</span>
+                    <span class="cat-group-count">12</span>
+                  </div>
+                  <button class="btn-add-sm">+ Add</button>
+                </div>
+                <div class="cat-group-collapsed">merry maids, fox pest, servpro… <span style="color:var(--brand)">Show all →</span></div>
+              </div>
+
+              <!-- Shopping group: collapsed, one disabled -->
+              <div style="border-top:1px solid var(--border)">
+                <div class="cat-group-hdr">
+                  <div class="cat-group-left">
+                    <span style="font-size:1rem">🛍️</span>
+                    <span class="cat-group-name">Shopping</span>
+                    <span class="cat-group-count">11</span>
+                    <span style="font-size:0.62rem;color:var(--amber);background:#fef3c7;border-radius:999px;padding:1px 6px">1 paused</span>
+                  </div>
+                  <button class="btn-add-sm">+ Add</button>
+                </div>
+                <div class="cat-group-collapsed">amazon, target, nordstrom… <span style="color:var(--brand)">Show all →</span></div>
+              </div>
+            </div>
+          </div>
+          <div class="phone-nav">
+            <div class="nav-item"><svg class="nav-icon"><use href="#ic-dash"/></svg>Dashboard</div>
+            <div class="nav-item"><svg class="nav-icon"><use href="#ic-txn"/></svg>Txns</div>
+            <div class="nav-item"><svg class="nav-icon"><use href="#ic-bud"/></svg>Budget</div>
+            <div class="nav-item"><svg class="nav-icon"><use href="#ic-acct"/></svg>Accounts</div>
+            <div class="nav-item active"><svg class="nav-icon"><use href="#ic-auto"/></svg>Automation</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- New rule form -->
+    <div class="screen-col">
+      <div class="screen-label">B · New rule form — 3-field quick add</div>
+      <div class="phone">
+        <div class="phone-inner">
+          <div class="phone-status"><span>9:41</span><span>Hearth</span><span>●●●</span></div>
+          <div class="phone-content">
+            <div class="app-header" style="display:flex;align-items:center;gap:10px">
+              <span style="color:var(--brand);font-size:1.2rem;cursor:pointer">←</span>
+              <div class="app-title">New Rule</div>
+            </div>
+            <div style="padding:14px 12px">
+              <!-- When -->
+              <div style="font-size:0.62rem;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--faint);margin-bottom:8px">When</div>
+              <div class="rule-form-select">
+                <select class="rule-sel"><option>description</option><option>merchant name</option><option>amount</option></select>
+                <select class="rule-sel"><option>contains</option><option>starts with</option><option>equals</option></select>
+              </div>
+              <input class="rule-form-field" type="text" placeholder="Type merchant name or pattern…" value="merry maids"/>
+
+              <!-- Then -->
+              <div style="font-size:0.62rem;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--faint);margin-bottom:8px;margin-top:14px">Then categorize as</div>
+              <div class="rule-cat-pick">
+                <span style="font-size:1rem">🧹</span>
+                <span class="rule-cat-pick-text">Limpieza &amp; Servicio</span>
+                <span class="rule-cat-pick-clear">✕</span>
+              </div>
+
+              <!-- Priority -->
+              <div style="font-size:0.62rem;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--faint);margin-bottom:8px;margin-top:14px">Priority</div>
+              <div style="display:flex;gap:8px;margin-bottom:18px">
+                <label style="flex:1;display:flex;align-items:center;gap:6px;background:var(--brand-xl);border:1.5px solid var(--brand);border-radius:8px;padding:8px 10px;cursor:pointer">
+                  <input type="radio" name="pri" checked style="accent-color:var(--brand)"/>
+                  <div>
+                    <div style="font-size:0.78rem;font-weight:700;color:var(--brand-d)">Auto</div>
+                    <div style="font-size:0.62rem;color:var(--brand)">Priority 30</div>
+                  </div>
+                </label>
+                <label style="flex:1;display:flex;align-items:center;gap:6px;background:var(--bg);border:1.5px solid var(--border);border-radius:8px;padding:8px 10px;cursor:pointer">
+                  <input type="radio" name="pri"/>
+                  <div>
+                    <div style="font-size:0.78rem;font-weight:600;color:var(--text)">Custom</div>
+                    <div style="font-size:0.62rem;color:var(--muted)">Set manually</div>
+                  </div>
+                </label>
+              </div>
+
+              <!-- Rule preview -->
+              <div style="background:var(--bg);border:1px solid var(--border);border-radius:10px;padding:10px 12px;margin-bottom:18px">
+                <div style="font-size:0.62rem;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--faint);margin-bottom:6px">Preview</div>
+                <div style="font-size:0.8rem;color:var(--text);line-height:1.6">
+                  When <strong>description</strong> contains <strong>"merry maids"</strong><br>
+                  → Set category to <strong>🧹 Limpieza &amp; Servicio</strong>
+                </div>
+              </div>
+
+              <!-- Actions -->
+              <div style="display:flex;gap:8px">
+                <button style="flex:1;padding:10px;border:1.5px solid var(--border);border-radius:8px;font-size:0.82rem;background:white;color:var(--muted);cursor:pointer">Cancel</button>
+                <button style="flex:2;padding:10px;background:var(--brand);border:none;border-radius:8px;font-size:0.82rem;font-weight:700;color:white;cursor:pointer">Save Rule →</button>
+              </div>
+            </div>
+          </div>
+          <div class="phone-nav">
+            <div class="nav-item"><svg class="nav-icon"><use href="#ic-dash"/></svg>Dashboard</div>
+            <div class="nav-item"><svg class="nav-icon"><use href="#ic-txn"/></svg>Txns</div>
+            <div class="nav-item"><svg class="nav-icon"><use href="#ic-bud"/></svg>Budget</div>
+            <div class="nav-item"><svg class="nav-icon"><use href="#ic-acct"/></svg>Accounts</div>
+            <div class="nav-item active"><svg class="nav-icon"><use href="#ic-auto"/></svg>Automation</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="ann-grid">
+    <div class="ann">
+      <div class="ann-tag">UX · Not a Spreadsheet</div>
+      <div class="ann-title">Rule Cards vs Data Rows</div>
+      <div class="ann-text">Each rule displays as a semantic card: <em>when [field] [op] "[pattern]" → category</em>. This is instantly readable vs a dense table. The match count ("47 matches") shows which rules are doing the heavy lifting — high-match rules should be reviewed carefully before editing or deleting.</div>
+    </div>
+    <div class="ann">
+      <div class="ann-tag">UX · Grouped by Outcome</div>
+      <div class="ann-title">Category-Centric View</div>
+      <div class="ann-text">Rules are organized by their target category, not by creation date or priority. When you ask "why is Whole Foods going to Super?", you open the Super group and see all 22 rules at a glance. Adding a rule from within a category group pre-fills the outcome field.</div>
+    </div>
+    <div class="ann">
+      <div class="ann-tag">UX · Preview</div>
+      <div class="ann-title">Live Preview Before Saving</div>
+      <div class="ann-text">The rule form shows a natural-language preview of the rule as you fill in the fields. This prevents mistakes like saving "description contains 'amazon'" when you meant "merchant name contains 'amazon'" — different match results in practice.</div>
+    </div>
+    <div class="ann">
+      <div class="ann-tag">Data · Priority Tiers</div>
+      <div class="ann-title">Rule Priority System</div>
+      <div class="ann-text">
+        <strong>10</strong> — Transfers (exact match, checked first)<br>
+        <strong>20</strong> — Income &amp; business charges<br>
+        <strong>30</strong> — Known merchants (specific stores)<br>
+        <strong>40</strong> — Named patterns (partial merchant)<br>
+        <strong>50</strong> — Broad patterns (generic terms)<br><br>
+        "Auto" defaults to 30. Lower number = higher priority.
+      </div>
+    </div>
+  </div>
+
+  <hr class="divider">
+
+  <!-- ═══════════════ SCREEN 6: RECOMMENDATIONS ═══════════════ -->
+  <div class="section-header">
+    <span class="section-num future">Screen 6 · Future State</span>
+    <span class="section-title">Insights — Spending Intelligence &amp; Optimization</span>
+  </div>
+
+  <div class="screen-with-notes">
+    <div class="screen-col">
+      <div class="screen-label">Insight feed with actionable cards</div>
+      <div class="phone">
+        <div class="phone-inner">
+          <div class="phone-status"><span>9:41</span><span>Hearth</span><span>●●●</span></div>
+          <div class="phone-content">
+            <div class="app-header">
+              <div class="app-title">Insights</div>
+              <div class="app-subtitle">August 14, 2026 · Updated hourly</div>
+            </div>
+            <div class="app-page">
+
+              <!-- Critical: over budget -->
+              <div class="insight" style="border-left:3px solid var(--red)">
+                <div class="insight-dot" style="background:var(--red)"></div>
+                <div class="insight-body">
+                  <div class="insight-title">Shopping is 42% over budget</div>
+                  <div class="insight-sub">$2,847 spent of $2,000 budget with 17 days remaining. Amazon accounts for 67% of charges this month.</div>
+                  <div class="insight-link">→ Review 8 Amazon transactions</div>
+                </div>
+              </div>
+
+              <!-- Warning: pace -->
+              <div class="insight" style="border-left:3px solid var(--amber)">
+                <div class="insight-dot" style="background:var(--amber)"></div>
+                <div class="insight-body">
+                  <div class="insight-title">Salidas on pace to double budget</div>
+                  <div class="insight-sub">$1,580 of $1,800 in 14 days. Current pace projects $3,500 — nearly 2× your monthly target.</div>
+                  <div class="insight-link">→ See restaurant spending</div>
+                </div>
+              </div>
+
+              <!-- Anomaly: unusual -->
+              <div class="insight" style="border-left:3px solid var(--purple)">
+                <div class="insight-dot" style="background:var(--purple)"></div>
+                <div class="insight-body">
+                  <div class="insight-title">Parking 4× your normal rate</div>
+                  <div class="insight-sub">$315 this month vs $80 average (3-month). 4 charges at Stamford Town Center — business reimbursable?</div>
+                  <div class="insight-link">→ Review parking transactions</div>
+                </div>
+              </div>
+
+              <!-- Good news -->
+              <div class="insight" style="border-left:3px solid var(--brand)">
+                <div class="insight-dot" style="background:var(--brand)"></div>
+                <div class="insight-body">
+                  <div class="insight-title">Great month for groceries</div>
+                  <div class="insight-sub">$1,235 of $2,000 budget used — $765 remaining with more than half the month left.</div>
+                </div>
+              </div>
+
+              <!-- Annual: underused -->
+              <div class="insight" style="border-left:3px solid var(--amber)">
+                <div class="insight-dot" style="background:var(--amber)"></div>
+                <div class="insight-body">
+                  <div class="insight-title">Travel Family budget 87% unused</div>
+                  <div class="insight-sub">Only $1,450 of $11,500 annual travel budget spent by August. $10,050 remaining — consider a fall trip.</div>
+                  <div class="insight-link">→ Annual travel budget</div>
+                </div>
+              </div>
+
+              <!-- Optimization: subscriptions -->
+              <div class="insight" style="border-left:3px solid var(--blue)">
+                <div class="insight-dot" style="background:var(--blue)"></div>
+                <div class="insight-body">
+                  <div class="insight-title">3 overlapping subscriptions detected</div>
+                  <div class="insight-sub">Amazon Prime + Prime Video + Kindle Unlimited = $42/month. These may overlap — worth reviewing.</div>
+                  <div class="insight-link">→ Review subscriptions</div>
+                </div>
+              </div>
+
+            </div>
+          </div>
+          <div class="phone-nav">
+            <div class="nav-item"><svg class="nav-icon"><use href="#ic-dash"/></svg>Dashboard</div>
+            <div class="nav-item"><svg class="nav-icon"><use href="#ic-txn"/></svg>Txns</div>
+            <div class="nav-item"><svg class="nav-icon"><use href="#ic-bud"/></svg>Budget</div>
+            <div class="nav-item"><svg class="nav-icon"><use href="#ic-acct"/></svg>Accounts</div>
+            <div class="nav-item active"><svg class="nav-icon"><use href="#ic-ins"/></svg>Insights</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="notes-col">
+      <div class="note">
+        <div class="note-tag future">Future State · Insight Types</div>
+        <div class="note-title">Four Insight Tiers (Priority Order)</div>
+        <div class="note-text">
+          🔴 <strong>Budget violations</strong> — already over, act now.<br>
+          🟡 <strong>Pace warnings</strong> — on track to exceed, watch it.<br>
+          🟣 <strong>Anomalies</strong> — unusual vs your 3-month average.<br>
+          🔵 <strong>Optimizations</strong> — subscriptions, duplicates, waste.<br>
+          🟢 <strong>Good news</strong> — always include; positive feedback matters.<br><br>
+          Each card must have an action link or it becomes noise.
+        </div>
+      </div>
+      <div class="note">
+        <div class="note-tag data">Data Requirements</div>
+        <div class="note-title">What Each Type Needs</div>
+        <div class="note-text">
+          • <strong>Pace warnings:</strong> current spend + budget + day-of-month. Already available.<br>
+          • <strong>Anomalies:</strong> rolling 3-month category average. Already computed in RTDB.<br>
+          • <strong>Subscription detection:</strong> recurring merchant + ±$1 amount tolerance + monthly interval. New logic.<br>
+          • <strong>Annual underuse:</strong> YTD vs pro-rated annual budget. Available from Budget tab.
+        </div>
+      </div>
+      <div class="note">
+        <div class="note-tag ux">UX · Navigation</div>
+        <div class="note-title">Insights Replaces a Nav Slot</div>
+        <div class="note-text">When Insights is ready, the bottom nav tab "Settings" should move to a gear icon inside each page's header, freeing the fifth slot for 💡 Insights. Settings is an infrequent destination; Insights should be checked regularly.</div>
+      </div>
+    </div>
+  </div>
+
+  <hr class="divider">
+
+  <!-- ═══════════════ DESKTOP LAYOUT ═══════════════ -->
+  <div class="section-header">
+    <span class="section-num">Layout</span>
+    <span class="section-title">Desktop &amp; Tablet Adaptation</span>
+  </div>
+
+  <div class="desktop-frame">
+    <!-- Sidebar -->
+    <div class="dt-sidebar">
+      <div class="dt-brand">
+        <span style="font-size:1.1rem">🏠</span>
+        <span style="color:white;font-weight:800;font-size:0.9rem">Hearth</span>
+      </div>
+      <div class="dt-nav-item">📊 Dashboard</div>
+      <div class="dt-nav-item active">📋 Transactions</div>
+      <div class="dt-nav-item">🎯 Budgets</div>
+      <div class="dt-nav-item">🏦 Accounts</div>
+      <div class="dt-nav-item">💡 Insights</div>
+      <div style="flex:1"></div>
+      <div class="dt-nav-item" style="opacity:.5">⚙️ Settings</div>
+    </div>
+
+    <!-- Main area -->
+    <div class="dt-main">
+      <div class="dt-topbar">
+        <div class="dt-title">Transactions</div>
+        <div style="display:flex;gap:7px;align-items:center">
+          <div class="dt-search">Search transactions…</div>
+          <div class="dt-filter-active">Filters ②</div>
+        </div>
+      </div>
+
+      <!-- Filter panel: 3 columns on desktop -->
+      <div class="dt-filter-row">
+        <div>
+          <div class="dt-filt-lbl">Date · Month</div>
+          <span class="dt-pill-act" style="background:rgba(255,255,255,.1);border:none;color:#e2e8f0">August 2026</span>
+        </div>
+        <div>
+          <div class="dt-filt-lbl">Source</div>
+          <span class="dt-pill-act">AI</span>
+          <span class="dt-pill">Rule</span>
+          <span class="dt-pill">Manual</span>
+        </div>
+        <div>
+          <div class="dt-filt-lbl">Status</div>
+          <label style="display:flex;align-items:center;gap:5px;font-size:0.72rem;color:#94a3b8"><input type="checkbox" checked> Needs review</label>
+        </div>
+      </div>
+
+      <!-- Transaction rows: wider layout -->
+      <div class="dt-txn-list">
+        <div class="dt-txn">
+          <div class="dt-ico" style="background:rgba(245,158,11,.15)">⛽</div>
+          <div style="flex:1">
+            <div class="dt-txn-name">Exxon Mobil #7821</div>
+            <div class="dt-txn-sub">Aug 14 · AmEx Corporate · <span style="color:#f59e0b">revisar</span></div>
+          </div>
+          <div class="dt-confirm">✓ Combustible &amp; Peajes</div>
+          <span class="dt-pill" style="font-size:0.63rem;cursor:pointer">Change</span>
+          <div class="dt-txn-amt">$68.40</div>
+        </div>
+        <div class="dt-txn">
+          <div class="dt-ico" style="background:rgba(22,163,74,.1)">🛒</div>
+          <div style="flex:1">
+            <div class="dt-txn-name">Whole Foods Market</div>
+            <div class="dt-txn-sub">Aug 14 · Citi Savings · <span style="color:#86efac">Super &amp; Farmacia</span></div>
+          </div>
+          <div class="dt-txn-amt">$124.80</div>
+        </div>
+        <div class="dt-txn">
+          <div class="dt-ico" style="background:rgba(239,68,68,.1)">❓</div>
+          <div style="flex:1">
+            <div class="dt-txn-name">ACH Debit — AQUAR…</div>
+            <div class="dt-txn-sub">Aug 11 · Citi Savings · <span style="color:#fca5a5">⚠ Sin categoría</span></div>
+          </div>
+          <span class="dt-pill" style="font-size:0.63rem;cursor:pointer;margin-left:auto;margin-right:8px">Categorize →</span>
+          <div class="dt-txn-amt">$190.73</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="dt-notes">
+    <div>
+      <strong>≥768px · Sidebar Navigation</strong>
+      Bottom nav becomes a 200px left sidebar. Active item has a left-edge accent bar + highlighted background. All nav labels stay visible. Logo lockup at top.
+    </div>
+    <div>
+      <strong>≥768px · Filter Panel</strong>
+      Filter sections render side-by-side in a 3-column grid. No modal needed for category picker on desktop — it can expand inline. Account pills scroll in a contained row.
+    </div>
+    <div>
+      <strong>≥1200px · Wider Content</strong>
+      Page max-width expands to 1080px. Dashboard cards go to a 3-column grid. Transaction rows gain more metadata (account badge, source tag, confidence score) that's hidden on mobile.
+    </div>
+  </div>
+
+  <hr class="divider">
+
+  <!-- ═══════════════ FOOTER ═══════════════ -->
+  <div class="doc-footer">
+    Hearth Finance — Design Brief v1.0.0 &nbsp;·&nbsp; August 2026 &nbsp;·&nbsp; Internal use only
+  </div>
+
+</div>
+</body>
+</html>

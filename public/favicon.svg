@@ -1,4 +1,11 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">
   <rect width="100" height="100" rx="22" fill="#16a34a"/>
-  <path d="M50,14 L86,48 H76 V82 H58 V65 H42 V82 H24 V48 H14 Z" fill="white"/>
+  <!-- left pillar -->
+  <rect x="16" y="47" width="15" height="42" rx="6" fill="white"/>
+  <!-- right pillar -->
+  <rect x="69" y="47" width="15" height="42" rx="6" fill="white"/>
+  <!-- arch -->
+  <path d="M23.5 53 Q23.5 14 50 14 Q76.5 14 76.5 53" fill="none" stroke="white" stroke-width="12" stroke-linecap="round" stroke-linejoin="round"/>
+  <!-- flame -->
+  <path d="M50 82 C43 75 42 65 47 60 C48 66 50 63 50 57 C53 63 52 66 53 60 C58 65 57 75 50 82Z" fill="white"/>
 </svg>
