@@ -1,24 +1,70 @@
-import { dbListen, dbSet, auth, getPartnerUid } from '../shared/firebase.js';
+import { dbGet, dbSet, dbListen, auth, getPartnerUid } from '../shared/firebase.js';
 import { fmtCurrency, fmtDate } from '../shared/format.js';
+import { signOut } from 'firebase/auth';
+import { openImportModal } from './import.js';
+import { CHANGELOG } from '../shared/changelog.js';
 
 const WORKER_URL = import.meta.env.VITE_WORKER_URL ?? 'http://localhost:8787';
 
 export function renderAccounts(container) {
-  const today   = new Date().toISOString().slice(0, 10);
+  const today     = new Date().toISOString().slice(0, 10);
   const ninetyAgo = new Date(Date.now() - 90 * 86400000).toISOString().slice(0, 10);
 
   container.innerHTML = `
-    <div class="page accounts">
-      <div id="account-list"></div>
-      <div style="display:flex;gap:0.5rem;margin-top:1rem">
-        <button class="btn-primary" id="link-account" style="flex:1">+ Link Bank Account</button>
-        <button class="btn-secondary" id="add-manual" style="flex:1">+ Manual Account</button>
+    <div class="page accounts" style="padding:0">
+      <!-- Dark hero: Assets · Debt · Net Worth -->
+      <div class="acct-hero">
+        <div class="acct-hero-item">
+          <div class="acct-hero-label">Assets</div>
+          <div class="acct-hero-val green" id="hero-assets">—</div>
+        </div>
+        <div class="acct-hero-item acct-hero-mid">
+          <div class="acct-hero-label">Debt</div>
+          <div class="acct-hero-val red" id="hero-debt">—</div>
+        </div>
+        <div class="acct-hero-item">
+          <div class="acct-hero-label">Net Worth</div>
+          <div class="acct-hero-val white" id="hero-net">—</div>
+        </div>
       </div>
-      <div style="margin-top:0.5rem">
-        <div class="sync-controls">
-          <input type="date" id="sync-from" value="${ninetyAgo}" style="flex:1" />
-          <input type="date" id="sync-to"   value="${today}"     style="flex:1" />
-          <button class="btn-ghost" id="sync-now" style="flex:2">Sync transactions</button>
+
+      <!-- Account list -->
+      <div class="acct-content">
+        <div id="account-list"></div>
+
+        <div class="acct-actions-row">
+          <button class="btn-primary" id="link-account" style="flex:1">+ Link Bank</button>
+          <button class="btn-secondary" id="add-manual" style="flex:1">+ Manual</button>
+        </div>
+
+        <div class="acct-sync-row">
+          <input type="date" id="sync-from" value="${ninetyAgo}" />
+          <input type="date" id="sync-to"   value="${today}" />
+          <button class="btn-ghost" id="sync-now">Sync</button>
+        </div>
+
+        <!-- Settings section -->
+        <div class="acct-settings">
+          <div class="acct-settings-hdr">Settings</div>
+
+          <div class="acct-settings-group">
+            <div class="acct-settings-label">Partner Sharing</div>
+            <div id="partner-section"></div>
+          </div>
+
+          <div class="acct-settings-group">
+            <div class="acct-settings-label">Data</div>
+            <button class="acct-settings-btn" id="import-csv">Import Tiller CSV…</button>
+            <button class="acct-settings-btn" id="export-csv">Export CSV</button>
+            <button class="acct-settings-btn" id="go-automation">Manage categorization rules →</button>
+          </div>
+
+          <div class="acct-settings-group">
+            <div class="acct-settings-label">About</div>
+            <div class="acct-settings-about">Hearth Finance · v${CHANGELOG[0].version}</div>
+          </div>
+
+          <button class="btn-danger" id="sign-out" style="margin-top:1rem;width:100%">Sign Out</button>
         </div>
       </div>
     </div>
@@ -31,8 +77,18 @@ export function renderAccounts(container) {
   let latestPartnerAccounts = null;
   let resolvedPartnerUid   = null;
 
+  const refreshHero = (accounts) => {
+    const assets = Object.values(accounts ?? {}).filter(a => a.type !== 'credit').reduce((s, a) => s + (a.currentBalance ?? 0), 0);
+    const debt   = Object.values(accounts ?? {}).filter(a => a.type === 'credit').reduce((s, a) => s + Math.abs(a.currentBalance ?? 0), 0);
+    const net    = assets - debt;
+    container.querySelector('#hero-assets').textContent = fmtCurrency(assets);
+    container.querySelector('#hero-debt').textContent   = fmtCurrency(debt);
+    container.querySelector('#hero-net').textContent    = fmtCurrency(net);
+  };
+
   const refreshAccounts = () => {
     const merged = { ...(latestOwnerAccounts ?? {}), ...(latestPartnerAccounts ?? {}) };
+    refreshHero(merged);
     renderAccountList(merged, uid, resolvedPartnerUid);
   };
 
@@ -54,69 +110,107 @@ export function renderAccounts(container) {
     }
   });
 
-  document.getElementById('link-account').addEventListener('click', () => openPlaidLink(uid));
-  document.getElementById('add-manual').addEventListener('click', () => openManualAccountForm(uid));
-  document.getElementById('sync-now').addEventListener('click', () => syncTransactions(uid));
+  container.querySelector('#link-account').addEventListener('click', () => openPlaidLink(uid));
+  container.querySelector('#add-manual').addEventListener('click', () => openManualAccountForm(uid));
+  container.querySelector('#sync-now').addEventListener('click', () => syncTransactions(uid));
+  container.querySelector('#import-csv').addEventListener('click', () => openImportModal());
+  container.querySelector('#export-csv').addEventListener('click', () => exportCsv(uid));
+  container.querySelector('#sign-out').addEventListener('click', () => signOut(auth));
+  container.querySelector('#go-automation').addEventListener('click', () => { location.hash = 'automation'; });
+
+  renderPartnerSection(uid);
+}
+
+function syncStatusDot(account) {
+  const status   = account.lastSyncStatus ?? (account.isManual ? 'manual' : null);
+  const lastSync = account.lastSync;
+
+  if (account.isManual) return { cls: 'dot-manual', label: 'manual' };
+  if (status === 'error') return { cls: 'dot-error', label: 'error' };
+
+  if (lastSync) {
+    const hoursSince = (Date.now() - new Date(lastSync).getTime()) / 3600000;
+    if (hoursSince <= 4)  return { cls: 'dot-ok',    label: 'synced ✓' };
+    if (hoursSince <= 48) return { cls: 'dot-stale', label: 'stale' };
+    return { cls: 'dot-error', label: 'stale' };
+  }
+  return { cls: 'dot-unknown', label: 'never synced' };
 }
 
 function renderAccountList(accounts, uid, partnerUid) {
   const el = document.getElementById('account-list');
+  if (!el) return;
   const entries = Object.entries(accounts);
   if (!entries.length) {
-    el.innerHTML = '<p class="empty">No accounts linked yet. Add a bank account to get started.</p>';
+    el.innerHTML = `<div class="acct-empty">No accounts linked yet. Tap "+ Link Bank" to get started.</div>`;
     return;
   }
 
-  const grouped = {};
+  // Group by institution
+  const grouped = new Map();
   for (const [id, a] of entries) {
-    const group = a.institution ?? 'Manual';
-    if (!grouped[group]) grouped[group] = [];
-    grouped[group].push([id, a]);
+    const inst = a.institution ?? 'Manual';
+    if (!grouped.has(inst)) grouped.set(inst, []);
+    grouped.get(inst).push([id, a]);
   }
 
-  el.innerHTML = Object.entries(grouped).map(([institution, accts]) => {
-    const rep        = accts[0][1];
-    const isPartner  = !!rep._isPartner;
-    const status     = rep.lastSyncStatus ?? null;
-    const dotClass   = status === 'ok' ? 'ok' : status === 'error' ? 'error' : 'unknown';
-    const itemId     = rep.plaidItemId ?? null;
-    const slot       = rep.plaidSlot ?? 1;
-    const reconnectBtn = (!isPartner && itemId)
-      ? `<button class="btn-reconnect" data-item-id="${itemId}" data-slot="${slot}">Reconnect</button>`
-      : '';
-    const unlinkBtn = (!isPartner && itemId)
-      ? `<button class="btn-unlink btn-ghost" style="font-size:0.75rem;padding:2px 8px;color:#ef4444;border-color:#ef4444" data-item-id="${itemId}" data-slot="${slot}">Unlink</button>`
-      : '';
+  el.innerHTML = [...grouped.entries()].map(([institution, accts]) => {
+    const rep       = accts[0][1];
+    const isPartner = !!rep._isPartner;
+    const dot       = syncStatusDot(rep);
+    const itemId    = rep.plaidItemId ?? null;
+    const slot      = rep.plaidSlot ?? 1;
+
+    const controls = !isPartner && itemId ? `
+      <button class="acct-ctrl-btn btn-reconnect" data-item-id="${itemId}" data-slot="${slot}">Reconnect</button>
+      <button class="acct-ctrl-btn acct-unlink-btn" data-item-id="${itemId}" data-slot="${slot}">Unlink</button>
+    ` : '';
+
     const partnerBadge = isPartner
-      ? `<span style="background:#dbeafe;color:#1e40af;border-radius:10px;padding:1px 6px;font-size:0.75rem;font-weight:600">Partner</span>`
-      : '';
+      ? `<span class="acct-partner-badge">Partner</span>` : '';
+
     return `
-    <div class="account-group">
-      <div style="display:flex;align-items:center;gap:0.5rem;margin-bottom:0.5rem">
-        <span class="sync-status-dot ${dotClass}"></span>
-        <h3 class="account-institution" style="margin-bottom:0">${institution}</h3>
-        ${partnerBadge}
-        ${reconnectBtn}
-        ${unlinkBtn}
-      </div>
-      ${accts.map(([id, a]) => `
-        <div class="account-row">
-          <div class="account-info">
-            <span class="account-name">${a.name}</span>
-            <span class="account-meta">${a.subtype ?? a.type} · Last sync ${a.lastSync ? fmtDate(a.lastSync) : 'never'}</span>
+      <div class="acct-group">
+        <div class="acct-group-hdr">
+          <div class="acct-group-left">
+            <span class="sync-dot ${dot.cls}"></span>
+            <span class="acct-inst-name">${institution}</span>
+            ${partnerBadge}
+            <span class="acct-sync-label ${dot.cls}">${dot.label}</span>
           </div>
-          <span class="account-balance ${a.type === 'credit' ? 'debt' : ''}">${fmtCurrency(a.currentBalance ?? 0)}</span>
-        </div>`).join('')}
-    </div>`;
+          <div class="acct-group-controls">${controls}</div>
+        </div>
+        ${accts.map(([id, a]) => {
+          const isDebt = a.type === 'credit';
+          const bal = a.currentBalance ?? 0;
+          return `
+            <div class="acct-row">
+              <div class="acct-row-icon">${acctIcon(a.type)}</div>
+              <div class="acct-row-info">
+                <span class="acct-row-name">${a.name}</span>
+                <span class="acct-row-sub">${capitalize(a.subtype ?? a.type)} · Last sync ${a.lastSync ? fmtDate(a.lastSync) : 'never'}</span>
+              </div>
+              <span class="acct-row-bal ${isDebt ? 'debt' : ''}">${isDebt ? '−' : ''}${fmtCurrency(Math.abs(bal))}</span>
+            </div>`;
+        }).join('')}
+      </div>`;
   }).join('');
 
   el.querySelectorAll('.btn-reconnect').forEach(btn => {
     btn.addEventListener('click', () => reconnectPlaid(uid, btn.dataset.itemId, Number(btn.dataset.slot)));
   });
-
-  el.querySelectorAll('.btn-unlink').forEach(btn => {
+  el.querySelectorAll('.acct-unlink-btn').forEach(btn => {
     btn.addEventListener('click', () => unlinkAccount(uid, btn.dataset.itemId, Number(btn.dataset.slot)));
   });
+}
+
+function acctIcon(type) {
+  const map = { checking: '🏦', savings: '🏦', credit: '💳', investment: '📈', loan: '📋', other: '💼' };
+  return map[type] ?? '🏦';
+}
+
+function capitalize(s) {
+  return s ? s.charAt(0).toUpperCase() + s.slice(1) : '';
 }
 
 async function openPlaidLink(uid) {
@@ -128,40 +222,35 @@ async function openPlaidLink(uid) {
   if (!res.ok) { alert('Could not start bank connection. Try again.'); return; }
   const { link_token, slot } = await res.json();
 
-  // Plaid Link requires the Plaid Link JS library loaded from CDN.
-  // Load it dynamically so it's not part of the main bundle.
   if (!window.Plaid) {
     await new Promise((resolve, reject) => {
       const s = document.createElement('script');
       s.src = 'https://cdn.plaid.com/link/v2/stable/link-initialize.js';
-      s.onload = resolve;
-      s.onerror = reject;
+      s.onload = resolve; s.onerror = reject;
       document.head.appendChild(s);
     });
   }
 
-  const handler = window.Plaid.create({
+  window.Plaid.create({
     token: link_token,
     onSuccess: async (publicToken) => {
-      const exchRes = await fetch(`${WORKER_URL}/plaid/exchange-token`, {
+      const idTok = await auth.currentUser.getIdToken();
+      await fetch(`${WORKER_URL}/plaid/exchange-token`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${idToken}` },
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${idTok}` },
         body: JSON.stringify({ public_token: publicToken, slot }),
       });
-      if (!exchRes.ok) { alert('Failed to connect account. Please try again.'); return; }
-      // Worker writes account records to RTDB; dbListen will pick up the change automatically.
     },
-    onExit: (err) => { if (err) console.error('Plaid Link exit error:', err); },
-  });
-  handler.open();
+    onExit: (err) => { if (err) console.error('Plaid exit:', err); },
+  }).open();
 }
 
 async function syncTransactions(uid) {
   const btn       = document.getElementById('sync-now');
   const startDate = document.getElementById('sync-from').value;
   const endDate   = document.getElementById('sync-to').value;
-  btn.textContent = 'Syncing…';
-  btn.disabled = true;
+  if (!btn) return;
+  btn.textContent = 'Syncing…'; btn.disabled = true;
   try {
     const idToken = await auth.currentUser.getIdToken();
     const res = await fetch(`${WORKER_URL}/sync`, {
@@ -169,14 +258,11 @@ async function syncTransactions(uid) {
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${idToken}` },
       body: JSON.stringify({ startDate, endDate }),
     });
-    const { synced, errors, error } = await res.json();
-    if (error) throw new Error(error);
-    btn.textContent = `Sync transactions (${synced} new)`;
-    setTimeout(() => { btn.textContent = 'Sync transactions'; btn.disabled = false; }, 4000);
-  } catch (err) {
-    console.error('Sync failed:', err);
-    btn.textContent = 'Sync failed — try again';
-    btn.disabled = false;
+    const { synced } = await res.json();
+    btn.textContent = `Sync (${synced} new)`;
+    setTimeout(() => { if (btn) { btn.textContent = 'Sync'; btn.disabled = false; } }, 4000);
+  } catch {
+    btn.textContent = 'Sync failed'; btn.disabled = false;
   }
 }
 
@@ -190,92 +276,60 @@ async function reconnectPlaid(uid, itemId, slot) {
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${idToken}` },
       body: JSON.stringify({ itemId, slot }),
     });
-    if (!res.ok) throw new Error('Failed to get reconnect token');
+    if (!res.ok) throw new Error();
     const { link_token } = await res.json();
 
     if (!window.Plaid) {
       await new Promise((resolve, reject) => {
         const s = document.createElement('script');
         s.src = 'https://cdn.plaid.com/link/v2/stable/link-initialize.js';
-        s.onload = resolve;
-        s.onerror = reject;
+        s.onload = resolve; s.onerror = reject;
         document.head.appendChild(s);
       });
     }
 
-    const handler = window.Plaid.create({
+    window.Plaid.create({
       token: link_token,
-      onSuccess: () => {
-        if (btn) { btn.textContent = 'Reconnected!'; btn.disabled = false; }
-        setTimeout(() => { if (btn) btn.textContent = 'Reconnect'; }, 3000);
-      },
-      onExit: (err) => {
-        if (btn) { btn.textContent = 'Reconnect'; btn.disabled = false; }
-        if (err) console.error('Plaid reconnect exit error:', err);
-      },
-    });
-    handler.open();
-  } catch (err) {
+      onSuccess: () => { if (btn) { btn.textContent = 'Reconnected!'; btn.disabled = false; } },
+      onExit: () => { if (btn) { btn.textContent = 'Reconnect'; btn.disabled = false; } },
+    }).open();
+  } catch {
     if (btn) { btn.textContent = 'Reconnect'; btn.disabled = false; }
   }
 }
 
 async function unlinkAccount(uid, itemId, slot) {
-  await new Promise((resolve, reject) => {
-    const modal = document.createElement('div');
-    modal.className = 'modal-overlay';
-    modal.innerHTML = `
-      <div class="modal">
-        <h3>Unlink account?</h3>
-        <p>This will remove the bank connection and its accounts from Hearth. Your synced transactions can optionally be deleted too.</p>
-        <label style="display:flex;align-items:center;gap:0.5rem;margin-bottom:1rem">
-          <input type="checkbox" id="unlink-delete-txns" />
-          Also delete synced transactions
-        </label>
-        <div style="display:flex;gap:0.5rem;margin-top:1rem">
-          <button class="btn-ghost modal-cancel" style="flex:1">Cancel</button>
-          <button class="btn-primary modal-confirm" style="flex:1;background:#ef4444;border-color:#ef4444">Unlink</button>
-        </div>
+  const modal = document.createElement('div');
+  modal.className = 'modal-overlay';
+  modal.innerHTML = `
+    <div class="modal">
+      <h3>Unlink account?</h3>
+      <p>Removes the bank connection. Synced transactions can optionally be deleted.</p>
+      <label style="display:flex;align-items:center;gap:0.5rem;margin-bottom:1rem">
+        <input type="checkbox" id="unlink-delete-txns" /> Also delete synced transactions
+      </label>
+      <div style="display:flex;gap:0.5rem;margin-top:1rem">
+        <button class="btn-ghost modal-cancel" style="flex:1">Cancel</button>
+        <button class="btn-primary modal-confirm" style="flex:1;background:#ef4444;border-color:#ef4444">Unlink</button>
       </div>
-    `;
-    document.body.appendChild(modal);
+    </div>
+  `;
+  document.body.appendChild(modal);
 
-    modal.querySelector('.modal-cancel').addEventListener('click', () => {
-      modal.remove();
-      reject(new Error('cancelled'));
-    });
-
-    modal.querySelector('.modal-confirm').addEventListener('click', async () => {
-      const deleteTransactions = modal.querySelector('#unlink-delete-txns').checked;
-      modal.remove();
-
-      const btn = document.querySelector(`.btn-unlink[data-item-id="${itemId}"]`);
-      if (btn) { btn.textContent = 'Unlinking…'; btn.disabled = true; }
-
-      try {
-        const idToken = await auth.currentUser.getIdToken();
-        const res = await fetch(`${WORKER_URL}/plaid/remove-account`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${idToken}` },
-          body: JSON.stringify({ itemId, slot, deleteTransactions }),
-        });
-        if (!res.ok) throw new Error('Failed to unlink account');
-        // Firebase listener will automatically update the account list
-        resolve();
-      } catch {
-        alert('Failed to unlink account. Please try again.');
-        if (btn) { btn.textContent = 'Unlink'; btn.disabled = false; }
-        resolve();
-      }
-    });
-
-    modal.addEventListener('click', e => {
-      if (e.target === modal) {
-        modal.remove();
-        reject(new Error('cancelled'));
-      }
-    });
-  }).catch(() => {});
+  modal.querySelector('.modal-cancel').addEventListener('click', () => modal.remove());
+  modal.addEventListener('click', e => { if (e.target === modal) modal.remove(); });
+  modal.querySelector('.modal-confirm').addEventListener('click', async () => {
+    const deleteTxns = modal.querySelector('#unlink-delete-txns').checked;
+    modal.remove();
+    try {
+      const idToken = await auth.currentUser.getIdToken();
+      await fetch(`${WORKER_URL}/plaid/remove-account`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${idToken}` },
+        body: JSON.stringify({ itemId, slot, deleteTransactions: deleteTxns }),
+      });
+    } catch { alert('Failed to unlink. Try again.'); }
+  });
 }
 
 function openManualAccountForm(uid) {
@@ -301,7 +355,6 @@ function openManualAccountForm(uid) {
     </div>
   `;
   document.body.appendChild(modal);
-
   modal.querySelector('.modal-save').addEventListener('click', async () => {
     const name    = modal.querySelector('#m-name').value.trim();
     const type    = modal.querySelector('#m-type').value;
@@ -311,7 +364,60 @@ function openManualAccountForm(uid) {
     await dbSet(`accounts/${uid}/${id}`, { name, type, subtype: type, currentBalance: balance, isManual: true, institution: 'Manual', lastSync: null });
     modal.remove();
   });
-
   modal.querySelector('.modal-cancel').addEventListener('click', () => modal.remove());
   modal.addEventListener('click', e => { if (e.target === modal) modal.remove(); });
+}
+
+function renderPartnerSection(uid) {
+  const el = document.getElementById('partner-section');
+  if (!el) return;
+  dbGet(`users/${uid}`).then(user => {
+    if (user?.partnerUid) {
+      dbGet(`users/${user.partnerUid}`).then(partner => {
+        el.innerHTML = `<div class="acct-settings-about">Sharing with <strong>${partner?.name ?? partner?.email ?? 'your partner'}</strong>.</div>`;
+      });
+    } else {
+      el.innerHTML = `
+        <button class="acct-settings-btn" id="send-invite">Send invite code</button>
+        <div style="display:flex;gap:6px;margin-top:6px">
+          <input id="invite-code-input" placeholder="Enter invite code" style="flex:1;border:1.5px solid var(--border);border-radius:8px;padding:8px 10px;font-size:0.85rem" />
+          <button class="btn-primary" id="accept-invite" style="width:auto;padding:8px 14px">Join</button>
+        </div>
+      `;
+      el.querySelector('#send-invite').addEventListener('click', () => generateInvite(uid));
+      el.querySelector('#accept-invite').addEventListener('click', () => acceptInvite(uid));
+    }
+  });
+}
+
+async function generateInvite(uid) {
+  const code = Math.random().toString(36).slice(2, 8).toUpperCase();
+  await dbSet(`invites/${code}`, { fromUid: uid, email: auth.currentUser.email, createdAt: Date.now(), accepted: false });
+  await dbSet(`users/${uid}/inviteCode`, code);
+  alert(`Your invite code: ${code}\n\nShare this with your partner.`);
+}
+
+async function acceptInvite(uid) {
+  const code   = document.getElementById('invite-code-input').value.trim().toUpperCase();
+  const invite = await dbGet(`invites/${code}`);
+  if (!invite || invite.accepted) { alert('Invalid or already-used invite code.'); return; }
+  await dbSet(`invites/${code}/accepted`, true);
+  await dbSet(`invites/${code}/acceptedBy`, uid);
+  await dbSet(`users/${uid}/partnerUid`, invite.fromUid);
+  await dbSet(`users/${invite.fromUid}/partnerUid`, uid);
+  renderPartnerSection(uid);
+}
+
+async function exportCsv(uid) {
+  const txns = await dbGet(`transactions/${uid}`);
+  if (!txns) { alert('No transactions to export.'); return; }
+  const rows = [['Date', 'Description', 'Merchant', 'Amount', 'Category', 'Account', 'Notes']];
+  for (const t of Object.values(txns)) {
+    rows.push([t.date, t.description, t.merchantName ?? '', t.amount, t.category, t.accountId, t.notes ?? '']);
+  }
+  const csv = rows.map(r => r.map(v => `"${String(v).replace(/"/g, '""')}"`).join(',')).join('\n');
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv' }));
+  a.download = `hearth-export-${new Date().toISOString().slice(0, 10)}.csv`;
+  a.click();
 }

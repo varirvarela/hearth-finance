@@ -1,5 +1,16 @@
 export const CHANGELOG = [
   {
+    version: '1.2.0',
+    date:    '2026-08-16',
+    changes: [
+      'Dashboard: redesigned with dark gradient net-worth hero, 3 mini metric cards (Spent, vs Budget, vs Last Year), category spend-vs-budget progress bars with pace ticks, alert banner for over-budget categories, and Review CTA.',
+      'Accounts: redesigned with dark gradient hero (Assets / Debt / Net Worth), institution groups with sync-status dots, and Settings section (partner sharing, import/export, sign-out) embedded at the bottom.',
+      'Insights: new tab (Screen 6) — AI-generated spending alerts sorted by severity: over-budget (red), on-pace-to-overspend (amber), anomalies vs last month (purple), subscription overlaps (blue), good-news under-pace (green).',
+      'Nav: 5th slot changed from Automation to Insights (sparkle icon); Automation remains accessible via direct link.',
+      'Desktop sidebar: dark (#0f1623) with white text and green active-state accent — matches design brief.',
+    ],
+  },
+  {
     version: '1.1.0',
     date:    '2026-08-16',
     changes: [
