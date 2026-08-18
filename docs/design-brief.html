@@ -2045,9 +2045,289 @@
 
   <hr class="divider">
 
+  <!-- ═══════════════ SCREEN 2a — SETTINGS IN ACCOUNTS ═══════════════ -->
+  <div class="section-header">
+    <span class="section-num">Screen 2a</span>
+    <h2 class="section-title">Accounts: Financial Summary + Settings</h2>
+  </div>
+
+  <div class="dt-notes" style="margin-bottom:1.5rem">
+    <div>
+      <strong>Design decision:</strong> Settings have no dedicated tab. Instead they live at the bottom of the Accounts screen, logically grouped with the financial identity of the user. This keeps the nav to 5 slots: Dashboard · Transactions · Budgets · Accounts · Insights.
+    </div>
+    <div>
+      <strong>Automation</strong> is not in the nav but is reachable via "Manage categorization rules →" in the Accounts settings section and from the Insights footer.
+    </div>
+  </div>
+
+  <div class="screens-row">
+    <!-- Accounts hero + list -->
+    <div class="phone-frame">
+      <div class="phone-status">9:41</div>
+      <div style="background:linear-gradient(135deg,#0f1623 0%,#1a2640 60%,#0d2318 100%);padding:22px 16px;display:flex;justify-content:space-around;align-items:center">
+        <div style="text-align:center">
+          <div style="font-size:0.55rem;font-weight:700;text-transform:uppercase;letter-spacing:0.1em;color:rgba(255,255,255,0.45);margin-bottom:3px">Assets</div>
+          <div style="font-size:1rem;font-weight:800;color:#4ade80">$284,500</div>
+        </div>
+        <div style="text-align:center;border-left:1px solid rgba(255,255,255,0.12);border-right:1px solid rgba(255,255,255,0.12);padding:0 16px">
+          <div style="font-size:0.55rem;font-weight:700;text-transform:uppercase;letter-spacing:0.1em;color:rgba(255,255,255,0.45);margin-bottom:3px">Debt</div>
+          <div style="font-size:1rem;font-weight:800;color:#f87171">$12,340</div>
+        </div>
+        <div style="text-align:center">
+          <div style="font-size:0.55rem;font-weight:700;text-transform:uppercase;letter-spacing:0.1em;color:rgba(255,255,255,0.45);margin-bottom:3px">Net Worth</div>
+          <div style="font-size:1rem;font-weight:800;color:white">$272,160</div>
+        </div>
+      </div>
+      <!-- Account groups -->
+      <div style="padding:10px 12px 0;background:var(--bg)">
+        <div style="background:var(--surface);border:1px solid var(--border);border-radius:10px;margin-bottom:8px;overflow:hidden">
+          <div style="display:flex;align-items:center;gap:6px;padding:8px 10px;background:var(--bg);border-bottom:1px solid var(--border)">
+            <div style="width:7px;height:7px;border-radius:50%;background:#16a34a;flex-shrink:0"></div>
+            <span style="font-size:0.72rem;font-weight:700;color:var(--text)">Chase</span>
+            <span style="font-size:0.6rem;color:#16a34a;font-weight:600">synced ✓</span>
+          </div>
+          <div style="display:flex;align-items:center;gap:8px;padding:8px 10px;border-bottom:1px solid var(--border)">
+            <span style="font-size:1rem">🏦</span>
+            <div style="flex:1">
+              <div style="font-size:0.72rem;font-weight:600;color:var(--text)">Sapphire Checking</div>
+              <div style="font-size:0.6rem;color:var(--muted)">Checking · Aug 15</div>
+            </div>
+            <span style="font-size:0.78rem;font-weight:700;color:var(--text)">$8,420</span>
+          </div>
+          <div style="display:flex;align-items:center;gap:8px;padding:8px 10px">
+            <span style="font-size:1rem">💳</span>
+            <div style="flex:1">
+              <div style="font-size:0.72rem;font-weight:600;color:var(--text)">Freedom Unlimited</div>
+              <div style="font-size:0.6rem;color:var(--muted)">Credit · Aug 15</div>
+            </div>
+            <span style="font-size:0.78rem;font-weight:700;color:#ef4444">−$3,210</span>
+          </div>
+        </div>
+        <div style="background:var(--surface);border:1px solid var(--border);border-radius:10px;margin-bottom:8px;overflow:hidden">
+          <div style="display:flex;align-items:center;gap:6px;padding:8px 10px;background:var(--bg);border-bottom:1px solid var(--border)">
+            <div style="width:7px;height:7px;border-radius:50%;background:#f59e0b;flex-shrink:0"></div>
+            <span style="font-size:0.72rem;font-weight:700;color:var(--text)">Fidelity</span>
+            <span style="font-size:0.6rem;color:#d97706;font-weight:600">stale</span>
+            <span style="font-size:0.58rem;background:#dbeafe;color:#1d4ed8;border-radius:99px;padding:1px 6px;font-weight:700;margin-left:auto">Partner</span>
+          </div>
+          <div style="display:flex;align-items:center;gap:8px;padding:8px 10px">
+            <span style="font-size:1rem">📈</span>
+            <div style="flex:1">
+              <div style="font-size:0.72rem;font-weight:600;color:var(--text)">Brokerage</div>
+              <div style="font-size:0.6rem;color:var(--muted)">Investment · Aug 12</div>
+            </div>
+            <span style="font-size:0.78rem;font-weight:700;color:var(--text)">$142,800</span>
+          </div>
+        </div>
+        <div style="display:flex;gap:6px;margin-bottom:8px">
+          <button style="flex:1;padding:8px;background:var(--brand);color:white;border:none;border-radius:8px;font-size:0.72rem;font-weight:700;cursor:pointer">+ Link Bank</button>
+          <button style="flex:1;padding:8px;background:var(--surface);border:1.5px solid var(--border);border-radius:8px;font-size:0.72rem;font-weight:600;cursor:pointer;color:var(--text)">+ Manual</button>
+        </div>
+        <!-- Settings section -->
+        <div style="border-top:1px solid var(--border);padding-top:12px;margin-top:4px">
+          <div style="font-size:0.58rem;font-weight:700;text-transform:uppercase;letter-spacing:0.1em;color:var(--muted);margin-bottom:10px">Settings</div>
+          <div style="font-size:0.58rem;font-weight:700;text-transform:uppercase;color:var(--faint);margin-bottom:5px;letter-spacing:0.06em">Partner Sharing</div>
+          <button style="display:block;width:100%;text-align:left;padding:8px 10px;background:var(--surface);border:1px solid var(--border);border-radius:8px;font-size:0.72rem;color:var(--text);margin-bottom:5px;cursor:pointer">Send invite code</button>
+          <div style="display:flex;gap:4px;margin-bottom:10px">
+            <input style="flex:1;padding:6px 8px;border:1.5px solid var(--border);border-radius:7px;font-size:0.68rem;background:var(--surface)" placeholder="Enter invite code"/>
+            <button style="padding:6px 10px;background:var(--brand);color:white;border:none;border-radius:7px;font-size:0.68rem;font-weight:700">Join</button>
+          </div>
+          <div style="font-size:0.58rem;font-weight:700;text-transform:uppercase;color:var(--faint);margin-bottom:5px;letter-spacing:0.06em">Data</div>
+          <button style="display:block;width:100%;text-align:left;padding:8px 10px;background:var(--surface);border:1px solid var(--border);border-radius:8px;font-size:0.72rem;color:var(--text);margin-bottom:5px;cursor:pointer">Import Tiller CSV…</button>
+          <button style="display:block;width:100%;text-align:left;padding:8px 10px;background:var(--surface);border:1px solid var(--border);border-radius:8px;font-size:0.72rem;color:var(--text);margin-bottom:5px;cursor:pointer">Export CSV</button>
+          <button style="display:block;width:100%;text-align:left;padding:8px 10px;background:var(--surface);border:1px solid var(--border);border-radius:8px;font-size:0.72rem;color:var(--brand);margin-bottom:10px;cursor:pointer">Manage categorization rules →</button>
+          <div style="font-size:0.58rem;font-weight:700;text-transform:uppercase;color:var(--faint);margin-bottom:5px;letter-spacing:0.06em">About</div>
+          <div style="font-size:0.72rem;color:var(--muted);padding:4px 0;margin-bottom:10px">Hearth Finance · v1.3.0</div>
+          <button style="width:100%;padding:10px;background:#ef4444;color:white;border:none;border-radius:8px;font-size:0.78rem;font-weight:700;cursor:pointer">Sign Out</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Annotation -->
+    <div class="annotation-col">
+      <div class="dt-notes">
+        <div>
+          <strong>Dark hero strip</strong> shows Assets (green) / Debt (red) / Net Worth (white) computed from all linked accounts in real-time. Partner accounts included.
+        </div>
+        <div>
+          <strong>Sync-freshness dots</strong>: green = synced within 4 hours, amber = 4–48 hours stale, red = &gt;48 hours or error, grey = manual account. Each dot paired with a micro-label ("synced ✓", "stale", "manual").
+        </div>
+        <div>
+          <strong>Partner badge</strong>: partner institutions shown read-only with a blue "Partner" chip. Reconnect/Unlink controls hidden for partner rows.
+        </div>
+        <div>
+          <strong>Settings at bottom</strong>: Partner Sharing (invite code send/accept), Data (import/export CSV, manage rules), About, and Sign Out. No separate Settings tab.
+        </div>
+        <div>
+          <strong>Manage rules link</strong>: navigates to <code>#automation</code> hash — keeps automation accessible without a dedicated nav slot.
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <hr class="divider">
+
+  <!-- ═══════════════ SCREEN 2b — CATEGORY DRILL-DOWN ═══════════════ -->
+  <div class="section-header">
+    <span class="section-num future">Screen 2b</span>
+    <h2 class="section-title">Dashboard → Category Drill-Down</h2>
+  </div>
+
+  <div class="dt-notes" style="margin-bottom:1.5rem">
+    <div>
+      <strong>Interaction:</strong> Tapping any category row in the Dashboard's "Spend vs Budget" section navigates to Transactions pre-filtered to that category and month. The filter state is passed via <code>sessionStorage</code> so it survives the tab switch.
+    </div>
+    <div>
+      <strong>Goal:</strong> Make the Dashboard actionable — not just a read-only summary, but a launch point for triage. If "Salidas" is 87% of budget at pace day 12, one tap shows exactly which restaurants and outings drove it.
+    </div>
+  </div>
+
+  <div class="screens-row">
+    <!-- Dashboard with clickable category -->
+    <div class="phone-frame">
+      <div class="phone-status">9:41</div>
+      <!-- Period bar -->
+      <div style="display:flex;align-items:center;justify-content:space-between;padding:8px 12px;background:var(--surface);border-bottom:1px solid var(--border)">
+        <div style="background:var(--bg);border:1.5px solid var(--border);border-radius:99px;padding:2px;display:inline-flex;gap:2px">
+          <span style="background:var(--brand);color:white;border-radius:99px;padding:3px 12px;font-size:0.6rem;font-weight:700">Monthly</span>
+          <span style="color:var(--muted);padding:3px 10px;font-size:0.6rem;font-weight:600">Annual</span>
+        </div>
+        <div style="display:flex;align-items:center;gap:6px">
+          <span style="font-size:0.9rem;color:var(--muted)">‹</span>
+          <span style="font-size:0.72rem;font-weight:700;color:var(--text)">August 2026</span>
+          <span style="font-size:0.9rem;color:var(--faint)">›</span>
+        </div>
+      </div>
+      <!-- Spend section -->
+      <div style="padding:10px 12px;background:var(--bg)">
+        <div style="background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:10px 12px">
+          <div style="font-size:0.58rem;font-weight:700;text-transform:uppercase;letter-spacing:0.07em;color:var(--muted);margin-bottom:8px">Spend vs Budget — Day 15 of 31 · 48% pace</div>
+          <!-- Normal row -->
+          <div style="margin-bottom:8px">
+            <div style="display:flex;align-items:center;gap:6px;margin-bottom:4px">
+              <span style="font-size:0.85rem;width:18px;text-align:center">🏠</span>
+              <span style="flex:1;font-size:0.72rem;font-weight:600;color:var(--text)">Casa</span>
+              <span style="font-size:0.68rem;font-weight:600;color:var(--brand)">$1,820 / $2,200</span>
+            </div>
+            <div style="position:relative;height:5px;background:var(--border);border-radius:3px">
+              <div style="position:absolute;left:0;top:0;height:100%;width:83%;background:#16a34a;border-radius:3px"></div>
+              <div style="position:absolute;top:-3px;bottom:-3px;left:48%;width:2px;background:rgba(0,0,0,0.35);border-radius:2px"></div>
+            </div>
+          </div>
+          <!-- HIGHLIGHTED / TAPPED row -->
+          <div style="margin-bottom:8px;background:#fef9ec;border-radius:8px;padding:6px 8px;border:1.5px solid #f59e0b;cursor:pointer">
+            <div style="display:flex;align-items:center;gap:6px;margin-bottom:4px">
+              <span style="font-size:0.85rem;width:18px;text-align:center">🍽</span>
+              <span style="flex:1;font-size:0.72rem;font-weight:600;color:var(--text)">Salidas</span>
+              <span style="font-size:0.68rem;font-weight:600;color:#b45309">$870 / $1,000 →</span>
+            </div>
+            <div style="position:relative;height:5px;background:var(--border);border-radius:3px">
+              <div style="position:absolute;left:0;top:0;height:100%;width:87%;background:#f59e0b;border-radius:3px"></div>
+              <div style="position:absolute;top:-3px;bottom:-3px;left:48%;width:2px;background:rgba(0,0,0,0.35);border-radius:2px"></div>
+            </div>
+          </div>
+          <!-- Another row -->
+          <div style="margin-bottom:8px">
+            <div style="display:flex;align-items:center;gap:6px;margin-bottom:4px">
+              <span style="font-size:0.85rem;width:18px;text-align:center">🛒</span>
+              <span style="flex:1;font-size:0.72rem;font-weight:600;color:var(--text)">Super & Farmacia</span>
+              <span style="font-size:0.68rem;font-weight:600;color:var(--brand)">$380 / $600</span>
+            </div>
+            <div style="position:relative;height:5px;background:var(--border);border-radius:3px">
+              <div style="position:absolute;left:0;top:0;height:100%;width:63%;background:#16a34a;border-radius:3px"></div>
+              <div style="position:absolute;top:-3px;bottom:-3px;left:48%;width:2px;background:rgba(0,0,0,0.35);border-radius:2px"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <!-- Arrow indicator -->
+      <div style="display:flex;align-items:center;justify-content:center;padding:8px;color:var(--muted)">
+        <span style="font-size:1.4rem">↓</span>
+      </div>
+    </div>
+
+    <!-- Arrow between phones -->
+    <div style="display:flex;align-items:center;justify-content:center;font-size:2rem;color:var(--brand);padding:0 0.5rem;flex-shrink:0">→</div>
+
+    <!-- Transactions filtered to Salidas -->
+    <div class="phone-frame">
+      <div class="phone-status">9:41</div>
+      <div style="padding:8px 12px;background:var(--surface);border-bottom:1px solid var(--border)">
+        <div style="display:flex;align-items:center;gap:8px">
+          <input style="flex:1;padding:7px 10px;border:1.5px solid var(--border);border-radius:8px;font-size:0.72rem;background:var(--bg)" placeholder="Search transactions…"/>
+          <button style="padding:6px 10px;background:var(--surface);border:1.5px solid var(--brand);border-radius:8px;font-size:0.7rem;font-weight:700;color:var(--brand)">Filters 🟢</button>
+        </div>
+      </div>
+      <!-- Active filter chips -->
+      <div style="padding:6px 12px;background:#f0fdf4;border-bottom:1px solid var(--brand-l);display:flex;gap:5px;flex-wrap:wrap">
+        <span style="background:var(--brand);color:white;border-radius:99px;padding:2px 8px;font-size:0.62rem;font-weight:700">🍽 Salidas</span>
+        <span style="background:var(--brand-xl);border:1px solid var(--brand-l);color:var(--brand);border-radius:99px;padding:2px 8px;font-size:0.62rem;font-weight:600">August 2026</span>
+        <span style="color:var(--muted);font-size:0.62rem;padding:2px 4px;cursor:pointer">✕ Clear</span>
+      </div>
+      <!-- Transaction rows -->
+      <div style="padding:0;background:var(--bg)">
+        <div style="background:var(--surface);margin:8px 12px;border-radius:10px;overflow:hidden">
+          <div style="display:flex;align-items:center;gap:8px;padding:10px 10px;border-bottom:1px solid var(--border)">
+            <div style="width:36px;height:36px;border-radius:10px;background:#fef3c7;display:flex;align-items:center;justify-content:center;font-size:1rem;flex-shrink:0">🍽</div>
+            <div style="flex:1;min-width:0">
+              <div style="font-size:0.78rem;font-weight:700;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">Nobu Restaurant</div>
+              <div style="font-size:0.65rem;color:var(--muted)">Aug 14 · Chase Freedom</div>
+            </div>
+            <span style="font-size:0.82rem;font-weight:700;color:var(--text)">$186.00</span>
+          </div>
+          <div style="display:flex;align-items:center;gap:8px;padding:10px 10px;border-bottom:1px solid var(--border)">
+            <div style="width:36px;height:36px;border-radius:10px;background:#fef3c7;display:flex;align-items:center;justify-content:center;font-size:1rem;flex-shrink:0">🍽</div>
+            <div style="flex:1;min-width:0">
+              <div style="font-size:0.78rem;font-weight:700;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">Le Pain Quotidien</div>
+              <div style="font-size:0.65rem;color:var(--muted)">Aug 11 · Chase Freedom</div>
+            </div>
+            <span style="font-size:0.82rem;font-weight:700;color:var(--text)">$43.50</span>
+          </div>
+          <div style="display:flex;align-items:center;gap:8px;padding:10px 10px;border-bottom:1px solid var(--border)">
+            <div style="width:36px;height:36px;border-radius:10px;background:#fef3c7;display:flex;align-items:center;justify-content:center;font-size:1rem;flex-shrink:0">☕</div>
+            <div style="flex:1;min-width:0">
+              <div style="font-size:0.78rem;font-weight:700;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">Starbucks</div>
+              <div style="font-size:0.65rem;color:var(--muted)">Aug 10 · Chase Sapphire</div>
+            </div>
+            <span style="font-size:0.82rem;font-weight:700;color:var(--text)">$8.75</span>
+          </div>
+          <div style="display:flex;align-items:center;gap:8px;padding:10px 10px">
+            <div style="width:36px;height:36px;border-radius:10px;background:#fef3c7;display:flex;align-items:center;justify-content:center;font-size:1rem;flex-shrink:0">🍽</div>
+            <div style="flex:1;min-width:0">
+              <div style="font-size:0.78rem;font-weight:700;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">Balthazar</div>
+              <div style="font-size:0.65rem;color:var(--muted)">Aug 8 · Chase Freedom</div>
+            </div>
+            <span style="font-size:0.82rem;font-weight:700;color:var(--text)">$124.20</span>
+          </div>
+        </div>
+        <div style="text-align:center;font-size:0.65rem;color:var(--muted);padding:4px">12 transactions · $870.00 total</div>
+      </div>
+    </div>
+
+    <!-- Annotation -->
+    <div class="annotation-col">
+      <div class="dt-notes">
+        <div>
+          <strong>Tap any category bar</strong> in the Dashboard's Spend vs Budget section to drill into its transactions. The row highlights amber on hover/tap to signal interactivity.
+        </div>
+        <div>
+          <strong>Filter state transfer:</strong> category ID + month/year stored in <code>sessionStorage</code> under <code>txn-filter-intent</code> before navigation. Transactions reads it on mount, applies the filter, clears the key.
+        </div>
+        <div>
+          <strong>Active filter chips</strong> shown at the top of Transactions so the user knows why the list is pre-filtered. The chips are tappable to clear individual filters.
+        </div>
+        <div>
+          <strong>Back navigation:</strong> Tapping "Accounts" or any other nav tab clears the filter. Tapping "← Back" (if added) returns to Dashboard.
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <hr class="divider">
+
   <!-- ═══════════════ FOOTER ═══════════════ -->
   <div class="doc-footer">
-    Hearth Finance — Design Brief v1.0.0 &nbsp;·&nbsp; August 2026 &nbsp;·&nbsp; Internal use only
+    Hearth Finance — Design Brief v1.1.0 &nbsp;·&nbsp; August 2026 &nbsp;·&nbsp; Internal use only
   </div>
 
 </div>

@@ -241,7 +241,7 @@ export function renderDashboard(container) {
     // spend vs budget bars
     container.querySelector('#spend-section-label').textContent =
       `Spend vs Budget — Day ${paceDay} of ${daysInMonth} · ${pacePct}% pace`;
-    renderSpendBars(container, expenses, latestBudgets ?? {}, pacePct);
+    renderSpendBars(container, expenses, latestBudgets ?? {}, pacePct, selYear, selMonth);
 
     // review CTA
     const ctaEl = container.querySelector('#dash-review-cta');
@@ -368,7 +368,7 @@ function renderAlert(container, spent, totalBudget, pacePct, reviewCount, allTxn
 }
 
 // ── Category spend-vs-budget bars ────────────────────────
-function renderSpendBars(container, expenses, budgets, pacePct) {
+function renderSpendBars(container, expenses, budgets, pacePct, selYear, selMonth) {
   const barsEl = container.querySelector('#spend-bars');
   if (!barsEl) return;
 
@@ -440,7 +440,7 @@ function renderSpendBars(container, expenses, budgets, pacePct) {
             : `${pct}% · ${pct <= pacePct ? 'on track' : 'under pace ✓'}`;
 
     return `
-      <div class="prog-row">
+      <div class="prog-row" data-cat="${cat.id}" title="Tap to see ${cat.name} transactions">
         <div class="prog-row-top">
           <span class="prog-icon">${cat.icon}</span>
           <span class="prog-name">${cat.name}</span>
@@ -458,6 +458,19 @@ function renderSpendBars(container, expenses, budgets, pacePct) {
   barsEl.innerHTML = html + (moreCount > 0
     ? `<div class="prog-more">+${moreCount} more categories</div>`
     : '');
+
+  // Category drill-down: tap row → Transactions filtered to that category + month
+  barsEl.querySelectorAll('.prog-row[data-cat]').forEach(row => {
+    row.style.cursor = 'pointer';
+    row.addEventListener('click', () => {
+      sessionStorage.setItem('txn-filter-intent', JSON.stringify({
+        catId: row.dataset.cat,
+        year:  selYear,
+        month: selMonth,
+      }));
+      location.hash = 'transactions';
+    });
+  });
 }
 
 // ── Trend chart ───────────────────────────────────────────

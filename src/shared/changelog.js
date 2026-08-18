@@ -1,5 +1,16 @@
 export const CHANGELOG = [
   {
+    version: '1.3.0',
+    date:    '2026-08-16',
+    changes: [
+      'Desktop sidebar: now correctly appears on the LEFT (was on right due to DOM order).',
+      'Dashboard: tapping a category spend bar now navigates to Transactions pre-filtered to that category and month (category drill-down).',
+      'Transactions: needs-review rows now show amber left-border + background; uncategorized rows show red left-border + background; active category filter chips appear at top when drill-down filter is active.',
+      'Budgets: leaf rows redesigned — two-row layout (icon + name + amount on top, full-width progress bar with pace tick below) replacing the cramped single-row style.',
+      'Design brief updated to v1.1.0: added Screen 2a (Settings in Accounts) and Screen 2b (Category drill-down mockup).',
+    ],
+  },
+  {
     version: '1.2.0',
     date:    '2026-08-16',
     changes: [

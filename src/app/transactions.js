@@ -111,6 +111,22 @@ export function renderTransactions(container) {
   partnerInitial = 'P';
 
   const state = blankState();
+
+  // Category drill-down from Dashboard: read sessionStorage intent
+  const filterIntent = sessionStorage.getItem('txn-filter-intent');
+  if (filterIntent) {
+    try {
+      const { catId, year, month } = JSON.parse(filterIntent);
+      sessionStorage.removeItem('txn-filter-intent');
+      if (catId) {
+        const cat = getCategoryById(catId);
+        state.cats   = [catId];
+        state.groups = cat.parent ? [cat.parent] : [catId];
+        if (year && month) { state.dateMode = 'month'; state.year = year; state.month = month; }
+      }
+    } catch { /* ignore malformed intent */ }
+  }
+
   let filterPanelRendered = false;
 
   const refresh = () => {
@@ -462,10 +478,11 @@ function renderPage(filtered, state, uid, refresh, accountMap) {
   const slice = filtered.slice(start, end);
 
   const rows = slice.map(([id, t]) => {
-    const cat       = getCategoryById(t.category);
-    const review    = needsReview(t);
-    const isPartner = !!t._owner;
-    const acctName  = t.accountName || accountMap[t.accountId]?.name || '';
+    const cat            = getCategoryById(t.category);
+    const review         = needsReview(t);
+    const isUncategorized = t.category === 'uncategorized' || !t.category;
+    const isPartner      = !!t._owner;
+    const acctName       = t.accountName || accountMap[t.accountId]?.name || '';
 
     const partnerBadge = isPartner
       ? `<span style="background:#dbeafe;color:#1e40af;border-radius:8px;padding:1px 6px;font-size:0.68rem;font-weight:700;flex-shrink:0">${partnerInitial}</span>`
@@ -500,7 +517,7 @@ function renderPage(filtered, state, uid, refresh, accountMap) {
     }
 
     return `
-      <div class="txn-row${review ? ' needs-review' : ''}" data-id="${id}">
+      <div class="txn-row${review ? ' needs-review' : ''}${isUncategorized ? ' is-uncategorized' : ''}" data-id="${id}">
         <button class="txn-icon cat-btn" title="Change category" data-id="${id}" data-cat="${t.category}"
                 style="--cat-bg:${catBg}"${isPartner ? ' disabled' : ''}>${cat.icon}</button>
         <div class="txn-meta">
@@ -522,11 +539,33 @@ function renderPage(filtered, state, uid, refresh, accountMap) {
       <button class="btn-ghost page-btn" data-p="${page + 1}" ${page === totalPages - 1 ? 'disabled' : ''}>Next →</button>
     </div>` : '';
 
+  // Active category filter chips
+  const activeCats = state.cats.length > 0 ? state.cats.map(cid => {
+    const c = getCategoryById(cid);
+    return `<span class="txn-filter-chip">${c.icon} ${c.name} <button class="txn-chip-clear" data-cat="${cid}">✕</button></span>`;
+  }).join('') : '';
+  const filterChips = activeCats ? `<div class="txn-filter-chips">${activeCats}</div>` : '';
+
   el.innerHTML = `
+    ${filterChips}
     <div class="txn-summary">${total.toLocaleString()} transactions · showing ${start + 1}–${end}</div>
     <div class="card-rows">${rows}</div>
     ${paginationHTML}
   `;
+
+  // Wire chip clear buttons
+  el.querySelectorAll('.txn-chip-clear').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const cid = btn.dataset.cat;
+      state.cats   = state.cats.filter(c => c !== cid);
+      state.groups = state.groups.filter(g => {
+        const cat = getCategoryById(cid);
+        return g !== (cat.parent ?? cid);
+      });
+      state.page = 0;
+      refresh();
+    });
+  });
 
   // ── Category icon button ──
   el.querySelectorAll('.cat-btn').forEach(btn => {

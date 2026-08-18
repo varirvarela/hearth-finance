@@ -123,6 +123,11 @@ function renderBudgetList(uid, budgets, txns, year, month) {
   const summaryEl = document.getElementById('budget-summary');
   if (!listEl || !summaryEl) return;
 
+  const now       = new Date();
+  const daysInMonth = new Date(year, month, 0).getDate();
+  const paceDay   = year === now.getFullYear() && month === now.getMonth() + 1 ? now.getDate() : daysInMonth;
+  const pacePct   = Math.round((paceDay / daysInMonth) * 100);
+
   const prefix = `${year}-${String(month).padStart(2, '0')}`;
   const spentByCat = {};
   for (const t of Object.values(txns)) {
@@ -167,32 +172,39 @@ function renderBudgetList(uid, budgets, txns, year, month) {
       </div>`;
 
     for (const leaf of visible) {
-      const spent    = spentByCat[leaf.id] ?? 0;
-      const limit    = budgets[leaf.id]?.monthly ?? 0;
+      const spent     = spentByCat[leaf.id] ?? 0;
+      const limit     = budgets[leaf.id]?.monthly ?? 0;
       const hasBudget = limit > 0;
-      const pct      = hasBudget ? Math.min(100, (spent / limit) * 100) : 0;
-      const barColor = pct >= 100 ? '#dc2626' : pct >= 80 ? '#f59e0b' : '#16a34a';
+      const pct       = hasBudget ? Math.min(100, Math.round((spent / limit) * 100)) : 0;
+      const barColor  = pct >= 100 ? '#dc2626' : pct >= pacePct + 15 ? '#f59e0b' : '#16a34a';
+      const amtColor  = pct >= 100 ? '#dc2626' : pct >= pacePct + 15 ? '#b45309' : 'var(--text)';
 
-      const badges = [
-        leaf.isFixed  ? '<span class="budget-badge">Fixed</span>'  : '',
-        leaf.isAnnual ? '<span class="budget-badge">Annual</span>' : '',
-      ].join('');
+      const badge = leaf.isFixed ? ' <span class="budget-badge">Fixed</span>'
+                  : leaf.isAnnual ? ' <span class="budget-badge annual-badge">Annual</span>' : '';
 
-      const limitCell = hasBudget
-        ? `<span class="budget-limit" data-cat="${leaf.id}">${fmtCurrency(limit)}/mo</span>`
-        : `<span class="set-budget-link" data-cat="${leaf.id}">Set budget</span>`;
+      const limitLabel = hasBudget
+        ? `<span class="budget-limit" data-cat="${leaf.id}">/${fmtCurrency(limit)}</span>`
+        : `<span class="set-budget-link" data-cat="${leaf.id}">Set</span>`;
 
-      const bar = hasBudget
-        ? `<div class="budget-bar-wrap"><div class="budget-bar-inner" style="width:${pct}%;background:${barColor}"></div></div>`
-        : '<div class="budget-bar-wrap"></div>';
+      const barHtml = hasBudget ? `
+        <div class="budget-bar-row">
+          <div class="budget-bar-track">
+            <div class="budget-bar-fill" style="width:${pct}%;background:${barColor}"></div>
+            <div class="budget-pace-tick" style="left:${pacePct}%"></div>
+          </div>
+          <span class="budget-bar-pct" style="color:${amtColor}">${pct}%</span>
+        </div>` : '';
 
       html += `<div class="budget-leaf">
-        <span>${leaf.icon}</span>
-        <span class="budget-leaf-name">${leaf.name}</span>
-        ${badges}
-        <span class="budget-actual">${fmtCurrency(spent)}</span>
-        ${limitCell}
-        ${bar}
+        <div class="budget-leaf-top">
+          <span class="budget-leaf-icon">${leaf.icon}</span>
+          <span class="budget-leaf-name">${leaf.name}${badge}</span>
+          <div class="budget-leaf-right">
+            <span class="budget-actual-sm" style="color:${amtColor}">${fmtCurrency(spent)}</span>
+            ${limitLabel}
+          </div>
+        </div>
+        ${barHtml}
       </div>`;
     }
 
