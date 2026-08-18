@@ -1,5 +1,19 @@
 export const CHANGELOG = [
   {
+    version: '1.4.0',
+    date:    '2026-08-17',
+    changes: [
+      'Transactions: rows are now compact (9×12px padding, 36px icon, tighter typography) matching the design brief exactly.',
+      'Transactions: AI suggestion strip is now a clean separate row below the transaction (no longer nested inside, correct 57px left-indent alignment).',
+      'Transactions: needs-review and uncategorized rows now use background-only state (removed left border, matches design brief).',
+      'Budgets: category rows redesigned to compact single-line layout (icon · name · 76px bar · amount) matching the design brief.',
+      'Budgets: group headers now use the design brief style (small caps, faint color, bg strip).',
+      'Accounts: hero values smaller (1rem/800) and labels tighter (0.58rem) per design brief.',
+      'Accounts: account rows have a boxed icon (30×30px, border-radius 8px) per design brief.',
+      'Desktop sidebar: 196px wide with 7×14px nav items, 0.78rem font, green left-accent bar on active tab.',
+    ],
+  },
+  {
     version: '1.3.0',
     date:    '2026-08-16',
     changes: [

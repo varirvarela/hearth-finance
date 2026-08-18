@@ -167,7 +167,7 @@ function renderBudgetList(uid, budgets, txns, year, month) {
     if (!visible.length) continue;
 
     html += `<div class="budget-group">
-      <div class="budget-group-header" style="color:${root.color}">
+      <div class="budget-group-header">
         <span>${root.icon}</span><span>${root.name}</span>
       </div>`;
 
@@ -182,29 +182,19 @@ function renderBudgetList(uid, budgets, txns, year, month) {
       const badge = leaf.isFixed ? ' <span class="budget-badge">Fixed</span>'
                   : leaf.isAnnual ? ' <span class="budget-badge annual-badge">Annual</span>' : '';
 
-      const limitLabel = hasBudget
-        ? `<span class="budget-limit" data-cat="${leaf.id}">/${fmtCurrency(limit)}</span>`
-        : `<span class="set-budget-link" data-cat="${leaf.id}">Set</span>`;
+      const barHtml = hasBudget
+        ? `<div class="budget-bar"><div class="budget-bar-fill" style="width:${pct}%;background:${barColor}"></div><div class="budget-pace-tick" style="left:${pacePct}%"></div></div>`
+        : `<div class="budget-bar" style="background:transparent"></div>`;
 
-      const barHtml = hasBudget ? `
-        <div class="budget-bar-row">
-          <div class="budget-bar-track">
-            <div class="budget-bar-fill" style="width:${pct}%;background:${barColor}"></div>
-            <div class="budget-pace-tick" style="left:${pacePct}%"></div>
-          </div>
-          <span class="budget-bar-pct" style="color:${amtColor}">${pct}%</span>
-        </div>` : '';
+      const amtHtml = hasBudget
+        ? `<span class="budget-leaf-amt" style="color:${amtColor}">${fmtCurrency(spent)} / <span class="budget-limit" data-cat="${leaf.id}">${fmtCurrency(limit)}</span></span>`
+        : `<span class="budget-leaf-amt"><span class="set-budget-link" data-cat="${leaf.id}">Set</span></span>`;
 
       html += `<div class="budget-leaf">
-        <div class="budget-leaf-top">
-          <span class="budget-leaf-icon">${leaf.icon}</span>
-          <span class="budget-leaf-name">${leaf.name}${badge}</span>
-          <div class="budget-leaf-right">
-            <span class="budget-actual-sm" style="color:${amtColor}">${fmtCurrency(spent)}</span>
-            ${limitLabel}
-          </div>
-        </div>
+        <span class="budget-leaf-icon">${leaf.icon}</span>
+        <span class="budget-leaf-name">${leaf.name}${badge}</span>
         ${barHtml}
+        ${amtHtml}
       </div>`;
     }
 
@@ -321,7 +311,7 @@ function buildAnnualSection(title, sectionClass, leaves, budgets, spentByCat, ro
     if (!visible.length) continue;
 
     inner += `<div class="budget-group">
-      <div class="budget-group-header" style="color:${root.color}">
+      <div class="budget-group-header">
         <span>${root.icon}</span><span>${root.name}</span>
       </div>`;
 
@@ -337,23 +327,19 @@ function buildAnnualSection(title, sectionClass, leaves, budgets, spentByCat, ro
         ? `<div class="budget-pace-tick" style="left:${pacePct}%"></div>`
         : '';
 
-      const limitCell = hasBudget
-        ? `<span class="budget-limit">${fmtCurrency(annualTarget)}/yr</span>`
-        : `<span class="budget-limit-muted">—</span>`;
+      const barHtml = hasBudget
+        ? `<div class="budget-bar"><div class="budget-bar-fill" style="width:${pct}%;background:${barColor}"></div>${tickHtml}</div>`
+        : `<div class="budget-bar" style="background:transparent"></div>`;
 
-      const bar = hasBudget
-        ? `<div class="budget-bar-wrap annual">
-            <div class="budget-bar-inner" style="width:${pct}%;background:${barColor}"></div>
-            ${tickHtml}
-           </div>`
-        : '<div class="budget-bar-wrap"></div>';
+      const amtLabel = hasBudget
+        ? `<span class="budget-leaf-amt">${fmtCurrency(spent)} / ${fmtCurrency(annualTarget)}/yr</span>`
+        : `<span class="budget-leaf-amt budget-limit-muted">—</span>`;
 
       inner += `<div class="budget-leaf">
-        <span>${leaf.icon}</span>
+        <span class="budget-leaf-icon">${leaf.icon}</span>
         <span class="budget-leaf-name">${leaf.name}</span>
-        <span class="budget-actual">${fmtCurrency(spent)}</span>
-        ${limitCell}
-        ${bar}
+        ${barHtml}
+        ${amtLabel}
       </div>`;
     }
 

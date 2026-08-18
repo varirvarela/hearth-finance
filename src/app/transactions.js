@@ -496,39 +496,41 @@ function renderPage(filtered, state, uid, refresh, accountMap) {
     if (acctName) subParts.push(acctName);
     const subHTML = `<span class="txn-sub">${subParts.join(' · ')} ${partnerBadge}</span>`;
 
-    // Suggestion strip for needs-review (AI suggested category with confidence)
+    // Suggestion strip — rendered as sibling to .txn-row inside .txn-item
     let suggestionHTML = '';
     if (review && !isPartner) {
       if (t.category !== 'uncategorized' && t.categorySource === 'ai' && (t.aiConfidence ?? 0) > 0) {
         suggestionHTML = `
-          <div class="txn-suggestion">
-            <span class="txn-suggestion-label">AI:</span>
-            <span class="txn-suggestion-cat">${cat.icon} ${cat.name}</span>
-            <button class="btn-quick-confirm" data-id="${id}" data-cat="${t.category}" title="Confirm this category">✓ Confirm</button>
-            <button class="btn-quick-change"  data-id="${id}" data-cat="${t.category}" title="Pick a different category">Change</button>
+          <div class="sug-strip ai">
+            <span class="sug-lbl ai">AI</span>
+            <span class="sug-cat">${cat.icon} ${cat.name}</span>
+            <button class="btn-quick-confirm" data-id="${id}" data-cat="${t.category}">✓ Confirm</button>
+            <button class="btn-quick-change"  data-id="${id}" data-cat="${t.category}">Change</button>
           </div>`;
       } else {
         suggestionHTML = `
-          <div class="txn-suggestion">
-            <span class="txn-suggestion-label">⚠ Uncategorized</span>
+          <div class="sug-strip warn">
+            <span class="sug-lbl warn">⚠ Uncategorized</span>
             <button class="btn-quick-change" data-id="${id}" data-cat="${t.category}" style="margin-left:auto">Categorize →</button>
           </div>`;
       }
     }
 
     return `
-      <div class="txn-row${review ? ' needs-review' : ''}${isUncategorized ? ' is-uncategorized' : ''}" data-id="${id}">
-        <button class="txn-icon cat-btn" title="Change category" data-id="${id}" data-cat="${t.category}"
-                style="--cat-bg:${catBg}"${isPartner ? ' disabled' : ''}>${cat.icon}</button>
-        <div class="txn-meta">
-          <span class="txn-desc">${t.merchantName ?? t.description}</span>
-          ${subHTML}
-          ${suggestionHTML}
+      <div class="txn-item">
+        <div class="txn-row${review ? ' needs-review' : ''}${isUncategorized ? ' is-uncategorized' : ''}" data-id="${id}">
+          <button class="txn-icon cat-btn" title="Change category" data-id="${id}" data-cat="${t.category}"
+                  style="--cat-bg:${catBg}"${isPartner ? ' disabled' : ''}>${cat.icon}</button>
+          <div class="txn-meta">
+            <span class="txn-desc">${t.merchantName ?? t.description}</span>
+            ${subHTML}
+          </div>
+          <div class="txn-right">
+            <span class="txn-amount ${t.amount < 0 ? 'income' : ''}">${t.amount < 0 ? '+' : ''}${fmtCurrency(Math.abs(t.amount))}</span>
+            ${t.pending ? '<span class="txn-pending-badge">Pending</span>' : ''}
+          </div>
         </div>
-        <div class="txn-right">
-          <span class="txn-amount ${t.amount < 0 ? 'income' : ''}">${t.amount < 0 ? '+' : ''}${fmtCurrency(Math.abs(t.amount))}</span>
-          ${t.pending ? '<span class="txn-pending-badge">Pending</span>' : ''}
-        </div>
+        ${suggestionHTML}
       </div>`;
   }).join('');
 
@@ -587,7 +589,7 @@ function renderPage(filtered, state, uid, refresh, accountMap) {
         categorySource: 'manual',
         needsReview:    false,
       });
-      const row = btn.closest('.txn-row');
+      const row = btn.closest('.txn-item')?.querySelector('.txn-row');
       if (row) {
         const entry = slice.find(([sid]) => sid === txnId);
         showRulePrompt(row, entry?.[1] ?? {}, cat, uid);
@@ -599,7 +601,7 @@ function renderPage(filtered, state, uid, refresh, accountMap) {
   el.querySelectorAll('.btn-quick-change').forEach(btn => {
     btn.addEventListener('click', e => {
       e.stopPropagation();
-      const row = btn.closest('.txn-row');
+      const row = btn.closest('.txn-item')?.querySelector('.txn-row') ?? btn.closest('.txn-row');
       openCategoryPicker(btn.dataset.id, btn.dataset.cat, uid, row);
     });
   });
@@ -620,18 +622,18 @@ function renderPage(filtered, state, uid, refresh, accountMap) {
     const [, t] = entry;
 
     row.addEventListener('click', e => {
-      if (e.target.closest('.cat-btn') ||
-          e.target.closest('.btn-quick-confirm') ||
-          e.target.closest('.btn-quick-change')) return;
+      if (e.target.closest('.cat-btn')) return;
 
-      // Close rule prompt if open on this row
-      row.nextElementSibling?.classList.contains('rule-prompt') && row.nextElementSibling.remove();
+      const item = row.closest('.txn-item') ?? row;
+
+      // Close rule prompt if open after this item
+      item.nextElementSibling?.classList.contains('rule-prompt') && item.nextElementSibling.remove();
 
       const existingDetail = document.querySelector('.txn-detail');
       if (existingDetail) {
-        const wasThisRow = existingDetail.previousElementSibling === row;
+        const wasThisItem = existingDetail.previousElementSibling === item;
         existingDetail.remove();
-        if (wasThisRow) return;
+        if (wasThisItem) return;
       }
 
       const isPartner   = !!t._owner;
@@ -654,7 +656,7 @@ function renderPage(filtered, state, uid, refresh, accountMap) {
         </div>
       `;
 
-      row.insertAdjacentElement('afterend', detail);
+      item.insertAdjacentElement('afterend', detail);
 
       if (!isPartner) {
         const originalNotes = t.notes ?? '';
@@ -690,8 +692,9 @@ function showRulePrompt(row, txn, catObj, uid) {
     <button class="btn-rule-skip">Skip</button>
   `;
 
-  // Insert after the row (or after its detail panel if one is open)
-  const target = row.nextElementSibling?.classList.contains('txn-detail') ? row.nextElementSibling : row;
+  // Insert after the txn-item (or after its detail panel if one is open)
+  const item   = row.closest?.('.txn-item') ?? row;
+  const target = item.nextElementSibling?.classList.contains('txn-detail') ? item.nextElementSibling : item;
   target.insertAdjacentElement('afterend', prompt);
 
   prompt.querySelector('.btn-rule-yes').addEventListener('click', async () => {

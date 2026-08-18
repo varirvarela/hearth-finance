@@ -272,34 +272,37 @@ input:focus, select:focus, textarea:focus { outline: none; }
 }
 
 /* ── Transaction rows ──────────────────────────────────── */
+.txn-item {
+  border-bottom: 1px solid var(--border);
+}
+.txn-item:last-child { border-bottom: none; }
+
 .txn-row {
   display: flex;
-  align-items: flex-start;
-  gap: 0.85rem;
-  padding: 0.85rem 1rem;
-  border-bottom: 1px solid var(--border);
+  align-items: center;
+  gap: 9px;
+  padding: 9px 12px;
   cursor: pointer;
   transition: background 0.1s;
   -webkit-tap-highlight-color: transparent;
 }
-.txn-row:last-child { border-bottom: none; }
 .txn-row:hover   { background: #fafbfc; }
 .txn-row:active  { background: var(--bg); }
 
 /* Category icon: gets a tinted background via --cat-bg set inline on the element */
 .txn-icon {
-  width: 42px; height: 42px;
-  border-radius: 12px;
+  width: 36px; height: 36px;
+  border-radius: 10px;
   background: var(--cat-bg, var(--bg));
   border: none;
-  font-size: 1.2rem;
+  font-size: 1rem;
   display: flex;
   align-items: center;
   justify-content: center;
   flex-shrink: 0;
+  position: relative;
   cursor: pointer;
   transition: transform 0.12s, opacity 0.12s;
-  margin-top: 1px;
 }
 .txn-icon:hover  { opacity: 0.8; }
 .txn-icon:active { transform: scale(0.88); }
@@ -307,18 +310,19 @@ input:focus, select:focus, textarea:focus { outline: none; }
 .txn-meta { flex: 1; min-width: 0; }
 
 .txn-desc {
-  font-size: 0.9rem;
+  font-size: 0.83rem;
   font-weight: 600;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
   line-height: 1.3;
+  color: var(--text);
 }
 
 .txn-sub {
-  font-size: 0.76rem;
+  font-size: 0.68rem;
   color: var(--muted);
-  margin-top: 2px;
+  margin-top: 1px;
   display: flex;
   align-items: center;
   gap: 0.3rem;
@@ -326,23 +330,21 @@ input:focus, select:focus, textarea:focus { outline: none; }
 }
 /* legacy: keep .txn-date working if referenced elsewhere */
 .txn-date {
-  font-size: 0.76rem;
+  font-size: 0.68rem;
   color: var(--muted);
-  margin-top: 2px;
+  margin-top: 1px;
 }
 .cat-tag { font-weight: 500; }
 
 .txn-right {
   display: flex;
-  flex-direction: column;
-  align-items: flex-end;
-  gap: 4px;
+  align-items: center;
+  gap: 6px;
   flex-shrink: 0;
-  padding-top: 2px;
 }
 
 .txn-amount {
-  font-size: 0.95rem;
+  font-size: 0.86rem;
   font-weight: 700;
   flex-shrink: 0;
   letter-spacing: -0.2px;
@@ -776,34 +778,50 @@ button:active  { opacity: 0.7; transform: scale(0.97); }
 }
 
 /* Amber: AI suggestion pending */
-.txn-row.needs-review {
-  background: #fffbeb;
-  border-left: 3px solid #f59e0b;
-  padding-left: calc(1rem - 3px);
-}
+.txn-row.needs-review { background: #fffbeb; }
 
 /* Red: fully uncategorized */
-.txn-row.is-uncategorized {
-  background: #fef2f2;
-  border-left: 3px solid #ef4444;
-  padding-left: calc(1rem - 3px);
-}
+.txn-row.is-uncategorized { background: #fff1f2; }
 
-.txn-row.needs-review .txn-icon { position: relative; }
 .txn-row.needs-review .txn-icon::after,
 .txn-row.is-uncategorized .txn-icon::after {
   content: '';
   position: absolute;
-  top: 2px;
-  right: 2px;
+  top: 1px;
+  right: 1px;
   width: 9px;
   height: 9px;
   border-radius: 50%;
   background: #f59e0b;
-  border: 1.5px solid var(--surface);
+  border: 1.5px solid white;
 }
-.txn-row.is-uncategorized .txn-icon { position: relative; }
 .txn-row.is-uncategorized .txn-icon::after { background: #ef4444; }
+
+/* Suggestion strip — sibling row inside .txn-item */
+.sug-strip {
+  padding: 6px 12px 6px 57px;
+  border-top: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 0.7rem;
+}
+.sug-strip.ai   { background: #fffbeb; }
+.sug-strip.warn { background: #fff1f2; }
+
+.sug-lbl { font-weight: 700; flex-shrink: 0; }
+.sug-lbl.ai   { color: #f59e0b; }
+.sug-lbl.warn { color: #ef4444; }
+
+.sug-cat {
+  color: var(--text);
+  font-weight: 600;
+  flex: 1;
+  font-size: 0.72rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
 
 /* Active filter chips (drill-down from Dashboard) */
 .txn-filter-chips {
@@ -1108,88 +1126,56 @@ button:active  { opacity: 0.7; transform: scale(0.97); }
   margin-bottom: 1rem;
 }
 
-.budget-group { margin-bottom: 1.5rem; }
+.budget-group { margin-bottom: 0; }
 
 .budget-group-header {
-  font-weight: 600;
-  font-size: 0.9rem;
-  color: var(--muted);
+  font-size: 0.62rem;
+  font-weight: 700;
   text-transform: uppercase;
-  letter-spacing: 0.04em;
-  margin-bottom: 0.5rem;
+  letter-spacing: 0.08em;
+  color: var(--faint);
+  padding: 9px 12px 3px;
+  background: var(--bg);
   display: flex;
   align-items: center;
   gap: 0.4rem;
+  margin-bottom: 0;
 }
 
 .budget-leaf {
-  padding: 9px 0;
-  border-bottom: 1px solid var(--border);
-}
-
-.budget-leaf-top {
   display: flex;
   align-items: center;
-  gap: 6px;
-  margin-bottom: 6px;
+  gap: 7px;
+  padding: 7px 12px;
+  border-bottom: 1px solid var(--border);
+  background: var(--surface);
 }
+.budget-leaf:last-child { border-bottom: none; }
 
 .budget-leaf-icon {
-  font-size: 0.95rem;
-  width: 20px;
-  text-align: center;
+  font-size: 0.9rem;
   flex-shrink: 0;
 }
 
 .budget-leaf-name {
   flex: 1;
-  font-size: 0.82rem;
-  font-weight: 600;
+  font-size: 0.78rem;
+  font-weight: 500;
   color: var(--text);
   min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
-.budget-leaf-right {
-  display: flex;
-  align-items: baseline;
-  gap: 1px;
-  flex-shrink: 0;
-}
-
-.budget-actual-sm {
-  font-size: 0.78rem;
-  font-weight: 700;
-  font-variant-numeric: tabular-nums;
-}
-
-.budget-limit {
-  font-size: 0.72rem;
-  color: var(--muted);
-  cursor: pointer;
-}
-
-.budget-limit:hover { color: var(--brand); }
-
-.budget-actual {
-  font-size: 0.85rem;
-  color: var(--text);
-  min-width: 64px;
-  text-align: right;
-}
-
-.budget-bar-row {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.budget-bar-track {
-  position: relative;
-  flex: 1;
+.budget-bar {
+  width: 76px;
   height: 5px;
   background: var(--border);
   border-radius: 3px;
   overflow: visible;
+  position: relative;
+  flex-shrink: 0;
 }
 
 .budget-bar-fill {
@@ -1199,16 +1185,40 @@ button:active  { opacity: 0.7; transform: scale(0.97); }
   height: 100%;
   border-radius: 3px;
   max-width: 100%;
-  transition: width 0.3s;
 }
 
-.budget-bar-pct {
-  font-size: 0.65rem;
-  font-weight: 700;
-  min-width: 28px;
+.budget-pace-tick {
+  position: absolute;
+  top: -3px;
+  width: 1.5px;
+  height: 11px;
+  background: rgba(100,116,139,0.5);
+  border-radius: 1px;
+  transform: translateX(-50%);
+}
+
+.budget-leaf-amt {
+  font-size: 0.68rem;
+  color: var(--muted);
+  min-width: 78px;
   text-align: right;
   flex-shrink: 0;
   font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.budget-limit {
+  font-size: 0.68rem;
+  color: var(--muted);
+  cursor: pointer;
+}
+.budget-limit:hover { color: var(--brand); }
+
+.budget-actual {
+  font-size: 0.85rem;
+  color: var(--text);
+  min-width: 64px;
+  text-align: right;
 }
 
 .annual-badge { background: #fef3c7; color: #92400e; }
@@ -1268,13 +1278,13 @@ button:active  { opacity: 0.7; transform: scale(0.97); }
 .nav-brand {
   display: none;
   align-items: center;
-  gap: 0.55rem;
-  padding: 0.25rem 1.25rem 1.25rem;
-  margin-bottom: 0.5rem;
-  border-bottom: 1px solid var(--border);
-  font-size: 1.05rem;
-  font-weight: 700;
-  color: var(--text);
+  gap: 8px;
+  padding: 0 14px 14px;
+  margin-bottom: 8px;
+  border-bottom: 1px solid rgba(255,255,255,0.07);
+  font-size: 0.9rem;
+  font-weight: 800;
+  color: white;
   letter-spacing: -0.2px;
 }
 .nav-brand-icon { width: 30px; height: 30px; display: block; flex-shrink: 0; border-radius: 7px; }
@@ -1293,16 +1303,18 @@ button:active  { opacity: 0.7; transform: scale(0.97); }
     top: 0;
     left: unset;
     right: unset;
-    width: 220px;
+    width: 196px;
     height: 100dvh;
     flex-direction: column;
     align-items: stretch;
     justify-content: flex-start;
     border-top: none;
-    border-right: 1px solid var(--border);
+    border-right: 1px solid rgba(255,255,255,0.06);
     box-shadow: none;
-    padding: 1.25rem 0 1.5rem;
+    padding: 14px 0;
+    gap: 1px;
     overflow-y: auto;
+    background: #0f1623;
   }
 
   .nav-brand { display: flex; }
@@ -1310,10 +1322,11 @@ button:active  { opacity: 0.7; transform: scale(0.97); }
   .nav-tab {
     flex-direction: row;
     justify-content: flex-start;
-    gap: 0.75rem;
-    padding: 0.7rem 1.25rem;
-    font-size: 0.88rem;
+    gap: 9px;
+    padding: 7px 14px;
+    font-size: 0.78rem;
     border-radius: 0;
+    color: #64748b;
   }
 
   .nav-tab .nav-icon { width: 20px; height: 20px; }
@@ -1321,15 +1334,20 @@ button:active  { opacity: 0.7; transform: scale(0.97); }
   /* No bounce animation on desktop */
   .nav-tab.active .nav-icon { transform: none; }
 
-  /* Replace circle dot with left-edge accent bar */
-  .nav-tab.active::after {
-    top: 0;
-    bottom: 0;
-    left: 0;
-    width: 3px;
-    height: unset;
-    border-radius: 0 2px 2px 0;
+  /* Left accent bar on active tab */
+  .nav-tab.active {
+    color: white;
+    background: rgba(22,163,74,0.14);
+    border-left: 3px solid #16a34a;
+    padding-left: 11px;
   }
+
+  /* Replace mobile top dot with left-edge accent (already set above via border-left) */
+  .nav-tab.active::after {
+    display: none;
+  }
+
+  .nav-tab:hover:not(.active) { background: rgba(255,255,255,0.06); color: rgba(255,255,255,0.85); }
 
   /* ── Scrollable main content ── */
   #main {
@@ -2241,19 +2259,19 @@ button:active  { opacity: 0.7; transform: scale(0.97); }
 }
 
 .acct-hero-label {
-  font-size: 0.62rem;
-  font-weight: 600;
+  font-size: 0.58rem;
+  font-weight: 700;
   text-transform: uppercase;
-  letter-spacing: 0.1em;
-  color: rgba(255,255,255,0.45);
-  margin-bottom: 4px;
+  letter-spacing: 0.05em;
+  color: rgba(255,255,255,0.5);
+  margin-bottom: 3px;
 }
 
 .acct-hero-val {
-  font-size: 1.15rem;
+  font-size: 1rem;
   font-weight: 800;
   color: white;
-  letter-spacing: -0.5px;
+  margin-top: 3px;
 }
 
 .acct-hero-val.green { color: #4ade80; }
@@ -2296,8 +2314,8 @@ button:active  { opacity: 0.7; transform: scale(0.97); }
 .acct-group {
   background: var(--surface);
   border: 1px solid var(--border);
-  border-radius: 12px;
-  margin-bottom: 10px;
+  border-radius: 10px;
+  margin-bottom: 8px;
   overflow: hidden;
 }
 
@@ -2305,7 +2323,7 @@ button:active  { opacity: 0.7; transform: scale(0.97); }
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 10px 14px;
+  padding: 8px 12px;
   border-bottom: 1px solid var(--border);
   background: var(--bg);
 }
@@ -2335,7 +2353,7 @@ button:active  { opacity: 0.7; transform: scale(0.97); }
 .dot-unknown { background: #cbd5e1; }
 
 .acct-inst-name {
-  font-size: 0.88rem;
+  font-size: 0.72rem;
   font-weight: 700;
   color: var(--text);
 }
@@ -2380,32 +2398,42 @@ button:active  { opacity: 0.7; transform: scale(0.97); }
 .acct-row {
   display: flex;
   align-items: center;
-  gap: 10px;
-  padding: 10px 14px;
+  gap: 9px;
+  padding: 9px 12px;
   border-bottom: 1px solid var(--border);
 }
 
 .acct-row:last-child { border-bottom: none; }
 
-.acct-row-icon { font-size: 1.2rem; flex-shrink: 0; }
+.acct-row-icon {
+  width: 30px;
+  height: 30px;
+  border-radius: 8px;
+  background: var(--bg);
+  font-size: 0.95rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
 
 .acct-row-info { flex: 1; min-width: 0; }
 
 .acct-row-name {
   display: block;
-  font-size: 0.85rem;
+  font-size: 0.8rem;
   font-weight: 600;
   color: var(--text);
 }
 
 .acct-row-sub {
   display: block;
-  font-size: 0.7rem;
+  font-size: 0.65rem;
   color: var(--muted);
 }
 
 .acct-row-bal {
-  font-size: 0.88rem;
+  font-size: 0.82rem;
   font-weight: 700;
   color: var(--text);
   flex-shrink: 0;
@@ -2571,22 +2599,7 @@ button:active  { opacity: 0.7; transform: scale(0.97); }
   margin: 0 auto;
 }
 
-/* ═══════════════════════════════════════════════════════════
-   DESKTOP — dark sidebar
-═══════════════════════════════════════════════════════════ */
+/* Sticky period bars don't need z-index fighting sidebar */
 @media (min-width: 768px) {
-  .bottom-nav {
-    background: #0f1623;
-    border-right-color: #1e2d40;
-  }
-
-  .nav-brand { color: white; border-bottom-color: rgba(255,255,255,0.08); }
-
-  .nav-tab { color: rgba(255,255,255,0.55); }
-  .nav-tab:hover { background: rgba(255,255,255,0.06); color: rgba(255,255,255,0.85); }
-  .nav-tab.active { color: white; background: rgba(22,163,74,0.15); }
-  .nav-tab.active::after { background: #16a34a; }
-
-  /* Sticky period bars don't need z-index fighting sidebar */
   .dash-period-bar { z-index: 5; }
 }
