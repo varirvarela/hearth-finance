@@ -1,5 +1,14 @@
 export const CHANGELOG = [
   {
+    version: '1.6.1',
+    date:    '2026-08-19',
+    changes: [
+      'Fix: duplicate review modal no longer stacks when "Review →" is tapped multiple times.',
+      'Fix: duplicate banner now sticks to the top while scrolling through transactions.',
+      'Fix: Firebase listeners from previously-visited tabs no longer crash when transactions are updated on another tab (dashboard textContent null error resolved).',
+    ],
+  },
+  {
     version: '1.6.0',
     date:    '2026-08-19',
     changes: [

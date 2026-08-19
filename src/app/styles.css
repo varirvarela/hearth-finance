@@ -2666,6 +2666,11 @@ button:active  { opacity: 0.7; transform: scale(0.97); }
 }
 
 /* ── Duplicate banner ──────────────────────────────────── */
+#dup-banner {
+  position: sticky;
+  top: 0;
+  z-index: 5;
+}
 .dup-banner {
   display: flex;
   align-items: center;

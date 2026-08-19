@@ -155,11 +155,12 @@ export function renderDashboard(container) {
   });
   dbListen(`accounts/${uid}`, accounts => {
     latestAccounts = accounts;
-    if (!container.isConnected) return;
+    const netWorthEl = container.querySelector('#net-worth');
+    if (!netWorthEl) return;
     const assets  = Object.values(accounts ?? {}).filter(a => a.type !== 'credit').reduce((s, a) => s + (a.currentBalance ?? 0), 0);
     const debt    = Object.values(accounts ?? {}).filter(a => a.type === 'credit').reduce((s, a) => s + Math.abs(a.currentBalance ?? 0), 0);
     const net     = assets - debt;
-    container.querySelector('#net-worth').textContent = fmtCurrency(net);
+    netWorthEl.textContent = fmtCurrency(net);
     container.querySelector('#net-worth-sub').textContent = `${fmtCurrency(assets)} assets · ${fmtCurrency(debt)} debt`;
   });
   dbListen(`budgets/${uid}`, budgets => {
@@ -168,7 +169,7 @@ export function renderDashboard(container) {
   });
 
   function render() {
-    if (!container.isConnected) return;
+    if (!container.querySelector('#spent-label')) return;
     if (viewMode === 'monthly') renderMonthly();
     else renderAnnual();
   }

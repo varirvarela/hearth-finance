@@ -141,12 +141,12 @@ export function renderTransactions(container) {
       badge.style.display = active > 0 ? 'inline-flex' : 'none';
     }
     renderPage(filtered, state, uid, refresh, accountMap);
-    updateDupBanner(allTxns, uid);
   };
 
   dbListen(`transactions/${uid}`, txns => {
     allTxns = Object.entries(txns ?? {}).sort((a, b) => b[1].date.localeCompare(a[1].date));
     refresh();
+    updateDupBanner(allTxns, uid);
   });
 
   dbListen(`accounts/${uid}`, accounts => {
@@ -828,10 +828,12 @@ function openCategoryPicker(txnId, currentCat, uid, rowEl) {
 
 // ── Duplicate detection banner ─────────────────────────────────────────────
 let _dupPairs = [];
+let _dupReviewOverlay = null;
 
 function updateDupBanner(txnEntries, uid) {
   const banner = document.getElementById('dup-banner');
   if (!banner) return;
+  if (_dupReviewOverlay) return; // don't update banner while review is open
   _dupPairs = findDuplicates(txnEntries);
   if (_dupPairs.length === 0) {
     banner.style.display = 'none';
@@ -848,22 +850,31 @@ function updateDupBanner(txnEntries, uid) {
 }
 
 function openDupReview(pairs, uid) {
+  if (_dupReviewOverlay) return; // already open — prevent stacking
   let idx = 0;
 
   const overlay = document.createElement('div');
   overlay.className = 'sheet-overlay';
+  _dupReviewOverlay = overlay;
   document.body.appendChild(overlay);
   requestAnimationFrame(() => overlay.classList.add('open'));
 
-  const close = () => { overlay.classList.remove('open'); setTimeout(() => overlay.remove(), 260); };
+  const close = () => {
+    _dupReviewOverlay = null;
+    overlay.classList.remove('open');
+    setTimeout(() => overlay.remove(), 260);
+  };
 
   function renderPair() {
+    if (!overlay.isConnected) return; // overlay was removed — stop
     if (idx >= pairs.length) {
-      overlay.querySelector('.sheet').innerHTML = `
+      const sheet = overlay.querySelector('.sheet');
+      if (!sheet) return;
+      sheet.innerHTML = `
         <div class="sheet-handle"></div>
         <div class="sheet-hdr"><span class="sheet-title">All duplicates reviewed</span><button class="sheet-close" id="dc">✕</button></div>
         <div style="padding:24px;text-align:center;font-size:0.85rem;color:var(--muted)">No more potential duplicates.</div>`;
-      overlay.querySelector('#dc').addEventListener('click', close);
+      overlay.querySelector('#dc')?.addEventListener('click', close);
       return;
     }
     const [idA, a, idB, b] = pairs[idx];
