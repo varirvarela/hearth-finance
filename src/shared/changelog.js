@@ -1,5 +1,18 @@
 export const CHANGELOG = [
   {
+    version: '1.5.0',
+    date:    '2026-08-18',
+    changes: [
+      'Transactions: search bar now fills the toolbar width; filter button correctly styled with brand color and active state.',
+      'Transactions: filter panel sections are tighter (9×11px padding), labels smaller (0.6rem), pills and segment controls match design brief.',
+      'Budgets: page is now edge-to-edge (no side padding); month nav uses compact bg-gray bar; summary row shows color-coded values (muted budget, red spent, green remaining).',
+      'Budgets: pace legend strip shows today\'s pace percentage below the summary, with the same tick marker used on progress bars.',
+      'Budgets: Monthly/Annual toggle active state is now dark (matches design brief) instead of green.',
+      'Accounts: action buttons (Link Bank, Manual) are smaller and tighter; settings buttons use 0.78rem font and 8px border-radius.',
+      'Accounts: "What\'s new" button in About opens a full changelog sheet showing version history.',
+    ],
+  },
+  {
     version: '1.4.0',
     date:    '2026-08-17',
     changes: [

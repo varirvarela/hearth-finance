@@ -22,6 +22,10 @@ export function renderBudgets(container) {
         <button id="budget-next">&#8594;</button>
       </div>
       <div class="budget-summary" id="budget-summary"></div>
+      <div class="budget-pace-legend" id="budget-pace-legend" style="display:none">
+        <div class="budget-pace-legend-tick"></div>
+        <span id="budget-pace-legend-text"></span>
+      </div>
       <div id="budget-list"></div>
     </div>
   `;
@@ -154,11 +158,22 @@ function renderBudgetList(uid, budgets, txns, year, month) {
       totalSpent    += spentByCat[catId] ?? 0;
     }
   }
+  const remaining = totalBudgeted - totalSpent;
   summaryEl.innerHTML = `
-    <span>Budgeted: ${fmtCurrency(totalBudgeted)}</span>
-    <span>Spent: ${fmtCurrency(totalSpent)}</span>
-    <span>Remaining: ${fmtCurrency(totalBudgeted - totalSpent)}</span>
+    <span style="color:var(--muted)">Budget ${fmtCurrency(totalBudgeted)}</span>
+    <span style="color:#ef4444">${fmtCurrency(totalSpent)} spent</span>
+    <span style="color:${remaining >= 0 ? 'var(--brand)' : '#ef4444'}">${fmtCurrency(Math.abs(remaining))} ${remaining >= 0 ? 'left' : 'over'}</span>
   `;
+
+  const legendEl    = document.getElementById('budget-pace-legend');
+  const legendTxtEl = document.getElementById('budget-pace-legend-text');
+  const isCurrentMonth = year === now.getFullYear() && month === now.getMonth() + 1;
+  if (legendEl && legendTxtEl && isCurrentMonth) {
+    legendTxtEl.textContent = `Today's pace — ${pacePct}% of month elapsed`;
+    legendEl.style.display = '';
+  } else if (legendEl) {
+    legendEl.style.display = 'none';
+  }
 
   let html = '';
   for (const root of rootCats) {
@@ -260,11 +275,15 @@ function renderBudgetAnnual(uid, budgets, txns, year) {
   const pct        = totalAnnualBudget > 0 ? Math.round((totalSpent / totalAnnualBudget) * 100) : 0;
   const barColor   = pacePct != null && pct > pacePct + 10 ? '#dc2626' : pct > (pacePct ?? 100) ? '#f59e0b' : '#16a34a';
 
+  const annualRemaining = totalAnnualBudget - totalSpent;
   summaryEl.innerHTML = `
-    <span>Annual Budget: ${fmtCurrency(totalAnnualBudget)}</span>
-    <span>YTD Spent: ${fmtCurrency(totalSpent)}</span>
-    <span style="color:${barColor}">Remaining: ${fmtCurrency(totalAnnualBudget - totalSpent)}</span>
+    <span style="color:var(--muted)">Budget ${fmtCurrency(totalAnnualBudget)}</span>
+    <span style="color:#ef4444">${fmtCurrency(totalSpent)} YTD</span>
+    <span style="color:${annualRemaining >= 0 ? 'var(--brand)' : '#ef4444'}">${fmtCurrency(Math.abs(annualRemaining))} ${annualRemaining >= 0 ? 'left' : 'over'}</span>
   `;
+
+  const legendEl = document.getElementById('budget-pace-legend');
+  if (legendEl) legendEl.style.display = 'none';
 
   // Build sections
   const rootMap = new Map();

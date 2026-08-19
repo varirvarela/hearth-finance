@@ -95,7 +95,7 @@ export function renderTransactions(container) {
     <div class="page transactions">
       <div class="toolbar">
         <input type="search" id="txn-search" placeholder="Search transactions…" />
-        <button class="btn-ghost filter-toggle" id="filter-toggle">
+        <button class="filter-toggle" id="filter-toggle">
           Filters <span class="filter-badge" id="filter-badge" style="display:none"></span>
         </button>
       </div>
@@ -180,12 +180,14 @@ export function renderTransactions(container) {
   });
 
   document.getElementById('filter-toggle').addEventListener('click', () => {
-    const panel = document.getElementById('filter-panel');
+    const panel  = document.getElementById('filter-panel');
+    const toggle = document.getElementById('filter-toggle');
     if (!filterPanelRendered) {
       renderFilterPanel(state, accountMap, refresh);
       filterPanelRendered = true;
     }
     panel.classList.toggle('open');
+    toggle.classList.toggle('active', panel.classList.contains('open'));
   });
 }
 
@@ -250,13 +252,13 @@ function renderFilterPanel(state, accountMap, refresh) {
         <button class="seg${state.dateMode === 'month' ? ' active' : ''}" data-mode="month">Month</button>
         <button class="seg${state.dateMode === 'range' ? ' active' : ''}" data-mode="range">Range</button>
       </div>
-      <div id="date-month-row" style="${state.dateMode !== 'month' ? 'display:none' : ''}; margin-top:0.5rem; display:${state.dateMode === 'month' ? 'flex' : 'none'}; gap:0.4rem">
-        <select id="f-month" style="padding:4px 8px;border:1.5px solid var(--border);border-radius:6px;font-size:0.82rem;background:var(--bg)">${monthOptions}</select>
-        <select id="f-year"  style="padding:4px 8px;border:1.5px solid var(--border);border-radius:6px;font-size:0.82rem;background:var(--bg)">${yearOptions}</select>
+      <div id="date-month-row" style="margin-top:6px;display:${state.dateMode === 'month' ? 'flex' : 'none'};gap:5px">
+        <select id="f-month" style="flex:1;border:1.5px solid var(--border);border-radius:6px;padding:4px 7px;font-size:0.75rem;background:var(--bg)">${monthOptions}</select>
+        <select id="f-year"  style="flex:1;border:1.5px solid var(--border);border-radius:6px;padding:4px 7px;font-size:0.75rem;background:var(--bg)">${yearOptions}</select>
       </div>
-      <div id="date-range-row" style="margin-top:0.5rem; display:${state.dateMode === 'range' ? 'flex' : 'none'}; gap:0.4rem">
-        <input type="date" id="f-from" value="${state.dateFrom}" style="padding:4px 8px;border:1.5px solid var(--border);border-radius:6px;font-size:0.82rem;background:var(--bg)">
-        <input type="date" id="f-to"   value="${state.dateTo}"   style="padding:4px 8px;border:1.5px solid var(--border);border-radius:6px;font-size:0.82rem;background:var(--bg)">
+      <div id="date-range-row" style="margin-top:6px;display:${state.dateMode === 'range' ? 'flex' : 'none'};gap:5px">
+        <input type="date" id="f-from" value="${state.dateFrom}" style="flex:1;border:1.5px solid var(--border);border-radius:6px;padding:4px 7px;font-size:0.75rem;background:var(--bg)">
+        <input type="date" id="f-to"   value="${state.dateTo}"   style="flex:1;border:1.5px solid var(--border);border-radius:6px;padding:4px 7px;font-size:0.75rem;background:var(--bg)">
       </div>
     </div>
 
@@ -272,21 +274,19 @@ function renderFilterPanel(state, accountMap, refresh) {
         </div>
         <div>
           <span class="filter-label">Amount</span>
-          <div style="display:flex;gap:0.4rem">
+          <div style="display:flex;gap:5px">
             <input type="number" id="f-amt-min" placeholder="Min $" value="${state.amtMin}"
-              style="width:80px;padding:5px 8px;border:1.5px solid var(--border);border-radius:6px;font-size:0.82rem;background:var(--bg)">
+              style="width:74px;padding:4px 7px;border:1.5px solid var(--border);border-radius:6px;font-size:0.75rem;background:var(--bg)">
             <input type="number" id="f-amt-max" placeholder="Max $" value="${state.amtMax}"
-              style="width:80px;padding:5px 8px;border:1.5px solid var(--border);border-radius:6px;font-size:0.82rem;background:var(--bg)">
+              style="width:74px;padding:4px 7px;border:1.5px solid var(--border);border-radius:6px;font-size:0.75rem;background:var(--bg)">
           </div>
         </div>
       </div>
     </div>
 
     <div class="filter-section">
-      <div class="filter-row" style="align-items:center;justify-content:space-between;margin-bottom:0.35rem">
-        <span class="filter-label" style="margin-bottom:0">Status</span>
-      </div>
-      <div style="display:flex;gap:1rem;flex-wrap:wrap">
+      <span class="filter-label">Status</span>
+      <div style="display:flex;gap:14px;flex-wrap:wrap">
         <label class="f-check">
           <input type="checkbox" id="f-review"    ${state.review       ? 'checked' : ''}> Needs review
         </label>
@@ -313,7 +313,7 @@ function renderFilterPanel(state, accountMap, refresh) {
     </div>
 
     <div class="filter-section" style="display:flex;align-items:center;justify-content:flex-end">
-      <button class="btn-ghost" id="f-clear" style="width:auto;font-size:0.85rem;padding:0.4rem 1rem">Clear all filters</button>
+      <button class="btn-ghost" id="f-clear" style="width:auto;font-size:0.75rem;padding:4px 12px;border:1.5px solid var(--border);border-radius:6px">Clear all</button>
     </div>
   `;
 

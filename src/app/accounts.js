@@ -62,9 +62,10 @@ export function renderAccounts(container) {
           <div class="acct-settings-group">
             <div class="acct-settings-label">About</div>
             <div class="acct-settings-about">Hearth Finance · v${CHANGELOG[0].version}</div>
+            <button class="acct-settings-btn" id="show-changelog">What's new →</button>
           </div>
 
-          <button class="btn-danger" id="sign-out" style="margin-top:1rem;width:100%">Sign Out</button>
+          <button class="btn-danger" id="sign-out" style="margin-top:1rem;width:100%;border-radius:8px;font-size:0.78rem">Sign Out</button>
         </div>
       </div>
     </div>
@@ -117,8 +118,40 @@ export function renderAccounts(container) {
   container.querySelector('#export-csv').addEventListener('click', () => exportCsv(uid));
   container.querySelector('#sign-out').addEventListener('click', () => signOut(auth));
   container.querySelector('#go-automation').addEventListener('click', () => { location.hash = 'automation'; });
+  container.querySelector('#show-changelog').addEventListener('click', () => openChangelogSheet());
 
   renderPartnerSection(uid);
+}
+
+function openChangelogSheet() {
+  const overlay = document.createElement('div');
+  overlay.className = 'sheet-overlay';
+  overlay.innerHTML = `
+    <div class="sheet" style="max-height:85vh">
+      <div class="sheet-handle"></div>
+      <div class="sheet-hdr">
+        <span class="sheet-title">What's new</span>
+        <button class="sheet-close" id="changelog-close">✕</button>
+      </div>
+      <div class="changelog-list">
+        ${CHANGELOG.map(entry => `
+          <div class="changelog-entry">
+            <div class="changelog-version-row">
+              <span class="changelog-version">v${entry.version}</span>
+              <span class="changelog-date">${entry.date}</span>
+            </div>
+            <ul class="changelog-changes">
+              ${entry.changes.map(c => `<li>${c}</li>`).join('')}
+            </ul>
+          </div>`).join('')}
+      </div>
+    </div>
+  `;
+  document.body.appendChild(overlay);
+  requestAnimationFrame(() => overlay.classList.add('open'));
+  const close = () => { overlay.classList.remove('open'); setTimeout(() => overlay.remove(), 260); };
+  overlay.querySelector('#changelog-close').addEventListener('click', close);
+  overlay.addEventListener('click', e => { if (e.target === overlay) close(); });
 }
 
 function syncStatusDot(account) {
