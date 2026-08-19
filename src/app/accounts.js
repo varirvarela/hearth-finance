@@ -43,6 +43,10 @@ export function renderAccounts(container) {
           <button class="btn-ghost" id="sync-now">Sync</button>
         </div>
 
+        <button class="acct-settings-btn" id="rationalize-accounts" style="margin-bottom:12px">
+          Rationalize accounts — find duplicates →
+        </button>
+
         <!-- Settings section -->
         <div class="acct-settings">
           <div class="acct-settings-hdr">Settings</div>
@@ -119,6 +123,7 @@ export function renderAccounts(container) {
   container.querySelector('#sign-out').addEventListener('click', () => signOut(auth));
   container.querySelector('#go-automation').addEventListener('click', () => { location.hash = 'automation'; });
   container.querySelector('#show-changelog').addEventListener('click', () => openChangelogSheet());
+  container.querySelector('#rationalize-accounts').addEventListener('click', () => openRationalizeSheet(uid));
 
   renderPartnerSection(uid);
 }
@@ -152,6 +157,102 @@ function openChangelogSheet() {
   const close = () => { overlay.classList.remove('open'); setTimeout(() => overlay.remove(), 260); };
   overlay.querySelector('#changelog-close').addEventListener('click', close);
   overlay.addEventListener('click', e => { if (e.target === overlay) close(); });
+}
+
+async function openRationalizeSheet(uid) {
+  const overlay = document.createElement('div');
+  overlay.className = 'sheet-overlay';
+  overlay.innerHTML = `
+    <div class="sheet" style="max-height:85vh">
+      <div class="sheet-handle"></div>
+      <div class="sheet-hdr"><span class="sheet-title">Rationalize accounts</span><button class="sheet-close" id="rat-close">✕</button></div>
+      <div style="padding:16px;font-size:0.8rem;color:var(--muted)">Analyzing…</div>
+    </div>`;
+  document.body.appendChild(overlay);
+  requestAnimationFrame(() => overlay.classList.add('open'));
+  const close = () => { overlay.classList.remove('open'); setTimeout(() => overlay.remove(), 260); };
+  overlay.querySelector('#rat-close').addEventListener('click', close);
+  overlay.addEventListener('click', e => { if (e.target === overlay) close(); });
+
+  // Load data
+  const [accountsSnap, txnsSnap] = await Promise.all([
+    dbGet(`accounts/${uid}`),
+    dbGet(`transactions/${uid}`),
+  ]);
+  const accounts = accountsSnap ?? {};
+  const txns     = txnsSnap    ?? {};
+
+  // Collect all Tiller account names from transactions
+  const tillerNames = new Set();
+  for (const t of Object.values(txns)) {
+    if ((t.source === 'tiller' || t.categorySource === 'import') && t.accountName) {
+      tillerNames.add(t.accountName);
+    }
+  }
+
+  // Find suggestions: Plaid ↔ Tiller that look similar but aren't merged yet
+  const plaidEntries = Object.entries(accounts).filter(([, a]) => !a.isManual);
+  const suggestions  = [];
+  const stopWords    = new Set(['account', 'checking', 'savings', 'card', 'credit', 'bank', 'the', 'and', 'my']);
+  const sigWords     = s => s.toLowerCase().replace(/[^a-z0-9 ]/g, '').split(' ')
+    .filter(w => w.length >= 3 && !stopWords.has(w));
+
+  for (const [plaidId, acc] of plaidEntries) {
+    const existing = acc.mergedNames ?? [];
+    const dispName = acc.alias ?? acc.name;
+    const wordsP   = new Set(sigWords(dispName));
+    for (const tName of tillerNames) {
+      if (existing.includes(tName)) continue;
+      const pn = dispName.toLowerCase();
+      const tn = tName.toLowerCase();
+      const match = pn === tn || pn.includes(tn) || tn.includes(pn) ||
+        sigWords(tName).some(w => wordsP.has(w));
+      if (match) suggestions.push({ plaidId, plaidName: dispName, tillerName: tName });
+    }
+  }
+
+  const sheet = overlay.querySelector('.sheet');
+  if (!suggestions.length && tillerNames.size === 0) {
+    sheet.innerHTML = `
+      <div class="sheet-handle"></div>
+      <div class="sheet-hdr"><span class="sheet-title">Rationalize accounts</span><button class="sheet-close" id="rat-close">✕</button></div>
+      <div style="padding:16px;font-size:0.8rem;color:var(--muted)">No Tiller accounts detected — nothing to merge.</div>`;
+  } else if (!suggestions.length) {
+    sheet.innerHTML = `
+      <div class="sheet-handle"></div>
+      <div class="sheet-hdr"><span class="sheet-title">Rationalize accounts</span><button class="sheet-close" id="rat-close">✕</button></div>
+      <div style="padding:16px;font-size:0.8rem;color:var(--muted)">No potential merges found. Tiller accounts (${tillerNames.size}): ${[...tillerNames].join(', ')}.</div>`;
+  } else {
+    const rows = suggestions.map((s, i) => `
+      <div class="rat-row" data-i="${i}">
+        <div class="rat-row-info">
+          <span class="rat-plaid">${s.plaidName}</span>
+          <span class="rat-arrow">←</span>
+          <span class="rat-tiller">${s.tillerName}</span>
+        </div>
+        <button class="rat-merge-btn btn-primary" data-i="${i}" style="font-size:0.72rem;padding:5px 12px;border-radius:6px">Merge</button>
+      </div>`).join('');
+    sheet.innerHTML = `
+      <div class="sheet-handle"></div>
+      <div class="sheet-hdr"><span class="sheet-title">Account suggestions (${suggestions.length})</span><button class="sheet-close" id="rat-close">✕</button></div>
+      <div style="padding:8px 16px 16px">
+        <p style="font-size:0.72rem;color:var(--muted);margin:0 0 10px">These Tiller import accounts look like the same physical account as a linked bank. Merging hides duplicates in the filter and matches their transactions together.</p>
+        <div id="rat-list">${rows}</div>
+      </div>`;
+
+    sheet.querySelectorAll('.rat-merge-btn').forEach(btn => {
+      btn.addEventListener('click', async () => {
+        const s       = suggestions[Number(btn.dataset.i)];
+        const current = (await dbGet(`accounts/${uid}/${s.plaidId}`))?.mergedNames ?? [];
+        await dbSet(`accounts/${uid}/${s.plaidId}/mergedNames`, [...new Set([...current, s.tillerName])]);
+        btn.textContent = '✓ Merged';
+        btn.disabled    = true;
+        btn.style.background = 'var(--brand)';
+      });
+    });
+  }
+
+  overlay.querySelectorAll('#rat-close').forEach(b => b.addEventListener('click', close));
 }
 
 function syncStatusDot(account) {
@@ -214,16 +315,20 @@ function renderAccountList(accounts, uid, partnerUid) {
           <div class="acct-group-controls">${controls}</div>
         </div>
         ${accts.map(([id, a]) => {
-          const isDebt = a.type === 'credit';
-          const bal = a.currentBalance ?? 0;
+          const isDebt    = a.type === 'credit';
+          const bal       = a.currentBalance ?? 0;
+          const dispName  = a.alias ?? a.name;
+          const mergedTag = (a.mergedNames ?? []).length > 0
+            ? `<span class="acct-merged-badge" title="${(a.mergedNames ?? []).join(', ')}">+${(a.mergedNames ?? []).length} merged</span>` : '';
           return `
-            <div class="acct-row">
+            <div class="acct-row" data-id="${id}">
               <div class="acct-row-icon">${acctIcon(a.type)}</div>
               <div class="acct-row-info">
-                <span class="acct-row-name">${a.name}</span>
-                <span class="acct-row-sub">${capitalize(a.subtype ?? a.type)} · Last sync ${a.lastSync ? fmtDate(a.lastSync) : 'never'}</span>
+                <span class="acct-row-name">${dispName}</span>
+                <span class="acct-row-sub">${capitalize(a.subtype ?? a.type)}${mergedTag}</span>
               </div>
               <span class="acct-row-bal ${isDebt ? 'debt' : ''}">${isDebt ? '−' : ''}${fmtCurrency(Math.abs(bal))}</span>
+              ${!isPartner ? `<button class="acct-rename-btn" data-id="${id}" title="Rename">✎</button>` : ''}
             </div>`;
         }).join('')}
       </div>`;
@@ -234,6 +339,38 @@ function renderAccountList(accounts, uid, partnerUid) {
   });
   el.querySelectorAll('.acct-unlink-btn').forEach(btn => {
     btn.addEventListener('click', () => unlinkAccount(uid, btn.dataset.itemId, Number(btn.dataset.slot)));
+  });
+
+  el.querySelectorAll('.acct-rename-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const row      = btn.closest('.acct-row');
+      const acctId   = btn.dataset.id;
+      const nameSpan = row.querySelector('.acct-row-name');
+      const current  = nameSpan.textContent;
+      const input    = document.createElement('input');
+      input.type      = 'text';
+      input.value     = current;
+      input.className = 'acct-rename-input';
+      nameSpan.replaceWith(input);
+      input.focus();
+      input.select();
+
+      const save = async () => {
+        const val = input.value.trim();
+        if (val && val !== current) {
+          await dbSet(`accounts/${uid}/${acctId}/alias`, val);
+        }
+        const next = document.createElement('span');
+        next.className   = 'acct-row-name';
+        next.textContent = val || current;
+        input.replaceWith(next);
+      };
+      input.addEventListener('blur', save);
+      input.addEventListener('keydown', e => {
+        if (e.key === 'Enter')  { e.preventDefault(); input.blur(); }
+        if (e.key === 'Escape') { input.value = current; input.blur(); }
+      });
+    });
   });
 }
 

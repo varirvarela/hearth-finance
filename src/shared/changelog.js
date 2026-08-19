@@ -1,5 +1,18 @@
 export const CHANGELOG = [
   {
+    version: '1.6.0',
+    date:    '2026-08-19',
+    changes: [
+      'Fix: SVG trend chart no longer throws "Expected length, auto" console error.',
+      'PWA: app is now installable to the home screen — service worker added, manifest moved to correct location with relative start_url.',
+      'Transactions: automatic duplicate detection scans for same-amount + same-date + same-name pairs and shows a banner with a guided "Keep A / Keep B" review flow.',
+      'Accounts: each account row now has a rename (✎) button — tap to set a display alias stored in Firebase.',
+      'Accounts: "Rationalize accounts" button auto-detects Tiller import accounts that look like a linked bank account and offers to merge them.',
+      'Transactions filter: merged Tiller accounts are hidden from the account filter; selecting a Plaid account pill also matches its merged Tiller transactions.',
+      'Transactions filter: Plaid account pills now show the alias (if set) instead of the raw bank name.',
+    ],
+  },
+  {
     version: '1.5.0',
     date:    '2026-08-18',
     changes: [

@@ -5,7 +5,7 @@ import {
   getRootCategories,
   getChildCategories,
 } from '../shared/categories.js';
-import { blankState, needsReview, applyFilters, countActive, normalizeSource } from '../shared/filter-utils.js';
+import { blankState, needsReview, applyFilters, countActive, normalizeSource, findDuplicates } from '../shared/filter-utils.js';
 import { buildRule } from '../shared/rules.js';
 
 const PAGE_SIZE = 100;
@@ -100,6 +100,7 @@ export function renderTransactions(container) {
         </button>
       </div>
       <div class="filter-panel" id="filter-panel"></div>
+      <div id="dup-banner" style="display:none"></div>
       <div id="txn-list"></div>
     </div>
   `;
@@ -140,6 +141,7 @@ export function renderTransactions(container) {
       badge.style.display = active > 0 ? 'inline-flex' : 'none';
     }
     renderPage(filtered, state, uid, refresh, accountMap);
+    updateDupBanner(allTxns, uid);
   };
 
   dbListen(`transactions/${uid}`, txns => {
@@ -212,19 +214,29 @@ function renderFilterPanel(state, accountMap, refresh) {
       ${c.icon} ${c.name}
     </button>`).join('');
 
-  // Combined account list: Plaid accounts + Tiller account names from transactions
-  const plaidAccounts = Object.entries(accountMap)
-    .filter(([, a]) => !a.isManual)
-    .map(([id, a]) => ({ key: id, name: a.name }));
+  // Combined account list: Plaid accounts (with alias) + Tiller accounts not already merged
+  const plaidEntries = Object.entries(accountMap).filter(([, a]) => !a.isManual);
+  const plaidAccounts = plaidEntries.map(([id, a]) => ({
+    key:         id,
+    name:        a.alias ?? a.name,
+    mergedNames: a.mergedNames ?? [],
+  }));
 
-  const plaidNames      = new Set(plaidAccounts.map(a => a.name));
+  // All Tiller names that have been merged into a Plaid account
+  const mergedTillerNames = new Set(plaidAccounts.flatMap(a => a.mergedNames));
+
+  // Exact Plaid display names (to avoid showing duplicates for exact-match Tiller)
+  const plaidDisplayNames = new Set(plaidAccounts.map(a => a.name));
+
   const tillerNamesSeen = new Set();
   allTxns.forEach(([, t]) => {
-    if ((t.source === 'tiller' || t.categorySource === 'import') && t.accountName && !plaidNames.has(t.accountName)) {
+    if ((t.source === 'tiller' || t.categorySource === 'import') && t.accountName
+        && !plaidDisplayNames.has(t.accountName)
+        && !mergedTillerNames.has(t.accountName)) {
       tillerNamesSeen.add(t.accountName);
     }
   });
-  const tillerAccounts   = [...tillerNamesSeen].map(name => ({ key: name, name }));
+  const tillerAccounts   = [...tillerNamesSeen].map(name => ({ key: name, name, mergedNames: [] }));
   const combinedAccounts = [...plaidAccounts, ...tillerAccounts];
   const hasAccounts      = combinedAccounts.length > 0;
 
@@ -391,15 +403,24 @@ function renderFilterPanel(state, accountMap, refresh) {
   });
 
   // ── Accounts ──
+  // Build a lookup: accountKey → mergedNames[] so pill clicks include merged Tiller names
+  const mergedNamesFor = {};
+  for (const acc of combinedAccounts) mergedNamesFor[acc.key] = acc.mergedNames ?? [];
+
   if (hasAccounts) {
     panel.querySelector('#f-accounts').addEventListener('click', e => {
       const btn = e.target.closest('.pill[data-account]');
       if (!btn) return;
-      const aid = btn.dataset.account;
-      state.accounts = state.accounts.includes(aid)
-        ? state.accounts.filter(a => a !== aid)
-        : [...state.accounts, aid];
-      btn.classList.toggle('active', state.accounts.includes(aid));
+      const aid    = btn.dataset.account;
+      const extras = mergedNamesFor[aid] ?? [];
+      const keys   = [aid, ...extras];
+      const isNowActive = !state.accounts.includes(aid);
+      if (isNowActive) {
+        state.accounts = [...new Set([...state.accounts, ...keys])];
+      } else {
+        state.accounts = state.accounts.filter(a => !keys.includes(a));
+      }
+      btn.classList.toggle('active', isNowActive);
       state.page = 0;
       refresh();
     });
@@ -803,4 +824,92 @@ function openCategoryPicker(txnId, currentCat, uid, rowEl) {
   }
 
   renderGroupStep();
+}
+
+// ── Duplicate detection banner ─────────────────────────────────────────────
+let _dupPairs = [];
+
+function updateDupBanner(txnEntries, uid) {
+  const banner = document.getElementById('dup-banner');
+  if (!banner) return;
+  _dupPairs = findDuplicates(txnEntries);
+  if (_dupPairs.length === 0) {
+    banner.style.display = 'none';
+    return;
+  }
+  banner.style.display = '';
+  banner.innerHTML = `
+    <div class="dup-banner">
+      <span class="dup-banner-icon">⚠</span>
+      <span class="dup-banner-text">${_dupPairs.length} potential duplicate${_dupPairs.length > 1 ? 's' : ''} found</span>
+      <button class="dup-banner-btn" id="dup-review-btn">Review →</button>
+    </div>`;
+  banner.querySelector('#dup-review-btn').addEventListener('click', () => openDupReview(_dupPairs, uid));
+}
+
+function openDupReview(pairs, uid) {
+  let idx = 0;
+
+  const overlay = document.createElement('div');
+  overlay.className = 'sheet-overlay';
+  document.body.appendChild(overlay);
+  requestAnimationFrame(() => overlay.classList.add('open'));
+
+  const close = () => { overlay.classList.remove('open'); setTimeout(() => overlay.remove(), 260); };
+
+  function renderPair() {
+    if (idx >= pairs.length) {
+      overlay.querySelector('.sheet').innerHTML = `
+        <div class="sheet-handle"></div>
+        <div class="sheet-hdr"><span class="sheet-title">All duplicates reviewed</span><button class="sheet-close" id="dc">✕</button></div>
+        <div style="padding:24px;text-align:center;font-size:0.85rem;color:var(--muted)">No more potential duplicates.</div>`;
+      overlay.querySelector('#dc').addEventListener('click', close);
+      return;
+    }
+    const [idA, a, idB, b] = pairs[idx];
+    const fmt = (t) => {
+      const cat = getCategoryById(t.category);
+      return `
+        <div class="dup-card">
+          <div class="dup-card-name">${t.merchantName ?? t.description}</div>
+          <div class="dup-card-meta">${t.date} · ${cat.icon} ${cat.name}</div>
+          <div class="dup-card-amt">${t.amount < 0 ? '+' : ''}$${Math.abs(t.amount).toFixed(2)}</div>
+          ${t.accountName ? `<div class="dup-card-acct">${t.accountName}</div>` : ''}
+        </div>`;
+    };
+
+    overlay.innerHTML = `
+      <div class="sheet" style="max-height:85vh">
+        <div class="sheet-handle"></div>
+        <div class="sheet-hdr">
+          <span class="sheet-title">Duplicate ${idx + 1} of ${pairs.length}</span>
+          <button class="sheet-close" id="dc">✕</button>
+        </div>
+        <div style="padding:12px 16px">
+          <p style="font-size:0.75rem;color:var(--muted);margin:0 0 10px">Same amount, date, and merchant. Keep one and delete the other.</p>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:12px">
+            ${fmt(a)}${fmt(b)}
+          </div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px">
+            <button class="btn-primary" id="keep-a" style="font-size:0.78rem;padding:8px">Keep A · Delete B</button>
+            <button class="btn-primary" id="keep-b" style="font-size:0.78rem;padding:8px">Keep B · Delete A</button>
+          </div>
+          <button class="btn-secondary" id="dup-skip" style="width:100%;font-size:0.78rem;padding:8px">Skip (keep both)</button>
+        </div>
+      </div>`;
+
+    overlay.querySelector('#dc').addEventListener('click', close);
+    overlay.querySelector('#keep-a').addEventListener('click', async () => {
+      await dbUpdate(`transactions/${uid}/${idB}`, { ignored: true });
+      idx++; renderPair();
+    });
+    overlay.querySelector('#keep-b').addEventListener('click', async () => {
+      await dbUpdate(`transactions/${uid}/${idA}`, { ignored: true });
+      idx++; renderPair();
+    });
+    overlay.querySelector('#dup-skip').addEventListener('click', () => { idx++; renderPair(); });
+  }
+
+  renderPair();
+  overlay.addEventListener('click', e => { if (e.target === overlay) close(); });
 }

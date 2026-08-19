@@ -2565,6 +2565,60 @@ button:active  { opacity: 0.7; transform: scale(0.97); }
   font-weight: 700;
 }
 
+/* Account rename & merge UI */
+.acct-rename-btn {
+  background: none;
+  border: none;
+  color: var(--faint);
+  font-size: 0.85rem;
+  cursor: pointer;
+  padding: 2px 6px;
+  border-radius: 4px;
+  flex-shrink: 0;
+  -webkit-tap-highlight-color: transparent;
+}
+.acct-rename-btn:hover { color: var(--muted); background: var(--bg); }
+
+.acct-rename-input {
+  border: 1.5px solid var(--brand);
+  border-radius: 6px;
+  padding: 2px 6px;
+  font-size: 0.8rem;
+  font-family: inherit;
+  color: var(--text);
+  background: var(--bg);
+  outline: none;
+  width: 100%;
+}
+
+.acct-merged-badge {
+  display: inline-flex;
+  align-items: center;
+  background: #dbeafe;
+  color: #1d4ed8;
+  border-radius: 999px;
+  font-size: 0.58rem;
+  font-weight: 700;
+  padding: 1px 6px;
+  margin-left: 6px;
+  cursor: default;
+}
+
+/* Rationalize sheet rows */
+.rat-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 9px 0;
+  border-bottom: 1px solid var(--border);
+}
+.rat-row:last-child { border-bottom: none; }
+.rat-row-info { flex: 1; min-width: 0; display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.rat-plaid  { font-size: 0.78rem; font-weight: 600; color: var(--text); }
+.rat-arrow  { font-size: 0.75rem; color: var(--faint); }
+.rat-tiller { font-size: 0.75rem; color: var(--muted); }
+
 /* ── Changelog sheet ───────────────────────────────────── */
 .changelog-list {
   overflow-y: auto;
@@ -2610,6 +2664,41 @@ button:active  { opacity: 0.7; transform: scale(0.97); }
   color: var(--brand);
   font-weight: 700;
 }
+
+/* ── Duplicate banner ──────────────────────────────────── */
+.dup-banner {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  background: #fffbeb;
+  border-bottom: 1px solid #fcd34d;
+  font-size: 0.78rem;
+}
+.dup-banner-icon { font-size: 0.9rem; }
+.dup-banner-text { flex: 1; font-weight: 500; color: #92400e; }
+.dup-banner-btn {
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: #b45309;
+  background: none;
+  border: 1.5px solid #fcd34d;
+  border-radius: 6px;
+  padding: 4px 10px;
+  cursor: pointer;
+  white-space: nowrap;
+  -webkit-tap-highlight-color: transparent;
+}
+.dup-card {
+  background: var(--surface);
+  border: 1.5px solid var(--border);
+  border-radius: 8px;
+  padding: 10px 12px;
+}
+.dup-card-name { font-size: 0.78rem; font-weight: 600; color: var(--text); margin-bottom: 3px; }
+.dup-card-meta { font-size: 0.68rem; color: var(--muted); margin-bottom: 4px; }
+.dup-card-amt  { font-size: 0.82rem; font-weight: 700; color: var(--text); }
+.dup-card-acct { font-size: 0.65rem; color: var(--faint); margin-top: 3px; }
 
 /* ═══════════════════════════════════════════════════════════
    INSIGHTS — Screen 6

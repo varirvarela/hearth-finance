@@ -518,7 +518,7 @@ function renderTrendChart(container, allTxns, selYear, selMonth, viewMode) {
   }).join('');
 
   container.querySelector('#trend-chart').innerHTML =
-    `<svg viewBox="0 0 340 100" width="100%" height="auto" style="display:block;overflow:visible;">${bars}</svg>`;
+    `<svg viewBox="0 0 340 100" width="100%" style="display:block;overflow:visible;">${bars}</svg>`;
 }
 
 // ── Recent transactions ───────────────────────────────────
