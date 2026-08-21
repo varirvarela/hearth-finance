@@ -399,6 +399,18 @@ input:focus, select:focus, textarea:focus { outline: none; }
 }
 .toolbar select:focus { border-color: var(--brand); }
 
+/* Desktop-only page title inside toolbar */
+.toolbar-dt-title {
+  display: none;
+  font-size: 0.92rem;
+  font-weight: 800;
+  color: var(--text);
+  letter-spacing: -0.2px;
+  white-space: nowrap;
+  flex-shrink: 0;
+  align-self: center;
+}
+
 /* Filter toggle button */
 .filter-toggle {
   flex-shrink: 0;
@@ -648,6 +660,57 @@ button:active  { opacity: 0.7; transform: scale(0.97); }
   transition: border-color 0.15s, background 0.15s;
 }
 .modal input:focus, .modal select:focus { border-color: var(--brand); background: var(--surface); }
+
+/* ── Sheet overlay (bottom drawer / full-height sheet) ── */
+.sheet-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(15, 23, 42, 0.45);
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  z-index: 200;
+  backdrop-filter: blur(3px);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.26s ease;
+}
+.sheet-overlay.open {
+  opacity: 1;
+  pointer-events: all;
+}
+.sheet {
+  background: var(--surface);
+  border-radius: 20px 20px 0 0;
+  width: 100%;
+  max-width: 640px;
+  max-height: 85dvh;
+  overflow-y: auto;
+  padding-bottom: env(safe-area-inset-bottom);
+  transform: translateY(100%);
+  transition: transform 0.28s cubic-bezier(0.32, 0.72, 0, 1);
+}
+.sheet-overlay.open .sheet { transform: translateY(0); }
+.sheet-handle {
+  width: 40px; height: 4px;
+  background: var(--border);
+  border-radius: 2px;
+  margin: 10px auto 4px;
+}
+.sheet-hdr {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 16px;
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+}
+.sheet-title { font-size: 0.9rem; font-weight: 700; color: var(--text); }
+.sheet-close {
+  background: none; border: none; cursor: pointer;
+  font-size: 1rem; color: var(--muted);
+  padding: 4px 6px; width: auto;
+}
 
 /* ── Category picker ───────────────────────────────────── */
 .cat-picker {
@@ -1483,6 +1546,23 @@ button:active  { opacity: 0.7; transform: scale(0.97); }
     border-right: none;
     border-top: 1px solid var(--border);
   }
+
+  /* Edge-to-edge pages fill full width (sidebar already constrains) */
+  .page.transactions, .page.budgets { max-width: none; }
+
+  /* Toolbar: more breathing room + show desktop title */
+  .toolbar { padding: 11px 18px; }
+  .toolbar-dt-title { display: block; }
+
+  /* Sheet overlay: centered dialog on desktop */
+  .sheet-overlay { align-items: center; }
+  .sheet {
+    border-radius: var(--r-xl);
+    width: 520px;
+    max-width: 90vw;
+    transform: scale(0.96);
+  }
+  .sheet-overlay.open .sheet { transform: scale(1); transition: transform 0.22s cubic-bezier(0.32, 0.72, 0, 1); }
 }
 
 /* ── Large desktop ── */

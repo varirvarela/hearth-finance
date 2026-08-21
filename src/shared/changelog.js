@@ -1,5 +1,15 @@
 export const CHANGELOG = [
   {
+    version: '1.6.2',
+    date:    '2026-08-20',
+    changes: [
+      'Fix: duplicate review, changelog, and account rationalize sheets now display as a proper overlay (not appended below the page).',
+      'Desktop: "Transactions" title now appears on the left side of the toolbar on desktop, matching the design brief topbar layout.',
+      'Desktop: transactions and budget pages now fill the full content width (no artificial max-width centering when sidebar is already visible).',
+      'Desktop: sheets and modals open as centered dialogs with a scale-in animation instead of bottom-sheets.',
+    ],
+  },
+  {
     version: '1.6.1',
     date:    '2026-08-19',
     changes: [

@@ -94,6 +94,7 @@ export function renderTransactions(container) {
   container.innerHTML = `
     <div class="page transactions">
       <div class="toolbar">
+        <span class="toolbar-dt-title">Transactions</span>
         <input type="search" id="txn-search" placeholder="Search transactions…" />
         <button class="filter-toggle" id="filter-toggle">
           Filters <span class="filter-badge" id="filter-badge" style="display:none"></span>
