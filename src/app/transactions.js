@@ -919,7 +919,15 @@ function openDupReview(pairs, uid) {
       await dbUpdate(`transactions/${uid}/${idA}`, { ignored: true });
       idx++; renderPair();
     });
-    overlay.querySelector('#dup-skip').addEventListener('click', () => { idx++; renderPair(); });
+    overlay.querySelector('#dup-skip').addEventListener('click', async () => {
+      const aOk = [...(a.dupOk ?? []), idB];
+      const bOk = [...(b.dupOk ?? []), idA];
+      await Promise.all([
+        dbUpdate(`transactions/${uid}/${idA}`, { dupOk: aOk }),
+        dbUpdate(`transactions/${uid}/${idB}`, { dupOk: bOk }),
+      ]);
+      idx++; renderPair();
+    });
   }
 
   renderPair();

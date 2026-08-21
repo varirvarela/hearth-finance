@@ -5,6 +5,7 @@ import { buildRule, evaluateRules } from '../shared/rules.js';
 import { CHANGELOG } from '../shared/changelog.js';
 import { fmtCurrency } from '../shared/format.js';
 import { openImportModal } from './import.js';
+import { openChangelogSheet } from './accounts.js';
 
 export function renderSettings(container) {
   container.innerHTML = `
@@ -40,7 +41,8 @@ export function renderSettings(container) {
       </section>
       <section class="section">
         <h3>About</h3>
-        <p style="color:var(--color-muted);font-size:0.85rem">Version ${CHANGELOG[0].version}</p>
+        <p style="color:var(--muted);font-size:0.82rem;margin-bottom:0.6rem">Hearth Finance · v${CHANGELOG[0].version}</p>
+        <button class="btn-secondary" id="show-changelog" style="width:auto;padding:0.4rem 1rem;font-size:0.82rem">What's new →</button>
       </section>
       <section class="section">
         <button class="btn-danger" id="sign-out">Sign Out</button>
@@ -76,6 +78,7 @@ export function renderSettings(container) {
     generateForMonth(uid, yearMonth);
   });
   document.getElementById('sign-out').addEventListener('click', () => signOut(auth));
+  container.querySelector('#show-changelog').addEventListener('click', () => openChangelogSheet());
   document.getElementById('import-csv').addEventListener('click', () => openImportModal());
   document.getElementById('export-csv').addEventListener('click', () => exportCsv(uid));
 

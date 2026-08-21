@@ -128,7 +128,7 @@ export function renderAccounts(container) {
   renderPartnerSection(uid);
 }
 
-function openChangelogSheet() {
+export function openChangelogSheet() {
   const overlay = document.createElement('div');
   overlay.className = 'sheet-overlay';
   overlay.innerHTML = `

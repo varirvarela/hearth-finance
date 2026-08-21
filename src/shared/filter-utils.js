@@ -112,6 +112,7 @@ export function findDuplicates(txnEntries) {
         if (!nameA || !nameB) continue;
         if (nameA !== nameB && !nameA.includes(nameB) && !nameB.includes(nameA)) continue;
 
+        if (a.dupOk?.includes(idB) || b.dupOk?.includes(idA)) continue;
         pairs.push([idA, a, idB, b]);
         used.add(idA);
         used.add(idB);

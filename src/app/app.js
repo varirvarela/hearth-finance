@@ -19,6 +19,45 @@ import { renderAccounts }     from './accounts.js';
 import { renderSettings }     from './settings.js';
 import { renderAutomation }   from './automation.js';
 import { renderInsights }     from './insights.js';
+import { CHANGELOG } from '../shared/changelog.js';
+
+function showWhatsNew(sinceVersion) {
+  const gt = (a, b) => {
+    const pa = a.split('.').map(Number), pb = b.split('.').map(Number);
+    for (let i = 0; i < 3; i++) {
+      if ((pa[i]??0) > (pb[i]??0)) return true;
+      if ((pa[i]??0) < (pb[i]??0)) return false;
+    }
+    return false;
+  };
+  const entries = CHANGELOG.filter(e => gt(e.version, sinceVersion));
+  if (!entries.length) return;
+  const overlay = document.createElement('div');
+  overlay.className = 'sheet-overlay';
+  overlay.innerHTML = `
+    <div class="sheet">
+      <div class="sheet-handle"></div>
+      <div class="sheet-hdr">
+        <span class="sheet-title">✨ What's new in v${CHANGELOG[0].version}</span>
+        <button class="sheet-close" id="wn-close">✕</button>
+      </div>
+      <div class="changelog-list">
+        ${entries.map(e => `
+          <div class="changelog-entry">
+            <div class="changelog-version-row">
+              <span class="changelog-version">v${e.version}</span>
+              <span class="changelog-date">${e.date}</span>
+            </div>
+            <ul class="changelog-changes">${e.changes.map(c => `<li>${c}</li>`).join('')}</ul>
+          </div>`).join('')}
+      </div>
+    </div>`;
+  document.body.appendChild(overlay);
+  requestAnimationFrame(() => overlay.classList.add('open'));
+  const close = () => { overlay.classList.remove('open'); setTimeout(() => overlay.remove(), 260); };
+  overlay.querySelector('#wn-close').addEventListener('click', close);
+  overlay.addEventListener('click', e => { if (e.target === overlay) close(); });
+}
 
 const TABS = ['dashboard', 'transactions', 'budgets', 'accounts', 'insights', 'automation', 'settings'];
 const renderers = {
@@ -74,6 +113,10 @@ onAuthStateChanged(auth, user => {
     document.getElementById('app-shell').hidden   = false;
     const hash = location.hash.slice(1) || 'dashboard';
     mount(hash);
+    const lastSeen = localStorage.getItem('hearth-seen-version');
+    const current  = CHANGELOG[0].version;
+    if (lastSeen && lastSeen !== current) setTimeout(() => showWhatsNew(lastSeen), 900);
+    localStorage.setItem('hearth-seen-version', current);
   } else {
     document.getElementById('auth-screen').hidden = false;
     document.getElementById('app-shell').hidden   = true;

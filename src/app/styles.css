@@ -1563,6 +1563,51 @@ button:active  { opacity: 0.7; transform: scale(0.97); }
     transform: scale(0.96);
   }
   .sheet-overlay.open .sheet { transform: scale(1); transition: transform 0.22s cubic-bezier(0.32, 0.72, 0, 1); }
+
+  /* ── Dark desktop theme ── */
+  :root {
+    --bg:       #0c1017;
+    --surface:  #161c27;
+    --border:   rgba(255, 255, 255, 0.09);
+    --text:     #e2e8f0;
+    --muted:    #64748b;
+    --faint:    #2d3748;
+    --brand-xl: rgba(22, 163, 74, 0.13);
+    --brand-l:  rgba(22, 163, 74, 0.24);
+    --sh-xs:    0 1px 3px rgba(0,0,0,.5);
+    --sh-sm:    0 2px 6px rgba(0,0,0,.45);
+    --sh-md:    0 4px 12px rgba(0,0,0,.45);
+    --sh-lg:    0 8px 24px rgba(0,0,0,.4);
+  }
+
+  /* Keep auth screen light */
+  #auth-screen {
+    --bg:       #f8fafc;
+    --surface:  #ffffff;
+    --border:   #e2e8f0;
+    --text:     #0f172a;
+    --muted:    #64748b;
+    --faint:    #94a3b8;
+    --brand-xl: #f0fdf4;
+    --brand-l:  #dcfce7;
+  }
+
+  /* Fix hardcoded amber/light colors for dark background */
+  .dup-banner              { background: rgba(245,158,11,.1); border-bottom-color: rgba(245,158,11,.25); }
+  .dup-banner-text         { color: #fbbf24; }
+  .dup-banner-btn          { border-color: rgba(245,158,11,.35); color: #fbbf24; }
+  .dup-banner-btn:hover    { background: rgba(245,158,11,.1); }
+  .needs-review-row        { background: rgba(245,158,11,.07) !important; }
+  .uncategorized-row       { background: rgba(239,68,68,.07) !important; }
+  .changelog-entry         { border-bottom-color: rgba(255,255,255,.07); }
+  .changelog-version       { color: var(--brand); }
+  .changelog-date          { color: var(--muted); }
+  .changelog-changes li    { color: var(--text); }
+}
+
+/* Body background matches dark desktop surface */
+@media (min-width: 768px) {
+  body { background: var(--bg); }
 }
 
 /* ── Large desktop ── */

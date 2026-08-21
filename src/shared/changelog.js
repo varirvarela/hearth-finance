@@ -1,5 +1,16 @@
 export const CHANGELOG = [
   {
+    version: '1.7.0',
+    date:    '2026-08-20',
+    changes: [
+      'Settings tab: new gear icon tab in the nav bar for Settings — shows partner sharing, import/export, version info, and sign-out.',
+      'What\'s new: on first open after an update, a sheet automatically shows the new features since your last session.',
+      'Settings: "What\'s new →" button in About section opens the full version history at any time.',
+      'Duplicates: tapping "Skip (keep both)" now permanently marks the pair as reviewed — they will not reappear in the duplicate banner.',
+      'Desktop: content area is now dark-themed (matching the design brief) with a matching dark body background.',
+    ],
+  },
+  {
     version: '1.6.2',
     date:    '2026-08-20',
     changes: [
