@@ -113,10 +113,13 @@ onAuthStateChanged(auth, user => {
     document.getElementById('app-shell').hidden   = false;
     const hash = location.hash.slice(1) || 'dashboard';
     mount(hash);
-    const lastSeen = localStorage.getItem('hearth-seen-version');
+    const lastSeen = localStorage.getItem('hearth-seen-version-2');
     const current  = CHANGELOG[0].version;
-    if (lastSeen && lastSeen !== current) setTimeout(() => showWhatsNew(lastSeen), 900);
-    localStorage.setItem('hearth-seen-version', current);
+    if (!lastSeen || lastSeen !== current) {
+      const since = lastSeen ?? (CHANGELOG[1]?.version ?? '0.0.0');
+      setTimeout(() => showWhatsNew(since), 900);
+    }
+    localStorage.setItem('hearth-seen-version-2', current);
   } else {
     document.getElementById('auth-screen').hidden = false;
     document.getElementById('app-shell').hidden   = true;

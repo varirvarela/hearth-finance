@@ -40,9 +40,11 @@ function getSourceBadge(source) {
   return `<span style="background:${s.bg};color:${s.color};border-radius:20px;padding:2px 8px;font-size:0.75rem;font-weight:600">${s.text}</span>`;
 }
 
-// Returns a hex color lightened toward white (for icon backgrounds).
+// Returns a tinted background for category icons.
+// On dark desktop (≥768px) uses low-opacity hex; on mobile lightens toward white.
 function tintColor(hex, amount = 0.88) {
   if (!hex || !hex.startsWith('#')) return 'var(--bg)';
+  if (window.matchMedia('(min-width: 768px)').matches) return hex + '28'; // 16% opacity on dark bg
   const r = parseInt(hex.slice(1, 3), 16);
   const g = parseInt(hex.slice(3, 5), 16);
   const b = parseInt(hex.slice(5, 7), 16);

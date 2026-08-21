@@ -29,6 +29,8 @@ export function matchesRule(txn, rule) {
 
   if      (matchField === 'description') fieldVal = (txn.description  ?? '').toLowerCase();
   else if (matchField === 'merchant')    fieldVal = (txn.merchantName ?? '').toLowerCase();
+  else if (matchField === 'accountName') fieldVal = (txn.accountName  ?? '').toLowerCase();
+  else if (matchField === 'source')      fieldVal = (txn.source ?? txn.categorySource ?? '').toLowerCase();
   else if (matchField === 'amount')      fieldVal = txn.amount;
   else return false;
 

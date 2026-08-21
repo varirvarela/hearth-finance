@@ -1,5 +1,17 @@
 export const CHANGELOG = [
   {
+    version: '1.7.1',
+    date:    '2026-08-21',
+    changes: [
+      'Fix: "What\'s new" popup now appears correctly on first open after an update (localStorage key corrected).',
+      'Fix: category icon backgrounds on dark desktop now use a subtle tinted overlay instead of a bright near-white color.',
+      'Fix: needs-review (amber) and uncategorized (red) row backgrounds and suggestion strips now display correctly in dark mode.',
+      'Settings: Rules and Recurring Transactions sections removed — both now live exclusively in the Automation tab.',
+      'Automation: Recurring Transactions section added (create, enable/disable, generate for any month).',
+      'Rules: rules can now match on Account name, Amount (greater/less than), and Source in addition to description and merchant.',
+    ],
+  },
+  {
     version: '1.7.0',
     date:    '2026-08-20',
     changes: [

@@ -1,6 +1,7 @@
 import { dbListen, dbSet, dbPush, dbRemove, dbUpdate, dbGet, auth } from '../shared/firebase.js';
 import { CATEGORIES, getCategoryById, getCategoryBudgetFields } from '../shared/categories.js';
 import { buildRule, evaluateRules } from '../shared/rules.js';
+import { fmtCurrency } from '../shared/format.js';
 
 export function renderAutomation(container) {
   const uid = auth.currentUser?.uid;
@@ -28,6 +29,19 @@ export function renderAutomation(container) {
       <div class="auto-footer-link">
         <a href="#settings" id="auto-settings-link">Other settings (import, partner, recurring) →</a>
       </div>
+
+      <div class="auto-recurring-section section">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:0.75rem">
+          <h3 style="margin:0">Recurring Transactions</h3>
+          <button class="btn-secondary" id="auto-add-recurring" style="width:auto;padding:0.4rem 0.9rem;font-size:0.82rem">+ Add</button>
+        </div>
+        <div id="auto-recurring-list"></div>
+        <div style="margin-top:0.75rem;display:flex;gap:0.5rem;align-items:center;flex-wrap:wrap">
+          <select id="auto-recurring-month" style="border:1.5px solid var(--border);border-radius:8px;padding:0.45rem 0.6rem;font-size:0.9rem;background:var(--surface);color:var(--text)"></select>
+          <button class="btn-primary" id="auto-generate-recurring" style="width:auto;padding:0.5rem 1rem">Generate</button>
+          <span id="auto-generate-status" style="font-size:0.85rem;color:var(--muted)"></span>
+        </div>
+      </div>
     </div>
   `;
 
@@ -54,6 +68,15 @@ export function renderAutomation(container) {
     allRules = rules ?? {};
     renderStats(container, allRules);
     renderRulesList(uid, allRules, searchQuery);
+  });
+
+  dbListen(`recurring/${uid}`, items => renderRecurring(items ?? {}, uid));
+  populateMonthSelect();
+
+  container.querySelector('#auto-add-recurring').addEventListener('click', () => openRecurringEditor(uid));
+  container.querySelector('#auto-generate-recurring').addEventListener('click', () => {
+    const yearMonth = document.getElementById('auto-recurring-month').value;
+    generateForMonth(uid, yearMonth);
   });
 }
 
@@ -233,13 +256,18 @@ function openRuleEditor(uid, ruleId = null, prefill = null, prefillCatId = null)
       <label class="modal-label">When</label>
       <div class="rule-editor-row">
         <select id="re-field" class="rule-editor-sel">
-          <option value="description" ${selField === 'description' ? 'selected' : ''}>description</option>
-          <option value="merchant"    ${selField === 'merchant'    ? 'selected' : ''}>merchant name</option>
+          <option value="description"  ${selField === 'description'  ? 'selected' : ''}>description</option>
+          <option value="merchant"     ${selField === 'merchant'     ? 'selected' : ''}>merchant name</option>
+          <option value="accountName"  ${selField === 'accountName'  ? 'selected' : ''}>account name</option>
+          <option value="amount"       ${selField === 'amount'       ? 'selected' : ''}>amount ($)</option>
+          <option value="source"       ${selField === 'source'       ? 'selected' : ''}>source</option>
         </select>
         <select id="re-op" class="rule-editor-sel">
           <option value="contains"   ${selOp === 'contains'   ? 'selected' : ''}>contains</option>
           <option value="startsWith" ${selOp === 'startsWith' ? 'selected' : ''}>starts with</option>
           <option value="equals"     ${selOp === 'equals'     ? 'selected' : ''}>equals</option>
+          <option value="gt"         ${selOp === 'gt'         ? 'selected' : ''}>greater than</option>
+          <option value="lt"         ${selOp === 'lt'         ? 'selected' : ''}>less than</option>
         </select>
       </div>
       <input id="re-value" class="rule-editor-input" type="text" placeholder="Merchant name or pattern…" value="${escHtml(prefill?.matchValue ?? '')}" />
@@ -372,4 +400,152 @@ async function applyAllRules(uid, rules) {
     const b = document.getElementById('auto-apply-rules');
     if (b) b.textContent = 'Re-apply all rules to transactions';
   }, 4000);
+}
+
+function populateMonthSelect() {
+  const sel = document.getElementById('auto-recurring-month');
+  if (!sel) return;
+  const now = new Date();
+  const options = [];
+  for (let i = 1; i >= -12; i--) {
+    const d = new Date(now.getFullYear(), now.getMonth() + i, 1);
+    const yyyy = d.getFullYear();
+    const mm   = String(d.getMonth() + 1).padStart(2, '0');
+    const key  = `${yyyy}-${mm}`;
+    const label = d.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
+    const selected = i === 0 ? ' selected' : '';
+    options.push(`<option value="${key}"${selected}>${label}</option>`);
+  }
+  sel.innerHTML = options.join('');
+}
+
+function renderRecurring(items, uid) {
+  const el = document.getElementById('auto-recurring-list');
+  if (!el) return;
+  const entries = Object.entries(items);
+  if (!entries.length) {
+    el.innerHTML = '<p class="empty" style="margin-bottom:0">No recurring transactions yet.</p>';
+    return;
+  }
+  el.innerHTML = entries.map(([id, r]) => {
+    const cat = getCategoryById(r.category);
+    const amountStyle = r.amount < 0 ? 'color:var(--color-income,#16a34a)' : '';
+    return `
+      <div class="rule-row">
+        <div class="rule-info">
+          <span class="rule-name">${cat.icon} ${r.name}</span>
+          <span class="rule-desc" style="${amountStyle}">${fmtCurrency(r.amount)} · Day ${r.dayOfMonth}</span>
+        </div>
+        <label style="display:flex;align-items:center;gap:0.35rem;cursor:pointer;font-size:0.8rem;color:var(--muted)">
+          <input type="checkbox" class="recurring-toggle" data-id="${id}" ${r.enabled ? 'checked' : ''}> On
+        </label>
+        <button class="auto-link-btn" data-id="${id}" style="color:var(--danger,#dc2626)">✕</button>
+      </div>`;
+  }).join('');
+
+  el.querySelectorAll('[data-id]').forEach(btn => {
+    if (btn.tagName === 'BUTTON') {
+      btn.addEventListener('click', () => dbRemove(`recurring/${uid}/${btn.dataset.id}`));
+    }
+  });
+  el.querySelectorAll('.recurring-toggle').forEach(cb => {
+    cb.addEventListener('change', () => dbSet(`recurring/${uid}/${cb.dataset.id}/enabled`, cb.checked));
+  });
+}
+
+function openRecurringEditor(uid, prefill = {}) {
+  const leafCats = CATEGORIES.filter(c => c.parent);
+  const modal = document.createElement('div');
+  modal.className = 'modal-overlay';
+  modal.innerHTML = `
+    <div class="modal">
+      <h3>Recurring Transaction</h3>
+      <input id="rc-name" placeholder="Name (e.g. Rent, Netflix)" value="${prefill.name ?? ''}" />
+      <input id="rc-amount" type="number" step="0.01" placeholder="Amount (negative = income)" value="${prefill.amount ?? ''}" />
+      <input id="rc-day" type="number" min="1" max="28" placeholder="Day of month (1–28)" value="${prefill.dayOfMonth ?? ''}" />
+      <select id="rc-cat">${leafCats.map(c => `<option value="${c.id}"${prefill.category === c.id ? ' selected' : ''}>${c.icon} ${c.name}</option>`).join('')}</select>
+      <label style="display:flex;align-items:center;gap:0.5rem;margin-top:0.5rem;font-size:0.9rem">
+        <input type="checkbox" id="rc-enabled" ${prefill.enabled !== false ? 'checked' : ''}> Enabled
+      </label>
+      <div style="display:flex;gap:0.5rem;margin-top:1rem">
+        <button class="btn-ghost modal-cancel" style="flex:1">Cancel</button>
+        <button class="btn-primary modal-save" style="flex:1">Save</button>
+      </div>
+    </div>
+  `;
+  document.body.appendChild(modal);
+
+  modal.querySelector('.modal-save').addEventListener('click', async () => {
+    const name    = modal.querySelector('#rc-name').value.trim();
+    const amount  = parseFloat(modal.querySelector('#rc-amount').value);
+    const day     = parseInt(modal.querySelector('#rc-day').value, 10);
+    const catId   = modal.querySelector('#rc-cat').value;
+    const enabled = modal.querySelector('#rc-enabled').checked;
+    if (!name || isNaN(amount) || isNaN(day)) return;
+    const cat = getCategoryById(catId);
+    await dbPush(`recurring/${uid}`, {
+      name,
+      amount,
+      category:   catId,
+      group:      cat.parent,
+      isFixed:    cat.isFixed  ?? false,
+      isAnnual:   cat.isAnnual ?? false,
+      dayOfMonth: Math.min(28, Math.max(1, day)),
+      enabled,
+      createdAt:  Date.now(),
+    });
+    modal.remove();
+  });
+
+  modal.querySelector('.modal-cancel').addEventListener('click', () => modal.remove());
+  modal.addEventListener('click', e => { if (e.target === modal) modal.remove(); });
+}
+
+async function generateForMonth(uid, yearMonth) {
+  const btn    = document.getElementById('auto-generate-recurring');
+  const status = document.getElementById('auto-generate-status');
+  if (!btn || !status) return;
+  btn.disabled = true;
+  btn.textContent = 'Generating…';
+  status.textContent = '';
+
+  const items = await dbGet(`recurring/${uid}`);
+  if (!items) {
+    btn.disabled = false;
+    btn.textContent = 'Generate';
+    status.textContent = 'No recurring transactions defined.';
+    setTimeout(() => { status.textContent = ''; }, 4000);
+    return;
+  }
+
+  let count = 0;
+  for (const [id, r] of Object.entries(items)) {
+    if (!r.enabled) continue;
+    const key      = `recurring_${id}_${yearMonth}`;
+    const existing = await dbGet(`transactions/${uid}/${key}`);
+    if (existing) continue;
+    const [yyyy, mm] = yearMonth.split('-');
+    const dd = String(r.dayOfMonth).padStart(2, '0');
+    await dbSet(`transactions/${uid}/${key}`, {
+      date:           `${yyyy}-${mm}-${dd}`,
+      description:    r.name,
+      merchantName:   r.name,
+      amount:         r.amount,
+      category:       r.category,
+      group:          r.group,
+      isFixed:        r.isFixed,
+      isAnnual:       r.isAnnual,
+      categorySource: 'recurring',
+      source:         'recurring',
+      needsReview:    false,
+    });
+    count++;
+  }
+
+  btn.disabled = false;
+  btn.textContent = 'Generate';
+  status.textContent = count > 0
+    ? `Generated ${count} transaction${count === 1 ? '' : 's'}.`
+    : 'All already generated.';
+  setTimeout(() => { status.textContent = ''; }, 4000);
 }
