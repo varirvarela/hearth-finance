@@ -7,9 +7,10 @@ import {
   getChildCategories,
 } from '../shared/categories.js';
 import { blankState, needsReview, applyFilters, countActive, normalizeSource, findDuplicates } from '../shared/filter-utils.js';
-import { buildRule } from '../shared/rules.js';
+import { buildRule, evaluateRules } from '../shared/rules.js';
 
 const PAGE_SIZE = 100;
+const WORKER_URL = import.meta.env.VITE_WORKER_URL ?? 'http://localhost:8787';
 
 const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
 
@@ -23,10 +24,12 @@ const SOURCES = [
   { id: 'plaid',  label: 'Plaid',  values: ['plaid']         },
 ];
 
-let allTxns        = [];
-let partnerAllTxns = [];
-let partnerInitial = 'P';
-let accountMap     = {};
+let allTxns          = [];
+let partnerAllTxns   = [];
+let partnerInitial   = 'P';
+let accountMap       = {};
+let allRulesSnapshot = {};
+const _aiSugCache    = new Map(); // txnId → { catId, source }
 
 function getSourceBadge(source) {
   const map = {
@@ -100,10 +103,13 @@ export function renderTransactions(container) {
         <span class="toolbar-dt-title">Transactions</span>
         <input type="search" id="txn-search" placeholder="Search transactions…" />
         <button class="filter-toggle" id="filter-toggle">
-          Filters <span class="filter-badge" id="filter-badge" style="display:none"></span>
+          <span class="filter-toggle-label">Filter</span>
+          <span class="filter-badge hidden" id="filter-active-count"></span>
         </button>
-        <button class="btn-ghost txn-data-btn" id="txn-import-btn">Import</button>
-        <button class="btn-ghost txn-data-btn" id="txn-export-btn">Export</button>
+        <div class="toolbar-data-actions">
+          <button class="txn-data-btn" id="txn-import-btn">↑ Import</button>
+          <button class="txn-data-btn" id="txn-export-btn">↓ Export</button>
+        </div>
       </div>
       <div class="filter-panel" id="filter-panel"></div>
       <div id="dup-banner" style="display:none"></div>
@@ -141,10 +147,10 @@ export function renderTransactions(container) {
       .sort((a, b) => b[1].date.localeCompare(a[1].date));
     const filtered = applyFilters(combined, state);
     const active   = countActive(state);
-    const badge    = document.getElementById('filter-badge');
+    const badge    = document.getElementById('filter-active-count');
     if (badge) {
-      badge.textContent   = active > 0 ? String(active) : '';
-      badge.style.display = active > 0 ? 'inline-flex' : 'none';
+      badge.textContent = active > 0 ? String(active) : '';
+      badge.classList.toggle('hidden', active === 0);
     }
     renderPage(filtered, state, uid, refresh, accountMap);
   };
@@ -158,6 +164,10 @@ export function renderTransactions(container) {
   dbListen(`accounts/${uid}`, accounts => {
     accountMap = accounts ?? {};
     refresh();
+  });
+
+  dbListen(`rules/${uid}`, rules => {
+    allRulesSnapshot = rules ?? {};
   });
 
   getPartnerUid(uid).then(p => {
@@ -489,6 +499,103 @@ function updateLeafSection(state, refresh) {
   });
 }
 
+// ── Tiered category suggestion helpers ────────────────────────────────────────
+
+function suggestCategory(txnId, txn, allRules) {
+  // Tier 1: rules
+  if (allRules && Object.keys(allRules).length > 0) {
+    const match = evaluateRules(txn, Object.values(allRules));
+    if (match) return { catId: match, source: 'rule' };
+  }
+
+  // Tier 2: keyword heuristics
+  const text = ((txn.merchantName ?? '') + ' ' + (txn.description ?? '')).toLowerCase();
+  const KEYWORDS = [
+    [/netflix|spotify|disney\+|hbo|apple.*subscription|amazon prime/i, 'suscripciones'],
+    [/uber eats|rappi|didi food|doordash|grubhub|pedidos ya/i, 'delivery'],
+    [/uber|didi|lyft|cabify|bolt/i, 'taxi'],
+    [/cfe|gas natural|telmex|totalplay|megacable|izzi|infinitum/i, 'utilities'],
+    [/walmart|costco|sam.s club|soriana|chedraui|h-e-b|oxxo|7-eleven/i, 'super'],
+    [/amazon|mercado libre|shein|liverpool|palacio de hierro/i, 'clothing'],
+    [/gym|fitness|sport|equinox|smartfit/i, 'gym'],
+    [/doctor|medico|farmacia|similares|benavides|hospital/i, 'health'],
+    [/gasolina|pemex|bp|shell|total.*gas/i, 'gas'],
+    [/cinepolis|cinemex|teatro|concierto|ticketmaster/i, 'events'],
+    [/restaurant|cafe|coffee|starbucks|sushi|pizza|taco|burger|mcdonald|kfc/i, 'dining'],
+    [/school|colegio|universidad|tuition|academia/i, 'school'],
+    [/airbnb|hotel|booking|expedia|vrbo/i, 'hotel'],
+    [/american airlines|aeromexico|volaris|vivaaerobus|delta|united/i, 'flights'],
+    [/mortgage|hipoteca|infonavit/i, 'mortgage'],
+    [/insurance|seguro|allianz|gnp|axa/i, 'insurance'],
+    [/electric|luz|cfe/i, 'utilities'],
+    [/internet|fibra|modem/i, 'telecom'],
+  ];
+  for (const [pattern, catId] of KEYWORDS) {
+    if (pattern.test(text)) return { catId, source: 'heuristic' };
+  }
+
+  // Tier 3: cached Worker result if already fetched
+  if (_aiSugCache.has(txnId)) return _aiSugCache.get(txnId);
+
+  // Return null if nothing found yet (Worker call triggered separately)
+  return null;
+}
+
+async function fetchAiSuggestion(txnId, txn) {
+  if (_aiSugCache.has(txnId)) return;
+  _aiSugCache.set(txnId, null); // mark as pending so we don't double-call
+
+  try {
+    const idToken = await auth.currentUser?.getIdToken();
+    if (!idToken) return;
+    const res = await fetch(`${WORKER_URL}/categorize`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${idToken}` },
+      body: JSON.stringify({
+        description:   txn.description ?? txn.merchantName,
+        merchantName:  txn.merchantName,
+        amount:        txn.amount,
+        date:          txn.date,
+        accountName:   txn.accountName,
+        plaidCategory: txn.plaidCategory,
+      }),
+    });
+    if (!res.ok) return;
+    const data = await res.json();
+    if (data.category) {
+      _aiSugCache.set(txnId, { catId: data.category, source: 'ai' });
+      updateSugStrip(txnId, { catId: data.category, source: 'ai' });
+    }
+  } catch { /* Worker unavailable — silent fail */ }
+}
+
+function updateSugStrip(txnId, sug) {
+  const row = document.querySelector(`.txn-row[data-id="${txnId}"]`);
+  if (!row) return;
+  const strip = row.closest('.txn-item')?.querySelector('.sug-strip');
+  if (!strip) return;
+  const cat = getCategoryById(sug.catId);
+  const sourceLbl = sug.source === 'ai' ? 'AI suggest' : sug.source === 'rule' ? 'Rule' : 'Suggested';
+  const cls = sug.source === 'ai' ? 'ai' : 'heuristic';
+  strip.className = `sug-strip ${cls}`;
+  strip.innerHTML = `
+    <span class="sug-lbl ${cls}">${sourceLbl}</span>
+    <span class="sug-cat">${cat.icon} ${cat.name}</span>
+    <button class="btn-quick-confirm" data-id="${txnId}" data-cat="${sug.catId}">✓ Confirm</button>
+    <button class="btn-quick-change"  data-id="${txnId}" data-cat="${sug.catId}">Change</button>`;
+  const uid = auth.currentUser?.uid;
+  strip.querySelector('.btn-quick-confirm')?.addEventListener('click', e => {
+    e.stopPropagation();
+    if (!uid) return;
+    dbUpdate(`transactions/${uid}/${txnId}`, { category: sug.catId, categorySource: 'manual', needsReview: false });
+  });
+  strip.querySelector('.btn-quick-change')?.addEventListener('click', e => {
+    e.stopPropagation();
+    const catBtn = row.querySelector('.cat-btn');
+    if (catBtn) catBtn.click();
+  });
+}
+
 function renderPage(filtered, state, uid, refresh, accountMap) {
   const el = document.getElementById('txn-list');
   if (!el) return;
@@ -538,11 +645,30 @@ function renderPage(filtered, state, uid, refresh, accountMap) {
             <button class="btn-quick-change"  data-id="${id}" data-cat="${t.category}">Change</button>
           </div>`;
       } else {
-        suggestionHTML = `
-          <div class="sug-strip warn">
-            <span class="sug-lbl warn">⚠ Uncategorized</span>
-            <button class="btn-quick-change" data-id="${id}" data-cat="${t.category}" style="margin-left:auto">Categorize →</button>
-          </div>`;
+        // Tiered suggestion for truly uncategorized rows
+        const sug = suggestCategory(id, t, allRulesSnapshot);
+        if (sug) {
+          const sugCat    = getCategoryById(sug.catId);
+          const sourceLbl = sug.source === 'rule' ? 'Rule' : sug.source === 'ai' ? 'AI suggest' : 'Suggested';
+          const stripCls  = sug.source === 'ai' ? 'ai' : 'heuristic';
+          suggestionHTML = `
+            <div class="sug-strip ${stripCls}">
+              <span class="sug-lbl ${stripCls}">${sourceLbl}</span>
+              <span class="sug-cat">${sugCat.icon} ${sugCat.name}</span>
+              <button class="btn-quick-confirm" data-id="${id}" data-cat="${sug.catId}">✓ Confirm</button>
+              <button class="btn-quick-change"  data-id="${id}" data-cat="${sug.catId}">Change</button>
+            </div>`;
+        } else {
+          // No suggestion yet — show placeholder, then queue Worker call
+          suggestionHTML = `
+            <div class="sug-strip warn" id="sug-${id}">
+              <span class="sug-lbl warn">⚠ Uncategorized</span>
+              <span class="sug-loading" style="font-size:0.68rem;color:var(--muted);margin-left:6px">Analyzing…</span>
+              <button class="btn-quick-change" data-id="${id}" data-cat="${t.category}" style="margin-left:auto">Categorize →</button>
+            </div>`;
+          // Kick off async Worker call (will update the DOM when done)
+          setTimeout(() => fetchAiSuggestion(id, t), 100);
+        }
       }
     }
 

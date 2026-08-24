@@ -2,6 +2,11 @@ import { dbListen, dbSet, auth, getPartnerUid } from '../shared/firebase.js';
 import { fmtCurrency, fmtMonth } from '../shared/format.js';
 import { CATEGORIES } from '../shared/categories.js';
 
+// ── Cascading budget tile state ───────────────────────────
+let _budgetLevel   = 1;   // 1 = group tiles, 2 = category tiles, 3 = detail
+let _budgetGroupId = null;
+let _budgetCatId   = null;
+
 export function renderBudgets(container) {
   const now = new Date();
   let year      = now.getFullYear();
@@ -127,12 +132,12 @@ function renderBudgetList(uid, budgets, txns, year, month) {
   const summaryEl = document.getElementById('budget-summary');
   if (!listEl || !summaryEl) return;
 
-  const now       = new Date();
+  const now        = new Date();
   const daysInMonth = new Date(year, month, 0).getDate();
-  const paceDay   = year === now.getFullYear() && month === now.getMonth() + 1 ? now.getDate() : daysInMonth;
-  const pacePct   = Math.round((paceDay / daysInMonth) * 100);
+  const paceDay    = (year === now.getFullYear() && month === now.getMonth() + 1) ? now.getDate() : daysInMonth;
+  const pacePct    = Math.round((paceDay / daysInMonth) * 100);
+  const prefix     = `${year}-${String(month).padStart(2, '0')}`;
 
-  const prefix = `${year}-${String(month).padStart(2, '0')}`;
   const spentByCat = {};
   for (const t of Object.values(txns)) {
     if (t.amount > 0 && !t.ignored && !t.isTransfer && t.group !== 'transfer' && t.date?.startsWith(prefix)) {
@@ -141,22 +146,17 @@ function renderBudgetList(uid, budgets, txns, year, month) {
   }
 
   const expenseLeaves = CATEGORIES.filter(c => c.parent && !c.isIncome);
-
   const rootMap = new Map();
   for (const leaf of expenseLeaves) {
     if (!rootMap.has(leaf.parent)) rootMap.set(leaf.parent, []);
     rootMap.get(leaf.parent).push(leaf);
   }
-
   const rootCats = CATEGORIES.filter(c => !c.parent && !c.isIncome && c.id !== 'transfer' && rootMap.has(c.id));
 
-  let totalBudgeted = 0;
-  let totalSpent    = 0;
+  // Summary
+  let totalBudgeted = 0, totalSpent = 0;
   for (const [catId, data] of Object.entries(budgets)) {
-    if (data?.monthly > 0) {
-      totalBudgeted += data.monthly;
-      totalSpent    += spentByCat[catId] ?? 0;
-    }
+    if (data?.monthly > 0) { totalBudgeted += data.monthly; totalSpent += spentByCat[catId] ?? 0; }
   }
   const remaining = totalBudgeted - totalSpent;
   summaryEl.innerHTML = `
@@ -165,68 +165,222 @@ function renderBudgetList(uid, budgets, txns, year, month) {
     <span style="color:${remaining >= 0 ? 'var(--brand)' : '#ef4444'}">${fmtCurrency(Math.abs(remaining))} ${remaining >= 0 ? 'left' : 'over'}</span>
   `;
 
-  const legendEl    = document.getElementById('budget-pace-legend');
+  // Pace legend
+  const legendEl = document.getElementById('budget-pace-legend');
   const legendTxtEl = document.getElementById('budget-pace-legend-text');
   const isCurrentMonth = year === now.getFullYear() && month === now.getMonth() + 1;
   if (legendEl && legendTxtEl && isCurrentMonth) {
     legendTxtEl.textContent = `Today's pace — ${pacePct}% of month elapsed`;
     legendEl.style.display = '';
-  } else if (legendEl) {
-    legendEl.style.display = 'none';
+  } else if (legendEl) { legendEl.style.display = 'none'; }
+
+  // Render breadcrumb + level
+  renderBudgetNav(listEl, rootCats, rootMap, budgets, spentByCat, txns, pacePct, year, month, prefix);
+}
+
+function getCatName(catId) {
+  return CATEGORIES.find(c => c.id === catId)?.name ?? catId ?? '';
+}
+
+function renderBudgetNav(listEl, rootCats, rootMap, budgets, spentByCat, txns, pacePct, year, month, prefix) {
+  // Build breadcrumb HTML
+  let bcHtml = '';
+  if (_budgetLevel >= 2) {
+    const grp = rootCats.find(r => r.id === _budgetGroupId);
+    bcHtml = `<div class="bud-breadcrumb">
+      <span class="bud-bc-link" data-level="1">All groups</span>
+      <span class="bud-bc-sep">›</span>
+      <span class="${_budgetLevel === 2 ? 'bud-bc-current' : 'bud-bc-link'}" data-level="2">${grp?.icon ?? ''} ${grp?.name ?? ''}</span>
+      ${_budgetLevel === 3 ? `<span class="bud-bc-sep">›</span><span class="bud-bc-current">${getCatName(_budgetCatId)}</span>` : ''}
+    </div>`;
   }
 
-  let html = '';
-  for (const root of rootCats) {
-    const leaves  = rootMap.get(root.id) ?? [];
-    const visible = leaves.filter(l => (budgets[l.id]?.monthly ?? 0) > 0 || (spentByCat[l.id] ?? 0) > 0);
-    if (!visible.length) continue;
+  listEl.innerHTML = bcHtml + '<div id="bud-level-content"></div>';
 
-    html += `<div class="budget-group">
-      <div class="budget-group-header">
-        <span>${root.icon}</span><span>${root.name}</span>
-      </div>`;
+  listEl.querySelectorAll('.bud-bc-link').forEach(link => {
+    link.addEventListener('click', () => {
+      const lv = parseInt(link.dataset.level);
+      if (lv === 1) { _budgetLevel = 1; _budgetGroupId = null; _budgetCatId = null; }
+      if (lv === 2) { _budgetLevel = 2; _budgetCatId = null; }
+      renderBudgetNav(listEl, rootCats, rootMap, budgets, spentByCat, txns, pacePct, year, month, prefix);
+    });
+  });
 
-    for (const leaf of visible) {
-      const spent     = spentByCat[leaf.id] ?? 0;
-      const limit     = budgets[leaf.id]?.monthly ?? 0;
-      const hasBudget = limit > 0;
-      const pct       = hasBudget ? Math.min(100, Math.round((spent / limit) * 100)) : 0;
-      const barColor  = pct >= 100 ? '#dc2626' : pct >= pacePct + 15 ? '#f59e0b' : '#16a34a';
-      const amtColor  = pct >= 100 ? '#dc2626' : pct >= pacePct + 15 ? '#b45309' : 'var(--text)';
+  const contentEl = document.getElementById('bud-level-content');
+  if (_budgetLevel === 1) renderGroupTiles(contentEl, rootCats, rootMap, budgets, spentByCat, pacePct, listEl, rootCats, txns, year, month, prefix);
+  else if (_budgetLevel === 2) renderCategoryTiles(contentEl, _budgetGroupId, rootMap, budgets, spentByCat, pacePct, listEl, rootCats, txns, year, month, prefix);
+  else if (_budgetLevel === 3) renderCategoryDetail(contentEl, _budgetCatId, budgets, spentByCat, txns, pacePct, year, month, prefix);
+}
 
-      const badge = leaf.isFixed ? ' <span class="budget-badge">Fixed</span>'
-                  : leaf.isAnnual ? ' <span class="budget-badge annual-badge">Annual</span>' : '';
+function renderGroupTiles(el, rootCats, rootMap, budgets, spentByCat, pacePct, listEl, allRoots, txns, year, month, prefix) {
+  const tiles = rootCats.map(root => {
+    const leaves = (rootMap.get(root.id) ?? []).filter(l => (budgets[l.id]?.monthly ?? 0) > 0 || (spentByCat[l.id] ?? 0) > 0);
+    if (!leaves.length) return '';
 
-      const barHtml = hasBudget
-        ? `<div class="budget-bar"><div class="budget-bar-fill" style="width:${pct}%;background:${barColor}"></div><div class="budget-pace-tick" style="left:${pacePct}%"></div></div>`
-        : `<div class="budget-bar" style="background:transparent"></div>`;
+    const groupSpent  = leaves.reduce((s, l) => s + (spentByCat[l.id] ?? 0), 0);
+    const groupBudget = leaves.reduce((s, l) => s + (budgets[l.id]?.monthly ?? 0), 0);
+    const pct         = groupBudget > 0 ? Math.min(100, Math.round((groupSpent / groupBudget) * 100)) : 0;
+    const status      = groupSpent > groupBudget ? 'over' : pct >= pacePct + 10 ? 'warn' : groupBudget > 0 ? 'good' : 'zero';
+    const catCount    = leaves.length;
 
-      const amtHtml = hasBudget
-        ? `<span class="budget-leaf-amt" style="color:${amtColor}">${fmtCurrency(spent)} / <span class="budget-limit" data-cat="${leaf.id}">${fmtCurrency(limit)}</span></span>`
-        : `<span class="budget-leaf-amt"><span class="set-budget-link" data-cat="${leaf.id}">Set</span></span>`;
+    return `<div class="bud-group-tile ${status}" data-group="${root.id}">
+      <div class="bud-tile-hdr">
+        <span class="bud-tile-icon">${root.icon}</span>
+        <span class="bud-tile-cat-count">${catCount} cat${catCount !== 1 ? 's' : ''}</span>
+      </div>
+      <div class="bud-tile-name">${root.name}</div>
+      <div class="bud-tile-amounts">
+        <span class="bud-tile-spent">${fmtCurrency(groupSpent)}</span>
+        <span class="bud-tile-budget"> / ${fmtCurrency(groupBudget)}</span>
+      </div>
+      <div class="bud-tile-bar-track"><div class="bud-tile-bar-fill" style="width:${pct}%"></div></div>
+      <div class="bud-tile-footer">
+        <span class="bud-tile-pct">${pct}% ${status === 'over' ? '↑ over' : status === 'warn' ? '⚠ on pace' : 'spent'}</span>
+        <span class="bud-tile-arrow">›</span>
+      </div>
+    </div>`;
+  }).join('');
 
-      html += `<div class="budget-leaf">
-        <span class="budget-leaf-icon">${leaf.icon}</span>
-        <span class="budget-leaf-name">${leaf.name}${badge}</span>
-        ${barHtml}
-        ${amtHtml}
-      </div>`;
-    }
+  el.innerHTML = `<div class="bud-group-tiles-grid">${tiles || '<p class="empty">No budgets set this month.</p>'}</div>`;
 
-    html += '</div>';
-  }
+  el.querySelectorAll('.bud-group-tile').forEach(tile => {
+    tile.addEventListener('click', () => {
+      _budgetLevel   = 2;
+      _budgetGroupId = tile.dataset.group;
+      renderBudgetNav(listEl, allRoots, rootMap, budgets, spentByCat, txns, pacePct, year, month, prefix);
+    });
+  });
+}
 
-  if (!html) {
-    listEl.innerHTML = '<p class="empty">No budgets set and no spending this month.</p>';
-    return;
-  }
+function renderCategoryTiles(el, groupId, rootMap, budgets, spentByCat, pacePct, listEl, allRoots, txns, year, month, prefix) {
+  const root   = CATEGORIES.find(c => c.id === groupId);
+  const leaves = (rootMap.get(groupId) ?? []).filter(l => (budgets[l.id]?.monthly ?? 0) > 0 || (spentByCat[l.id] ?? 0) > 0);
 
-  listEl.innerHTML = html;
+  const tiles = leaves.map(leaf => {
+    const spent  = spentByCat[leaf.id] ?? 0;
+    const limit  = budgets[leaf.id]?.monthly ?? 0;
+    const pct    = limit > 0 ? Math.min(100, Math.round((spent / limit) * 100)) : 0;
+    const status = spent > limit && limit > 0 ? 'over' : pct >= pacePct + 10 ? 'warn' : limit > 0 ? 'good' : 'zero';
+    const badge  = leaf.isFixed ? '<span class="bud-fixed-badge">Fixed</span>' : leaf.isAnnual ? '<span class="bud-fixed-badge annual">Annual</span>' : '';
 
-  listEl.querySelectorAll('[data-cat]').forEach(el => {
-    el.addEventListener('click', () =>
-      openInlineEdit(el, uid, el.dataset.cat, budgets[el.dataset.cat]?.monthly ?? 0)
-    );
+    return `<div class="bud-cat-tile ${status}" data-cat="${leaf.id}">
+      <div class="bud-tile-hdr">
+        <div class="bud-cat-tile-icon" style="background:${leaf.color ? leaf.color + '28' : 'var(--faint)'}">${leaf.icon}</div>
+        <div class="bud-tile-status-dot"></div>
+      </div>
+      <div class="bud-tile-name">${leaf.name}${badge}</div>
+      <div class="bud-tile-amounts">
+        <span class="bud-tile-spent">${fmtCurrency(spent)}</span>
+        ${limit > 0 ? `<span class="bud-tile-budget"> / ${fmtCurrency(limit)}</span>` : ''}
+      </div>
+      ${limit > 0
+        ? `<div class="bud-tile-bar-track"><div class="bud-tile-bar-fill" style="width:${pct}%"></div></div>
+           <div class="bud-tile-pct">${pct}%${leaf.isFixed ? ' — fixed' : pct >= 100 ? ' ↑ over' : ''}</div>`
+        : `<div class="bud-set-link" data-cat="${leaf.id}">Set budget</div>`
+      }
+    </div>`;
+  }).join('');
+
+  el.innerHTML = `
+    <div class="bud-cat-tiles-subhdr">
+      <span class="bud-cat-tiles-group-name">${root?.icon ?? ''} ${root?.name ?? ''}</span>
+    </div>
+    <div class="bud-cat-tiles-grid">${tiles || '<p class="empty" style="padding:16px">No categories with budgets in this group.</p>'}</div>`;
+
+  el.querySelectorAll('.bud-cat-tile').forEach(tile => {
+    tile.addEventListener('click', () => {
+      _budgetLevel  = 3;
+      _budgetCatId  = tile.dataset.cat;
+      renderBudgetNav(listEl, allRoots, rootMap, budgets, spentByCat, txns, pacePct, year, month, prefix);
+    });
+  });
+
+  el.querySelectorAll('.bud-set-link').forEach(el2 => {
+    el2.addEventListener('click', e => {
+      e.stopPropagation();
+      openInlineEdit(el2, auth.currentUser?.uid, el2.dataset.cat, budgets[el2.dataset.cat]?.monthly ?? 0);
+    });
+  });
+}
+
+function renderCategoryDetail(el, catId, budgets, spentByCat, txns, pacePct, year, month, prefix) {
+  const cat    = CATEGORIES.find(c => c.id === catId) ?? { icon: '?', name: catId, color: '#64748b' };
+  const spent  = spentByCat[catId] ?? 0;
+  const limit  = budgets[catId]?.monthly ?? 0;
+  const pct    = limit > 0 ? Math.min(100, Math.round((spent / limit) * 100)) : 0;
+  const status = spent > limit && limit > 0 ? 'over' : pct >= pacePct + 10 ? 'warn' : limit > 0 ? 'good' : 'zero';
+  const barColor = status === 'over' ? '#ef4444' : status === 'warn' ? '#f59e0b' : '#16a34a';
+
+  // Recent transactions for this category this month
+  const catTxns = Object.values(txns)
+    .filter(t => t.category === catId && t.date?.startsWith(prefix) && !t.ignored && !t.isTransfer)
+    .sort((a, b) => b.date.localeCompare(a.date))
+    .slice(0, 8);
+
+  const txnRows = catTxns.map(t => `
+    <div class="bud-detail-txn-row">
+      <div class="bud-detail-txn-icon">${cat.icon}</div>
+      <div class="bud-detail-txn-name">${t.merchantName ?? t.description ?? 'Unknown'}</div>
+      <div class="bud-detail-txn-date">${t.date?.slice(5) ?? ''}</div>
+      <div class="bud-detail-txn-amt">${fmtCurrency(t.amount)}</div>
+    </div>`).join('') || '<div style="padding:12px 0;font-size:0.8rem;color:var(--muted)">No transactions this month.</div>';
+
+  el.innerHTML = `
+    <div class="bud-detail-hdr">
+      <div class="bud-detail-icon" style="background:${cat.color ? cat.color + '1a' : 'var(--faint)'}">${cat.icon}</div>
+      <div>
+        <div class="bud-detail-name">${cat.name}</div>
+        <div class="bud-detail-meta">${catTxns.length} transaction${catTxns.length !== 1 ? 's' : ''} this month</div>
+      </div>
+      <div class="bud-detail-amounts-right">
+        <div class="bud-detail-spent-big" style="color:${barColor}">${fmtCurrency(spent)}</div>
+        ${limit > 0 ? `<div class="bud-detail-budget-line">of ${fmtCurrency(limit)} budget · ${pct}%</div>` : '<div class="bud-detail-budget-line">no budget set</div>'}
+      </div>
+    </div>
+
+    ${limit > 0 ? `
+    <div class="bud-detail-bar-wrap">
+      <div class="bud-detail-bar-track">
+        <div class="bud-detail-bar-fill" style="width:${pct}%;background:${barColor}"></div>
+        <div class="budget-pace-tick" style="left:${pacePct}%"></div>
+      </div>
+      <div class="bud-detail-bar-label">
+        <span>$0</span>
+        <span style="color:${barColor}">${fmtCurrency(spent)} (${pct}%)</span>
+        <span>${fmtCurrency(limit)}</span>
+      </div>
+    </div>` : ''}
+
+    <div class="bud-detail-stat-grid">
+      <div class="bud-detail-stat-card">
+        <div class="bud-detail-stat-label">This month</div>
+        <div class="bud-detail-stat-val">${fmtCurrency(spent)}</div>
+      </div>
+      <div class="bud-detail-stat-card">
+        <div class="bud-detail-stat-label">Transactions</div>
+        <div class="bud-detail-stat-val">${catTxns.length}</div>
+      </div>
+      ${catTxns.length > 0 ? `
+      <div class="bud-detail-stat-card">
+        <div class="bud-detail-stat-label">Largest</div>
+        <div class="bud-detail-stat-val">${fmtCurrency(Math.max(...catTxns.map(t => t.amount)))}</div>
+      </div>
+      <div class="bud-detail-stat-card">
+        <div class="bud-detail-stat-label">Average</div>
+        <div class="bud-detail-stat-val">${fmtCurrency(spent / catTxns.length)}</div>
+      </div>` : ''}
+    </div>
+
+    <div class="bud-detail-txn-title">Recent transactions</div>
+    ${txnRows}
+    ${catTxns.length === 0 && limit > 0 ? `
+    <div style="margin-top:14px">
+      <button class="bud-edit-budget-btn" data-cat="${catId}">Edit budget (${fmtCurrency(limit)}/mo) →</button>
+    </div>` : ''}
+  `;
+
+  el.querySelector('.bud-edit-budget-btn')?.addEventListener('click', e => {
+    openInlineEdit(e.currentTarget, auth.currentUser?.uid, catId, budgets[catId]?.monthly ?? 0);
   });
 }
 

@@ -1,5 +1,16 @@
 export const CHANGELOG = [
   {
+    version: '1.7.4',
+    date:    '2026-08-24',
+    changes: [
+      'Budgets: redesigned as cascading tiles — click a group tile to see categories, click a category tile to see transactions and stats.',
+      'Transactions: tiered category suggestions for uncategorized rows — tries rules first, then keyword heuristics, then AI (Worker). Shows source badge (Rule / Suggested / AI).',
+      'Transactions: toolbar redesigned — search bar fills full width on mobile (own row), filter and Import/Export on second row; single clean row on desktop.',
+      'Transactions: duplicate review cards now show properly styled name, date/category meta, amount, and account in side-by-side layout.',
+      'Transactions: long merchant descriptions no longer overflow or overlap on mobile (display:block fix).',
+    ],
+  },
+  {
     version: '1.7.3',
     date:    '2026-08-24',
     changes: [
