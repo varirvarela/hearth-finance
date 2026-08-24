@@ -1,5 +1,13 @@
 export const CHANGELOG = [
   {
+    version: '1.7.6',
+    date:    '2026-08-24',
+    changes: [
+      'Budgets: annual view now uses the same 3-level cascading tiles as monthly — group → category → detail with YTD stats and projected end-of-year.',
+      'Budgets: edit button (✎) on every group and category tile — set a group total and it prorates proportionally across all categories in that group.',
+    ],
+  },
+  {
     version: '1.7.5',
     date:    '2026-08-24',
     changes: [
