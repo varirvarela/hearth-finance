@@ -1,5 +1,19 @@
 export const CHANGELOG = [
   {
+    version: '1.7.3',
+    date:    '2026-08-24',
+    changes: [
+      'Accounts: custom date range sync — select "Custom range…" to pick an exact from/to date window.',
+      'Accounts: last sync date now shown beside each account (e.g. "synced Aug 23, 2026").',
+      'Transactions: Import and Export toolbar buttons now show labels instead of bare arrows.',
+      'Transactions: search bar now fills the full available toolbar width.',
+      'Transactions: account/date sub-line no longer wraps or overlaps on mobile.',
+      'Rules tab: redesigned as a category tile grid — click a category to see its rules grouped by match field (description, merchant, account, amount, source).',
+      'Design: budget tiles updated to interactive cascading 3-level design (group → category → detail).',
+      'Design: new rules tiles design file showing cascading category → field-grouped rules view.',
+    ],
+  },
+  {
     version: '1.7.2',
     date:    '2026-08-23',
     changes: [

@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width,initial-scale=1" />
-<title>Hearth Finance · Budget Tiles — Design Recommendation</title>
+<title>Hearth Finance · Budget — Cascading Tiles Design</title>
 <style>
   :root {
     --bg:      #0c1017;
@@ -43,16 +43,13 @@
     border-bottom: 1px solid var(--border);
     margin-bottom: 12px;
   }
-  .sidebar-brand svg { flex-shrink: 0; }
   .nav-item {
     display: flex; align-items: center; gap: 10px;
     padding: 8px 16px; font-size: 0.78rem; color: var(--muted);
-    cursor: pointer; border-radius: 0; border: none; background: none;
+    cursor: pointer; border: none; background: none;
     width: 100%; text-align: left; position: relative;
   }
-  .nav-item.active {
-    color: var(--text); background: rgba(255,255,255,.04);
-  }
+  .nav-item.active { color: var(--text); background: rgba(255,255,255,.04); }
   .nav-item.active::before {
     content: ''; position: absolute; left: 0; top: 6px; bottom: 6px;
     width: 3px; background: var(--brand); border-radius: 0 2px 2px 0;
@@ -62,7 +59,7 @@
   /* ── Budget page ── */
   .budget-page { padding: 0 0 60px; }
 
-  /* Month header */
+  /* Sticky header */
   .budget-header {
     position: sticky; top: 0; z-index: 10;
     background: var(--bg); border-bottom: 1px solid var(--border);
@@ -78,14 +75,11 @@
     font-size: 0.75rem; display: flex; align-items: center; justify-content: center;
   }
   .month-nav-btn:hover { border-color: var(--brand); color: var(--text); }
-  .month-label { font-size: 0.82rem; font-weight: 600; color: var(--text); min-width: 96px; text-align: center; }
-  .view-toggle {
-    display: flex; background: var(--faint); border-radius: 8px; padding: 2px;
-  }
+  .month-label { font-size: 0.82rem; font-weight: 600; min-width: 96px; text-align: center; }
+  .view-toggle { display: flex; background: var(--faint); border-radius: 8px; padding: 2px; }
   .view-btn {
     border: none; border-radius: 6px; padding: 4px 12px;
-    font-size: 0.75rem; cursor: pointer; color: var(--muted); background: none;
-    font-weight: 500;
+    font-size: 0.75rem; cursor: pointer; color: var(--muted); background: none; font-weight: 500;
   }
   .view-btn.active { background: var(--surface); color: var(--text); font-weight: 600; }
 
@@ -105,61 +99,111 @@
   .summary-val.warn { color: var(--amber); }
   .summary-val.over { color: var(--red); }
 
-  /* Overall progress bar */
+  /* Overall bar */
   .overall-bar-wrap { padding: 12px 24px 18px; }
   .overall-bar-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; font-size: 0.75rem; }
   .overall-bar-label { color: var(--muted); }
   .overall-bar-pct { font-weight: 700; color: var(--amber); }
-  .progress-track {
-    height: 6px; background: var(--faint); border-radius: 3px; position: relative; overflow: visible;
-  }
-  .progress-fill {
-    height: 100%; border-radius: 3px; transition: width .3s;
-  }
+  .progress-track { height: 6px; background: var(--faint); border-radius: 3px; position: relative; overflow: visible; }
+  .progress-fill { height: 100%; border-radius: 3px; }
   .progress-fill.good { background: var(--brand); }
   .progress-fill.warn { background: var(--amber); }
   .progress-fill.over { background: var(--red); }
-  .pace-tick {
-    position: absolute; top: -4px; width: 2px; height: 14px;
-    background: rgba(255,255,255,.6); border-radius: 1px;
+  .pace-tick { position: absolute; top: -4px; width: 2px; height: 14px; background: rgba(255,255,255,.6); border-radius: 1px; }
+
+  /* ── BREADCRUMB ───────────────────────────────────────────── */
+  .breadcrumb {
+    display: flex; align-items: center; gap: 6px;
+    padding: 10px 24px 4px;
+    font-size: 0.75rem; color: var(--muted);
+  }
+  .breadcrumb-item { cursor: pointer; }
+  .breadcrumb-item:hover { color: var(--text); text-decoration: underline; }
+  .breadcrumb-sep { color: var(--faint); font-size: 0.65rem; }
+  .breadcrumb-current { color: var(--text); font-weight: 600; cursor: default; }
+  .breadcrumb-current:hover { text-decoration: none; }
+
+  /* ── LEVEL 1: GROUP TILES ─────────────────────────────────── */
+  #level1 { padding: 0 24px 24px; }
+  .level-title {
+    font-size: 0.62rem; font-weight: 700; text-transform: uppercase; letter-spacing: .08em;
+    color: var(--muted); padding: 14px 0 12px;
+    border-bottom: 1px solid var(--border); margin-bottom: 16px;
+  }
+  .group-tile-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 12px;
   }
 
-  /* ── Group section ── */
-  .group-section { padding: 0 24px; margin-bottom: 24px; }
-  .group-hdr {
+  .group-tile {
+    background: var(--card); border: 1px solid var(--border);
+    border-radius: var(--r-lg); padding: 18px 16px 14px;
+    cursor: pointer; position: relative; overflow: hidden;
+    transition: border-color .15s, transform .12s;
+    display: flex; flex-direction: column; gap: 8px;
+  }
+  .group-tile:hover { border-color: rgba(255,255,255,.22); transform: translateY(-2px); }
+  .group-tile::before {
+    content: ''; position: absolute; left: 0; top: 0; bottom: 0;
+    width: 4px; border-radius: var(--r-lg) 0 0 var(--r-lg);
+  }
+  .group-tile.good::before { background: var(--brand); }
+  .group-tile.warn::before { background: var(--amber); }
+  .group-tile.over::before { background: var(--red); }
+  .group-tile.zero::before { background: var(--faint); }
+
+  .group-tile-hdr { display: flex; align-items: center; gap: 10px; }
+  .group-tile-icon { font-size: 1.5rem; }
+  .group-tile-name { font-size: 0.85rem; font-weight: 700; color: var(--text); }
+  .group-tile-count { font-size: 0.65rem; color: var(--muted); margin-left: auto; }
+
+  .group-tile-amounts { display: flex; align-items: baseline; gap: 5px; }
+  .group-tile-spent { font-size: 1.1rem; font-weight: 700; }
+  .good .group-tile-spent  { color: var(--brand); }
+  .warn .group-tile-spent  { color: var(--amber); }
+  .over .group-tile-spent  { color: var(--red); }
+  .group-tile-budget { font-size: 0.72rem; color: var(--muted); }
+  .group-tile-bar-track { height: 4px; background: var(--faint); border-radius: 2px; overflow: hidden; }
+  .group-tile-bar-fill { height: 100%; border-radius: 2px; }
+  .good .group-tile-bar-fill  { background: var(--brand); }
+  .warn .group-tile-bar-fill  { background: var(--amber); }
+  .over .group-tile-bar-fill  { background: var(--red); width: 100% !important; }
+
+  .group-tile-footer { display: flex; align-items: center; justify-content: space-between; }
+  .group-tile-pct { font-size: 0.68rem; font-weight: 600; color: var(--muted); }
+  .over .group-tile-pct { color: var(--red); }
+  .warn .group-tile-pct { color: var(--amber); }
+  .group-tile-arrow { font-size: 0.7rem; color: var(--muted); }
+
+  /* ── LEVEL 2: CATEGORY TILES WITHIN GROUP ─────────────────── */
+  #level2 { display: none; padding: 0 24px 24px; }
+  .group-section-hdr {
     display: flex; align-items: center; justify-content: space-between;
-    padding: 10px 0 10px;
-    border-bottom: 1px solid var(--border);
-    margin-bottom: 12px;
+    padding: 14px 0 12px; border-bottom: 1px solid var(--border);
+    margin-bottom: 16px;
   }
-  .group-hdr-left { display: flex; align-items: center; gap: 8px; }
-  .group-icon { font-size: 1rem; }
-  .group-name { font-size: 0.72rem; font-weight: 700; text-transform: uppercase; letter-spacing: .07em; color: var(--muted); }
-  .group-total-spent { font-size: 0.78rem; font-weight: 700; color: var(--text); }
-  .group-total-budget { font-size: 0.72rem; color: var(--muted); }
+  .group-section-hdr-left { display: flex; align-items: center; gap: 10px; }
+  .group-hdr-icon { font-size: 1.1rem; }
+  .group-hdr-name { font-size: 0.72rem; font-weight: 700; text-transform: uppercase; letter-spacing: .07em; color: var(--muted); }
+  .group-hdr-totals { font-size: 0.82rem; color: var(--text); }
+  .group-hdr-budget-total { font-size: 0.75rem; color: var(--muted); }
 
-  /* ── Tile grid ── */
   .tile-grid {
     display: grid;
     grid-template-columns: repeat(4, 1fr);
     gap: 10px;
+    margin-bottom: 24px;
   }
 
-  /* ── Individual tile ── */
   .cat-tile {
-    background: var(--card);
-    border: 1px solid var(--border);
-    border-radius: var(--r-lg);
-    padding: 14px 12px 12px;
+    background: var(--card); border: 1px solid var(--border);
+    border-radius: var(--r-lg); padding: 14px 12px 12px;
     display: flex; flex-direction: column; gap: 6px;
-    cursor: pointer;
+    cursor: pointer; position: relative; overflow: hidden;
     transition: border-color .15s, transform .1s;
-    position: relative;
-    overflow: hidden;
   }
-  .cat-tile:hover { border-color: rgba(255,255,255,.18); transform: translateY(-1px); }
-
-  /* Left accent bar = status color */
+  .cat-tile:hover { border-color: rgba(255,255,255,.22); transform: translateY(-1px); }
   .cat-tile::before {
     content: ''; position: absolute; left: 0; top: 0; bottom: 0;
     width: 3px; border-radius: var(--r-lg) 0 0 var(--r-lg);
@@ -170,41 +214,81 @@
   .cat-tile.zero::before { background: var(--faint); }
 
   .tile-icon-row { display: flex; align-items: center; justify-content: space-between; }
-  .tile-icon {
-    width: 36px; height: 36px; border-radius: 10px;
-    display: flex; align-items: center; justify-content: center;
-    font-size: 1.1rem;
-  }
-  .tile-status-dot {
-    width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0;
-  }
+  .tile-icon { width: 36px; height: 36px; border-radius: 10px; display: flex; align-items: center; justify-content: center; font-size: 1.1rem; }
+  .tile-status-dot { width: 7px; height: 7px; border-radius: 50%; }
   .good .tile-status-dot  { background: var(--brand); }
   .warn .tile-status-dot  { background: var(--amber); }
   .over .tile-status-dot  { background: var(--red); box-shadow: 0 0 6px rgba(239,68,68,.6); }
   .zero .tile-status-dot  { background: var(--faint); }
 
-  .tile-name {
-    font-size: 0.72rem; font-weight: 600; color: var(--text);
-    line-height: 1.2; margin-top: 4px;
-  }
-  .tile-amounts {
-    display: flex; align-items: baseline; gap: 4px;
-  }
+  .tile-name { font-size: 0.72rem; font-weight: 600; color: var(--text); line-height: 1.2; margin-top: 4px; }
+  .tile-amounts { display: flex; align-items: baseline; gap: 4px; }
   .tile-spent { font-size: 0.88rem; font-weight: 700; color: var(--text); }
   .tile-budget { font-size: 0.65rem; color: var(--muted); }
-  .tile-bar-track {
-    height: 3px; background: var(--faint); border-radius: 2px; overflow: hidden;
-  }
+  .tile-bar-track { height: 3px; background: var(--faint); border-radius: 2px; overflow: hidden; }
   .tile-bar-fill { height: 100%; border-radius: 2px; }
   .good .tile-bar-fill  { background: var(--brand); }
   .warn .tile-bar-fill  { background: var(--amber); }
   .over .tile-bar-fill  { background: var(--red); }
   .zero .tile-bar-fill  { background: var(--faint); }
   .tile-pct { font-size: 0.62rem; color: var(--muted); font-weight: 600; }
-  .over .tile-pct  { color: var(--red); font-weight: 700; }
-  .warn .tile-pct  { color: var(--amber); }
+  .over .tile-pct { color: var(--red); font-weight: 700; }
+  .warn .tile-pct { color: var(--amber); }
 
-  /* ── Design notes panel ── */
+  /* ── LEVEL 3: CATEGORY DETAIL ──────────────────────────────── */
+  #level3 { display: none; padding: 0 24px 24px; }
+  .detail-hdr {
+    display: flex; align-items: center; gap: 12px;
+    padding: 14px 0 16px; border-bottom: 1px solid var(--border);
+    margin-bottom: 16px;
+  }
+  .detail-icon { width: 44px; height: 44px; border-radius: 12px; display: flex; align-items: center; justify-content: center; font-size: 1.4rem; }
+  .detail-name { font-size: 1rem; font-weight: 700; }
+  .detail-meta { font-size: 0.75rem; color: var(--muted); margin-top: 2px; }
+  .detail-amounts-right { margin-left: auto; text-align: right; }
+  .detail-spent-big { font-size: 1.3rem; font-weight: 700; }
+  .detail-budget-line { font-size: 0.72rem; color: var(--muted); }
+
+  .detail-bar-wrap { margin-bottom: 20px; }
+  .detail-bar-track { height: 8px; background: var(--faint); border-radius: 4px; position: relative; overflow: visible; margin-bottom: 4px; }
+  .detail-bar-fill { height: 100%; border-radius: 4px; }
+  .detail-bar-label { display: flex; justify-content: space-between; font-size: 0.68rem; color: var(--muted); }
+
+  .detail-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-bottom: 22px; }
+  .detail-stat-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--r-md); padding: 12px 14px; }
+  .detail-stat-label { font-size: 0.62rem; font-weight: 700; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); margin-bottom: 5px; }
+  .detail-stat-val { font-size: 0.92rem; font-weight: 700; }
+
+  /* Mini sparkline chart */
+  .detail-chart-wrap { background: var(--surface); border: 1px solid var(--border); border-radius: var(--r-lg); padding: 14px 16px; margin-bottom: 20px; }
+  .detail-chart-title { font-size: 0.7rem; font-weight: 600; color: var(--muted); margin-bottom: 12px; text-transform: uppercase; letter-spacing: .06em; }
+  .detail-chart { display: flex; align-items: flex-end; gap: 6px; height: 54px; }
+  .chart-bar-col { display: flex; flex-direction: column; align-items: center; gap: 4px; flex: 1; }
+  .chart-bar {
+    width: 100%; border-radius: 4px 4px 0 0;
+    background: var(--brand); opacity: .6;
+    transition: opacity .15s; cursor: default;
+  }
+  .chart-bar.current { opacity: 1; background: var(--brand); }
+  .chart-bar.over { background: var(--red); opacity: 1; }
+  .chart-month { font-size: 0.55rem; color: var(--muted); }
+
+  /* Recent transactions */
+  .detail-txn-title { font-size: 0.7rem; font-weight: 700; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); margin-bottom: 10px; }
+  .detail-txn-row {
+    display: flex; align-items: center; gap: 10px;
+    padding: 9px 0; border-bottom: 1px solid var(--border);
+    font-size: 0.8rem;
+  }
+  .detail-txn-icon { font-size: 0.9rem; width: 28px; height: 28px; border-radius: 8px; background: var(--card); display: flex; align-items: center; justify-content: center; }
+  .detail-txn-name { flex: 1; font-weight: 500; }
+  .detail-txn-date { font-size: 0.68rem; color: var(--muted); }
+  .detail-txn-amt { font-weight: 700; }
+  .detail-txn-amt.expense { color: var(--text); }
+  .detail-all-btn { display: block; text-align: center; margin-top: 12px; font-size: 0.75rem; color: var(--brand); text-decoration: none; cursor: pointer; }
+  .detail-all-btn:hover { text-decoration: underline; }
+
+  /* ── Design notes ── */
   .design-notes {
     background: var(--surface); border: 1px solid var(--brand);
     border-radius: var(--r-lg); margin: 0 24px 24px;
@@ -216,20 +300,30 @@
   .design-notes li::before { content: '→'; position: absolute; left: 0; color: var(--brand); }
   .design-notes li strong { color: var(--text); }
 
-  /* annotation badge */
-  .annotation {
+  .level-badge {
     display: inline-flex; align-items: center;
     background: rgba(22,163,74,.15); border: 1px solid rgba(22,163,74,.35);
     color: var(--brand); font-size: 0.62rem; font-weight: 700;
-    border-radius: 4px; padding: 1px 6px; letter-spacing: .04em;
-    margin-left: 6px; vertical-align: middle;
+    border-radius: 4px; padding: 2px 7px; letter-spacing: .04em;
+    margin-left: 7px; vertical-align: middle;
   }
+  .level-badge.l2 { background: rgba(99,102,241,.15); border-color: rgba(99,102,241,.35); color: #818cf8; }
+  .level-badge.l3 { background: rgba(245,158,11,.12); border-color: rgba(245,158,11,.3); color: var(--amber); }
+
+  /* Transition animation hint */
+  .view-anim-note {
+    display: flex; align-items: center; gap: 8px;
+    background: rgba(22,163,74,.08); border: 1px solid rgba(22,163,74,.2);
+    border-radius: 8px; padding: 8px 14px; margin: 0 24px 16px;
+    font-size: 0.73rem; color: var(--muted);
+  }
+  .view-anim-note strong { color: var(--text); }
 </style>
 </head>
 <body>
 <div class="app-shell">
 
-  <!-- Desktop sidebar (reference) -->
+  <!-- Sidebar -->
   <nav class="sidebar">
     <div class="sidebar-brand">
       <svg width="22" height="22" viewBox="0 0 20 20" fill="none">
@@ -249,11 +343,10 @@
     <button class="nav-item">⋯ Settings</button>
   </nav>
 
-  <!-- Main content -->
   <main class="main">
     <div class="budget-page">
 
-      <!-- Page header -->
+      <!-- Sticky header — shared across all levels -->
       <div class="budget-header">
         <span class="budget-title">Budgets</span>
         <div class="month-nav">
@@ -267,7 +360,7 @@
         </div>
       </div>
 
-      <!-- Summary cards -->
+      <!-- Summary cards — always visible -->
       <div class="budget-summary">
         <div class="summary-card">
           <div class="summary-label">Spent</div>
@@ -283,7 +376,7 @@
         </div>
       </div>
 
-      <!-- Overall bar -->
+      <!-- Overall bar — always visible -->
       <div class="overall-bar-wrap">
         <div class="overall-bar-header">
           <span class="overall-bar-label">Overall spending pace</span>
@@ -295,326 +388,448 @@
         </div>
       </div>
 
-      <!-- ═══════════════════════════════════════════ -->
-      <!-- GROUP: Casa -->
-      <!-- ═══════════════════════════════════════════ -->
-      <div class="group-section">
-        <div class="group-hdr">
-          <div class="group-hdr-left">
-            <span class="group-icon">🏡</span>
-            <span class="group-name">Casa</span>
-          </div>
-          <div>
-            <span class="group-total-spent">$12,800</span>
-            <span class="group-total-budget"> / $14,210</span>
-          </div>
-        </div>
-        <div class="tile-grid">
-
-          <!-- Mortgage — Fixed, on track -->
-          <div class="cat-tile good">
-            <div class="tile-icon-row">
-              <div class="tile-icon" style="background:#16a34a28">🏠</div>
-              <div class="tile-status-dot"></div>
-            </div>
-            <div class="tile-name">Mortgage</div>
-            <div class="tile-amounts">
-              <span class="tile-spent">$10,300</span>
-              <span class="tile-budget">/ $10,300</span>
-            </div>
-            <div class="tile-bar-track"><div class="tile-bar-fill" style="width:100%"></div></div>
-            <div class="tile-pct">100% — fixed</div>
-          </div>
-
-          <!-- Utilities — Over pace -->
-          <div class="cat-tile warn">
-            <div class="tile-icon-row">
-              <div class="tile-icon" style="background:#f59e0b28">💡</div>
-              <div class="tile-status-dot"></div>
-            </div>
-            <div class="tile-name">Utilities</div>
-            <div class="tile-amounts">
-              <span class="tile-spent">$540</span>
-              <span class="tile-budget">/ $620</span>
-            </div>
-            <div class="tile-bar-track"><div class="tile-bar-fill" style="width:87%"></div></div>
-            <div class="tile-pct">87% · on pace ⚠</div>
-          </div>
-
-          <!-- Cleaning — Good -->
-          <div class="cat-tile good">
-            <div class="tile-icon-row">
-              <div class="tile-icon" style="background:#0ea5e928">🧹</div>
-              <div class="tile-status-dot"></div>
-            </div>
-            <div class="tile-name">Cleaning</div>
-            <div class="tile-amounts">
-              <span class="tile-spent">$1,200</span>
-              <span class="tile-budget">/ $2,692</span>
-            </div>
-            <div class="tile-bar-track"><div class="tile-bar-fill" style="width:45%"></div></div>
-            <div class="tile-pct">45% · under pace</div>
-          </div>
-
-          <!-- Home repairs — Zero spent -->
-          <div class="cat-tile zero">
-            <div class="tile-icon-row">
-              <div class="tile-icon" style="background:#33415528">🔧</div>
-              <div class="tile-status-dot"></div>
-            </div>
-            <div class="tile-name">Repairs</div>
-            <div class="tile-amounts">
-              <span class="tile-spent">$0</span>
-              <span class="tile-budget">/ $458</span>
-            </div>
-            <div class="tile-bar-track"><div class="tile-bar-fill" style="width:0%"></div></div>
-            <div class="tile-pct">0% spent</div>
-          </div>
-
-          <!-- Telecom -->
-          <div class="cat-tile good">
-            <div class="tile-icon-row">
-              <div class="tile-icon" style="background:#8b5cf628">📡</div>
-              <div class="tile-status-dot"></div>
-            </div>
-            <div class="tile-name">Telecom</div>
-            <div class="tile-amounts">
-              <span class="tile-spent">$240</span>
-              <span class="tile-budget">/ $240</span>
-            </div>
-            <div class="tile-bar-track"><div class="tile-bar-fill" style="width:100%"></div></div>
-            <div class="tile-pct">100% — fixed</div>
-          </div>
-
-          <!-- Insurance -->
-          <div class="cat-tile zero">
-            <div class="tile-icon-row">
-              <div class="tile-icon" style="background:#06b6d428">🛡</div>
-              <div class="tile-status-dot"></div>
-            </div>
-            <div class="tile-name">Insurance</div>
-            <div class="tile-amounts">
-              <span class="tile-spent">$0</span>
-              <span class="tile-budget">/ $63</span>
-            </div>
-            <div class="tile-bar-track"><div class="tile-bar-fill" style="width:0%"></div></div>
-            <div class="tile-pct">annual — not yet</div>
-          </div>
-
-        </div>
+      <!-- Breadcrumb (hidden at Level 1) -->
+      <div class="breadcrumb" id="breadcrumb" style="display:none">
+        <span class="breadcrumb-item" id="bc-l1" onclick="showLevel(1)">All groups</span>
+        <span class="breadcrumb-sep" id="bc-sep1">›</span>
+        <span class="breadcrumb-item breadcrumb-current" id="bc-l2">Casa</span>
+        <span class="breadcrumb-sep" id="bc-sep2" style="display:none">›</span>
+        <span class="breadcrumb-item breadcrumb-current" id="bc-l3" style="display:none">Utilities</span>
       </div>
 
-      <!-- ═══════════════════════════════════════════ -->
-      <!-- GROUP: Kids -->
-      <!-- ═══════════════════════════════════════════ -->
-      <div class="group-section">
-        <div class="group-hdr">
-          <div class="group-hdr-left">
-            <span class="group-icon">👧</span>
-            <span class="group-name">Kids</span>
+      <!-- ═══════════════════════════════════════════════════ -->
+      <!-- LEVEL 1 — Group tiles (one per spending group)      -->
+      <!-- ═══════════════════════════════════════════════════ -->
+      <div id="level1">
+        <div class="view-anim-note">
+          <span>💡</span>
+          <span><strong>Click any group tile</strong> to drill down into categories · <strong>Click a category tile</strong> for transaction detail</span>
+        </div>
+        <div style="padding: 0 24px">
+          <div class="level-title">Spending Groups <span class="level-badge">Level 1</span></div>
+          <div class="group-tile-grid">
+
+            <!-- Casa -->
+            <div class="group-tile good" onclick="showLevel(2,'casa')">
+              <div class="group-tile-hdr">
+                <span class="group-tile-icon">🏡</span>
+                <span class="group-tile-name">Casa</span>
+                <span class="group-tile-count">6 categories</span>
+              </div>
+              <div class="group-tile-amounts">
+                <span class="group-tile-spent">$12,800</span>
+                <span class="group-tile-budget">/ $14,210</span>
+              </div>
+              <div class="group-tile-bar-track"><div class="group-tile-bar-fill" style="width:90%"></div></div>
+              <div class="group-tile-footer">
+                <span class="group-tile-pct">90% spent · 2 fixed</span>
+                <span class="group-tile-arrow">›</span>
+              </div>
+            </div>
+
+            <!-- Kids — over -->
+            <div class="group-tile over" onclick="showLevel(2,'kids')">
+              <div class="group-tile-hdr">
+                <span class="group-tile-icon">👧</span>
+                <span class="group-tile-name">Kids</span>
+                <span class="group-tile-count">2 categories</span>
+              </div>
+              <div class="group-tile-amounts">
+                <span class="group-tile-spent">$2,850</span>
+                <span class="group-tile-budget">/ $2,775</span>
+              </div>
+              <div class="group-tile-bar-track"><div class="group-tile-bar-fill" style="width:100%"></div></div>
+              <div class="group-tile-footer">
+                <span class="group-tile-pct">103% ↑ over budget</span>
+                <span class="group-tile-arrow">›</span>
+              </div>
+            </div>
+
+            <!-- Salidas — warn -->
+            <div class="group-tile warn" onclick="showLevel(2,'salidas')">
+              <div class="group-tile-hdr">
+                <span class="group-tile-icon">🍽</span>
+                <span class="group-tile-name">Salidas</span>
+                <span class="group-tile-count">2 categories</span>
+              </div>
+              <div class="group-tile-amounts">
+                <span class="group-tile-spent">$980</span>
+                <span class="group-tile-budget">/ $1,967</span>
+              </div>
+              <div class="group-tile-bar-track"><div class="group-tile-bar-fill" style="width:50%"></div></div>
+              <div class="group-tile-footer">
+                <span class="group-tile-pct">50% · on pace</span>
+                <span class="group-tile-arrow">›</span>
+              </div>
+            </div>
+
+            <!-- Auto -->
+            <div class="group-tile good" onclick="showLevel(2,'auto')">
+              <div class="group-tile-hdr">
+                <span class="group-tile-icon">🚗</span>
+                <span class="group-tile-name">Auto</span>
+                <span class="group-tile-count">3 categories</span>
+              </div>
+              <div class="group-tile-amounts">
+                <span class="group-tile-spent">$820</span>
+                <span class="group-tile-budget">/ $808</span>
+              </div>
+              <div class="group-tile-bar-track"><div class="group-tile-bar-fill" style="width:100%"></div></div>
+              <div class="group-tile-footer">
+                <span class="group-tile-pct">101% · just over</span>
+                <span class="group-tile-arrow">›</span>
+              </div>
+            </div>
+
+            <!-- Shopping — good -->
+            <div class="group-tile good" onclick="showLevel(2,'shopping')">
+              <div class="group-tile-hdr">
+                <span class="group-tile-icon">🛍</span>
+                <span class="group-tile-name">Shopping</span>
+                <span class="group-tile-count">2 categories</span>
+              </div>
+              <div class="group-tile-amounts">
+                <span class="group-tile-spent">$1,340</span>
+                <span class="group-tile-budget">/ $4,000</span>
+              </div>
+              <div class="group-tile-bar-track"><div class="group-tile-bar-fill" style="width:34%"></div></div>
+              <div class="group-tile-footer">
+                <span class="group-tile-pct">34% · under pace</span>
+                <span class="group-tile-arrow">›</span>
+              </div>
+            </div>
+
+            <!-- Travel — zero -->
+            <div class="group-tile zero" onclick="showLevel(2,'travel')">
+              <div class="group-tile-hdr">
+                <span class="group-tile-icon">✈</span>
+                <span class="group-tile-name">Travel</span>
+                <span class="group-tile-count">3 categories</span>
+              </div>
+              <div class="group-tile-amounts">
+                <span class="group-tile-spent">$0</span>
+                <span class="group-tile-budget">/ $833</span>
+              </div>
+              <div class="group-tile-bar-track"><div class="group-tile-bar-fill" style="width:0%"></div></div>
+              <div class="group-tile-footer">
+                <span class="group-tile-pct">0% — no spend this month</span>
+                <span class="group-tile-arrow">›</span>
+              </div>
+            </div>
+
+          </div>
+        </div>
+      </div><!-- /level1 -->
+
+      <!-- ═══════════════════════════════════════════════════ -->
+      <!-- LEVEL 2 — Category tiles within a group             -->
+      <!-- (Only "Casa" shown; others follow same pattern)     -->
+      <!-- ═══════════════════════════════════════════════════ -->
+      <div id="level2" data-group="">
+
+        <div class="group-section-hdr" style="margin:0 24px">
+          <div class="group-section-hdr-left">
+            <span class="group-hdr-icon" id="l2-icon">🏡</span>
+            <span class="group-hdr-name" id="l2-name">Casa</span>
+            <span class="level-badge l2">Level 2</span>
           </div>
           <div>
-            <span class="group-total-spent">$2,850</span>
-            <span class="group-total-budget"> / $2,775</span>
+            <span class="group-hdr-totals" id="l2-spent">$12,800</span>
+            <span class="group-hdr-budget-total" id="l2-budget"> / $14,210</span>
           </div>
         </div>
-        <div class="tile-grid">
 
-          <!-- Tuition — Over budget -->
-          <div class="cat-tile over">
-            <div class="tile-icon-row">
-              <div class="tile-icon" style="background:#ef444428">🎓</div>
-              <div class="tile-status-dot"></div>
+        <!-- Casa categories (rendered here; in app this is dynamic) -->
+        <div style="padding: 0 24px">
+          <div id="l2-tiles" class="tile-grid" style="margin-top:16px">
+
+            <div class="cat-tile good" onclick="showLevel(3,'mortgage')">
+              <div class="tile-icon-row">
+                <div class="tile-icon" style="background:#16a34a28">🏠</div>
+                <div class="tile-status-dot"></div>
+              </div>
+              <div class="tile-name">Mortgage</div>
+              <div class="tile-amounts"><span class="tile-spent">$10,300</span><span class="tile-budget">/ $10,300</span></div>
+              <div class="tile-bar-track"><div class="tile-bar-fill" style="width:100%"></div></div>
+              <div class="tile-pct">100% — fixed</div>
             </div>
-            <div class="tile-name">Tuition & School</div>
-            <div class="tile-amounts">
-              <span class="tile-spent">$975</span>
-              <span class="tile-budget">/ $900</span>
+
+            <div class="cat-tile warn" onclick="showLevel(3,'utilities')">
+              <div class="tile-icon-row">
+                <div class="tile-icon" style="background:#f59e0b28">💡</div>
+                <div class="tile-status-dot"></div>
+              </div>
+              <div class="tile-name">Utilities</div>
+              <div class="tile-amounts"><span class="tile-spent">$540</span><span class="tile-budget">/ $620</span></div>
+              <div class="tile-bar-track"><div class="tile-bar-fill" style="width:87%"></div></div>
+              <div class="tile-pct">87% · on pace ⚠</div>
             </div>
-            <div class="tile-bar-track"><div class="tile-bar-fill" style="width:100%"></div></div>
-            <div class="tile-pct">108% ↑ over budget</div>
+
+            <div class="cat-tile good" onclick="showLevel(3,'cleaning')">
+              <div class="tile-icon-row">
+                <div class="tile-icon" style="background:#0ea5e928">🧹</div>
+                <div class="tile-status-dot"></div>
+              </div>
+              <div class="tile-name">Cleaning</div>
+              <div class="tile-amounts"><span class="tile-spent">$1,200</span><span class="tile-budget">/ $2,692</span></div>
+              <div class="tile-bar-track"><div class="tile-bar-fill" style="width:45%"></div></div>
+              <div class="tile-pct">45% · under pace</div>
+            </div>
+
+            <div class="cat-tile zero" onclick="showLevel(3,'repairs')">
+              <div class="tile-icon-row">
+                <div class="tile-icon" style="background:#33415528">🔧</div>
+                <div class="tile-status-dot"></div>
+              </div>
+              <div class="tile-name">Repairs</div>
+              <div class="tile-amounts"><span class="tile-spent">$0</span><span class="tile-budget">/ $458</span></div>
+              <div class="tile-bar-track"><div class="tile-bar-fill" style="width:0%"></div></div>
+              <div class="tile-pct">0% spent</div>
+            </div>
+
+            <div class="cat-tile good" onclick="showLevel(3,'telecom')">
+              <div class="tile-icon-row">
+                <div class="tile-icon" style="background:#8b5cf628">📡</div>
+                <div class="tile-status-dot"></div>
+              </div>
+              <div class="tile-name">Telecom</div>
+              <div class="tile-amounts"><span class="tile-spent">$240</span><span class="tile-budget">/ $240</span></div>
+              <div class="tile-bar-track"><div class="tile-bar-fill" style="width:100%"></div></div>
+              <div class="tile-pct">100% — fixed</div>
+            </div>
+
+            <div class="cat-tile zero" onclick="showLevel(3,'insurance')">
+              <div class="tile-icon-row">
+                <div class="tile-icon" style="background:#06b6d428">🛡</div>
+                <div class="tile-status-dot"></div>
+              </div>
+              <div class="tile-name">Insurance</div>
+              <div class="tile-amounts"><span class="tile-spent">$0</span><span class="tile-budget">/ $63</span></div>
+              <div class="tile-bar-track"><div class="tile-bar-fill" style="width:0%"></div></div>
+              <div class="tile-pct">annual — not yet</div>
+            </div>
+
+          </div>
+        </div>
+      </div><!-- /level2 -->
+
+      <!-- ═══════════════════════════════════════════════════ -->
+      <!-- LEVEL 3 — Category detail                           -->
+      <!-- (Utilities shown as example)                        -->
+      <!-- ═══════════════════════════════════════════════════ -->
+      <div id="level3">
+        <div style="padding: 0 24px">
+
+          <!-- Detail header -->
+          <div class="detail-hdr">
+            <div class="detail-icon" style="background:#f59e0b1a" id="l3-icon">💡</div>
+            <div>
+              <div class="detail-name" id="l3-name">Utilities</div>
+              <div class="detail-meta">Casa · <span id="l3-meta">6 transactions this month</span></div>
+            </div>
+            <div class="detail-amounts-right">
+              <div class="detail-spent-big warn" id="l3-spent">$540</div>
+              <div class="detail-budget-line" id="l3-budget">budget $620 · 87% used</div>
+            </div>
           </div>
 
-          <!-- Activities — Amber -->
-          <div class="cat-tile warn">
-            <div class="tile-icon-row">
-              <div class="tile-icon" style="background:#f59e0b28">🏃</div>
-              <div class="tile-status-dot"></div>
+          <!-- Progress bar -->
+          <div class="detail-bar-wrap">
+            <div class="detail-bar-track">
+              <div class="detail-bar-fill warn" style="width:87%;background:var(--amber)"></div>
+              <div class="pace-tick" style="left:68%"></div>
             </div>
-            <div class="tile-name">Activities</div>
-            <div class="tile-amounts">
-              <span class="tile-spent">$1,875</span>
-              <span class="tile-budget">/ $1,875</span>
+            <div class="detail-bar-label">
+              <span>$0</span>
+              <span style="color:var(--amber)">$540 spent (87%)</span>
+              <span>$620 budget</span>
             </div>
-            <div class="tile-bar-track"><div class="tile-bar-fill" style="width:100%"></div></div>
-            <div class="tile-pct">100% — on pace</div>
           </div>
 
-        </div>
-      </div>
+          <!-- Stat cards -->
+          <div class="detail-grid">
+            <div class="detail-stat-card">
+              <div class="detail-stat-label">Avg per month</div>
+              <div class="detail-stat-val">$495</div>
+            </div>
+            <div class="detail-stat-card">
+              <div class="detail-stat-label">vs last month</div>
+              <div class="detail-stat-val warn">+$89</div>
+            </div>
+            <div class="detail-stat-card">
+              <div class="detail-stat-label">Largest this month</div>
+              <div class="detail-stat-val">$220</div>
+            </div>
+            <div class="detail-stat-card">
+              <div class="detail-stat-label">Pace projection</div>
+              <div class="detail-stat-val warn">~$628 by month-end</div>
+            </div>
+          </div>
 
-      <!-- ═══════════════════════════════════════════ -->
-      <!-- GROUP: Salidas -->
-      <!-- ═══════════════════════════════════════════ -->
-      <div class="group-section">
-        <div class="group-hdr">
-          <div class="group-hdr-left">
-            <span class="group-icon">🍽</span>
-            <span class="group-name">Salidas</span>
-          </div>
-          <div>
-            <span class="group-total-spent">$980</span>
-            <span class="group-total-budget"> / $1,967</span>
-          </div>
-        </div>
-        <div class="tile-grid">
-          <div class="cat-tile good">
-            <div class="tile-icon-row">
-              <div class="tile-icon" style="background:#16a34a28">🥂</div>
-              <div class="tile-status-dot"></div>
+          <!-- Sparkline chart -->
+          <div class="detail-chart-wrap">
+            <div class="detail-chart-title">Monthly spend — last 6 months <span class="level-badge l3">Level 3</span></div>
+            <div class="detail-chart">
+              <div class="chart-bar-col">
+                <div class="chart-bar" style="height:34px"></div>
+                <div class="chart-month">Mar</div>
+              </div>
+              <div class="chart-bar-col">
+                <div class="chart-bar" style="height:40px"></div>
+                <div class="chart-month">Apr</div>
+              </div>
+              <div class="chart-bar-col">
+                <div class="chart-bar" style="height:38px"></div>
+                <div class="chart-month">May</div>
+              </div>
+              <div class="chart-bar-col">
+                <div class="chart-bar" style="height:44px"></div>
+                <div class="chart-month">Jun</div>
+              </div>
+              <div class="chart-bar-col">
+                <div class="chart-bar" style="height:36px"></div>
+                <div class="chart-month">Jul</div>
+              </div>
+              <div class="chart-bar-col">
+                <div class="chart-bar current" style="height:47px"></div>
+                <div class="chart-month" style="color:var(--brand)">Aug</div>
+              </div>
             </div>
-            <div class="tile-name">Dining & Bars</div>
-            <div class="tile-amounts">
-              <span class="tile-spent">$760</span>
-              <span class="tile-budget">/ $1,800</span>
-            </div>
-            <div class="tile-bar-track"><div class="tile-bar-fill" style="width:42%"></div></div>
-            <div class="tile-pct">42% · under pace</div>
           </div>
-          <div class="cat-tile zero">
-            <div class="tile-icon-row">
-              <div class="tile-icon" style="background:#33415528">🎭</div>
-              <div class="tile-status-dot"></div>
-            </div>
-            <div class="tile-name">Events</div>
-            <div class="tile-amounts">
-              <span class="tile-spent">$220</span>
-              <span class="tile-budget">/ $167</span>
-            </div>
-            <div class="tile-bar-track"><div class="tile-bar-fill warn" style="width:100%;background:var(--amber)"></div></div>
-            <div class="tile-pct">132% — over</div>
-          </div>
-        </div>
-      </div>
 
-      <!-- ═══════════════════════════════════════════ -->
-      <!-- GROUP: Auto -->
-      <!-- ═══════════════════════════════════════════ -->
-      <div class="group-section">
-        <div class="group-hdr">
-          <div class="group-hdr-left">
-            <span class="group-icon">🚗</span>
-            <span class="group-name">Auto</span>
+          <!-- Recent transactions -->
+          <div class="detail-txn-title">Recent transactions</div>
+          <div class="detail-txn-row">
+            <div class="detail-txn-icon">💡</div>
+            <div class="detail-txn-name">CFE Luz</div>
+            <div class="detail-txn-date">Aug 18</div>
+            <div class="detail-txn-amt expense">$220</div>
           </div>
-          <div>
-            <span class="group-total-spent">$820</span>
-            <span class="group-total-budget"> / $808</span>
+          <div class="detail-txn-row">
+            <div class="detail-txn-icon">💧</div>
+            <div class="detail-txn-name">SACMEX Agua</div>
+            <div class="detail-txn-date">Aug 14</div>
+            <div class="detail-txn-amt expense">$85</div>
           </div>
-        </div>
-        <div class="tile-grid">
-          <div class="cat-tile good">
-            <div class="tile-icon-row">
-              <div class="tile-icon" style="background:#16a34a28">🏦</div>
-              <div class="tile-status-dot"></div>
-            </div>
-            <div class="tile-name">Car Payment</div>
-            <div class="tile-amounts">
-              <span class="tile-spent">$460</span>
-              <span class="tile-budget">/ $460</span>
-            </div>
-            <div class="tile-bar-track"><div class="tile-bar-fill" style="width:100%"></div></div>
-            <div class="tile-pct">100% — fixed</div>
+          <div class="detail-txn-row">
+            <div class="detail-txn-icon">🔥</div>
+            <div class="detail-txn-name">Gas Natural</div>
+            <div class="detail-txn-date">Aug 10</div>
+            <div class="detail-txn-amt expense">$140</div>
           </div>
-          <div class="cat-tile good">
-            <div class="tile-icon-row">
-              <div class="tile-icon" style="background:#16a34a28">⛽</div>
-              <div class="tile-status-dot"></div>
-            </div>
-            <div class="tile-name">Gas & Tolls</div>
-            <div class="tile-amounts">
-              <span class="tile-spent">$185</span>
-              <span class="tile-budget">/ $265</span>
-            </div>
-            <div class="tile-bar-track"><div class="tile-bar-fill" style="width:70%"></div></div>
-            <div class="tile-pct">70% · under pace</div>
+          <div class="detail-txn-row">
+            <div class="detail-txn-icon">💡</div>
+            <div class="detail-txn-name">Telmex Internet</div>
+            <div class="detail-txn-date">Aug 5</div>
+            <div class="detail-txn-amt expense">$95</div>
           </div>
-          <div class="cat-tile zero">
-            <div class="tile-icon-row">
-              <div class="tile-icon" style="background:#33415528">🔩</div>
-              <div class="tile-status-dot"></div>
-            </div>
-            <div class="tile-name">Service</div>
-            <div class="tile-amounts">
-              <span class="tile-spent">$175</span>
-              <span class="tile-budget">/ $83</span>
-            </div>
-            <div class="tile-bar-track"><div class="tile-bar-fill" style="width:100%;background:var(--amber)"></div></div>
-            <div class="tile-pct">211% — over (annual)</div>
-          </div>
-        </div>
-      </div>
+          <div class="detail-all-btn">View all transactions in Utilities →</div>
 
-      <!-- ═══════════════════════════════════════════ -->
-      <!-- Shopping -->
-      <!-- ═══════════════════════════════════════════ -->
-      <div class="group-section">
-        <div class="group-hdr">
-          <div class="group-hdr-left">
-            <span class="group-icon">🛍</span>
-            <span class="group-name">Shopping</span>
-          </div>
-          <div>
-            <span class="group-total-spent">$1,340</span>
-            <span class="group-total-budget"> / $2,000</span>
-          </div>
         </div>
-        <div class="tile-grid">
-          <div class="cat-tile good">
-            <div class="tile-icon-row">
-              <div class="tile-icon" style="background:#16a34a28">🛒</div>
-              <div class="tile-status-dot"></div>
-            </div>
-            <div class="tile-name">Super &amp; Farmacia</div>
-            <div class="tile-amounts">
-              <span class="tile-spent">$1,340</span>
-              <span class="tile-budget">/ $2,000</span>
-            </div>
-            <div class="tile-bar-track"><div class="tile-bar-fill" style="width:67%"></div></div>
-            <div class="tile-pct">67% · under pace</div>
-          </div>
-          <div class="cat-tile good">
-            <div class="tile-icon-row">
-              <div class="tile-icon" style="background:#16a34a28">👗</div>
-              <div class="tile-status-dot"></div>
-            </div>
-            <div class="tile-name">Clothing &amp; Misc</div>
-            <div class="tile-amounts">
-              <span class="tile-spent">$0</span>
-              <span class="tile-budget">/ $2,000</span>
-            </div>
-            <div class="tile-bar-track"><div class="tile-bar-fill" style="width:0%"></div></div>
-            <div class="tile-pct">0% — not yet spent</div>
-          </div>
-        </div>
-      </div>
+      </div><!-- /level3 -->
 
-      <!-- ─────────────── Design Notes ─────────────── -->
-      <div class="design-notes">
-        <h3>Design Recommendation — Budget Tiles</h3>
+      <!-- Design notes -->
+      <div class="design-notes" id="design-notes">
+        <h3>Cascading Tiles — Design Notes</h3>
         <ul>
-          <li><strong>Group sections with tile grids</strong> replace the current full-width row list. Each group has a header showing total spent vs budget, then a 4-column grid (desktop) / 2-column (mobile) of category tiles.</li>
-          <li><strong>Left accent bar color</strong> encodes status at a glance: <span style="color:var(--brand)">green = under pace</span>, <span style="color:var(--amber)">amber = over pace (approaching limit)</span>, <span style="color:var(--red)">red = over budget</span>.</li>
-          <li><strong>Status dot</strong> (top-right of tile) gives a second color signal without needing to read numbers. Over-budget dot pulses with a red glow.</li>
-          <li><strong>Mini bar + percentage</strong> at the tile bottom is the most compact way to show progress — no full-width bar needed per row.</li>
-          <li><strong>Pace tick</strong> on the overall bar shows today's elapsed month proportion so you can instantly see if you're ahead or behind on total spending.</li>
-          <li><strong>Clicking a tile</strong> could navigate to Transactions pre-filtered to that category + current month (same drill-down that exists from Dashboard today).</li>
-          <li><strong>Annual categories</strong> (car service, insurance) show a note "annual — not yet" rather than forcing a monthly % comparison that would always look alarming.</li>
-          <li><strong>Tile grid vs current list:</strong> shows ~3× more categories without scrolling on desktop; groups collapse the hierarchy so context is maintained.</li>
+          <li><strong>Level 1 (Group tiles)</strong> — one tile per spending group (Casa, Kids, Salidas, Auto, Shopping, Travel). Each shows total spent/budget, mini progress bar, and category count. Click → Level 2.</li>
+          <li><strong>Level 2 (Category tiles)</strong> — category grid inside the selected group. Same tile design as current. Each tile shows icon, name, spent/budget, bar, percentage. Click → Level 3.</li>
+          <li><strong>Level 3 (Category detail)</strong> — full detail panel: large progress bar with pace tick, 4 stat cards, 6-month sparkline chart, recent transactions list.</li>
+          <li><strong>Breadcrumb navigation</strong> at the top lets users jump back to any level without using the back button: "All groups › Casa › Utilities".</li>
+          <li><strong>Summary cards and overall bar stay sticky</strong> at the top across all 3 levels — total spending context is never lost.</li>
+          <li><strong>Color encoding</strong> is consistent: green = under pace, amber = approaching limit, red = over budget. Status dot on each tile gives a second visual signal.</li>
+          <li><strong>Pace tick</strong> on all progress bars marks today's elapsed month position so over/under pace is instantly readable.</li>
+          <li><strong>Projection</strong> in Level 3 shows month-end estimate based on current pace — early warning before actually going over.</li>
         </ul>
       </div>
 
     </div><!-- /budget-page -->
   </main>
 </div>
+
+<script>
+const GROUPS = {
+  casa:     { icon: '🏡', name: 'Casa',     spent: '$12,800', budget: '/ $14,210', status: 'good' },
+  kids:     { icon: '👧', name: 'Kids',     spent: '$2,850',  budget: '/ $2,775',  status: 'over' },
+  salidas:  { icon: '🍽', name: 'Salidas',  spent: '$980',    budget: '/ $1,967',  status: 'warn' },
+  auto:     { icon: '🚗', name: 'Auto',     spent: '$820',    budget: '/ $808',    status: 'good' },
+  shopping: { icon: '🛍', name: 'Shopping', spent: '$1,340',  budget: '/ $4,000',  status: 'good' },
+  travel:   { icon: '✈',  name: 'Travel',   spent: '$0',      budget: '/ $833',    status: 'zero' },
+};
+
+const CATS = {
+  mortgage:   { icon: '🏠', name: 'Mortgage',  spent: '$10,300', budget: 'budget $10,300 · 100% used', txnCount: '1', meta: '100% — fixed' },
+  utilities:  { icon: '💡', name: 'Utilities', spent: '$540',    budget: 'budget $620 · 87% used',    txnCount: '6', meta: '6 transactions this month' },
+  cleaning:   { icon: '🧹', name: 'Cleaning',  spent: '$1,200',  budget: 'budget $2,692 · 45% used',  txnCount: '4', meta: '4 transactions this month' },
+  repairs:    { icon: '🔧', name: 'Repairs',   spent: '$0',      budget: 'budget $458 · 0% used',     txnCount: '0', meta: 'No spend yet' },
+  telecom:    { icon: '📡', name: 'Telecom',   spent: '$240',    budget: 'budget $240 · 100% used',   txnCount: '1', meta: '1 transaction' },
+  insurance:  { icon: '🛡', name: 'Insurance', spent: '$0',      budget: 'budget $63 · annual',        txnCount: '0', meta: 'Annual — no monthly spend' },
+};
+
+let currentGroup = 'casa';
+let currentCat   = 'utilities';
+let currentLevel = 1;
+
+function showLevel(n, id) {
+  const l1 = document.getElementById('level1');
+  const l2 = document.getElementById('level2');
+  const l3 = document.getElementById('level3');
+  const bc  = document.getElementById('breadcrumb');
+  const dn  = document.getElementById('design-notes');
+
+  l1.style.display = 'none';
+  l2.style.display = 'none';
+  l3.style.display = 'none';
+
+  currentLevel = n;
+
+  if (n === 1) {
+    l1.style.display = '';
+    bc.style.display = 'none';
+    dn.style.display = '';
+    return;
+  }
+
+  bc.style.display = 'flex';
+  dn.style.display = 'none';
+
+  if (n === 2) {
+    currentGroup = id;
+    const g = GROUPS[id];
+    document.getElementById('l2-icon').textContent = g.icon;
+    document.getElementById('l2-name').textContent = g.name;
+    document.getElementById('l2-spent').textContent = g.spent;
+    document.getElementById('l2-budget').textContent = ' ' + g.budget;
+    l2.style.display = '';
+    document.getElementById('bc-l2').textContent = g.name;
+    document.getElementById('bc-sep2').style.display = 'none';
+    document.getElementById('bc-l3').style.display = 'none';
+    document.getElementById('bc-l2').className = 'breadcrumb-item breadcrumb-current';
+    return;
+  }
+
+  if (n === 3) {
+    currentCat = id;
+    const c = CATS[id] ?? {};
+    const g = GROUPS[currentGroup];
+    document.getElementById('l3-icon').textContent = c.icon ?? '?';
+    document.getElementById('l3-name').textContent = c.name ?? id;
+    document.getElementById('l3-meta').textContent = c.meta ?? '';
+    document.getElementById('l3-spent').textContent = c.spent ?? '';
+    document.getElementById('l3-budget').textContent = c.budget ?? '';
+    l3.style.display = '';
+    document.getElementById('bc-l2').textContent = g?.name ?? currentGroup;
+    document.getElementById('bc-l2').className = 'breadcrumb-item';
+    document.getElementById('bc-sep2').style.display = '';
+    document.getElementById('bc-l3').style.display = '';
+    document.getElementById('bc-l3').textContent = c.name ?? id;
+    document.getElementById('bc-l2').onclick = () => showLevel(2, currentGroup);
+    return;
+  }
+}
+
+// Initialize — show Level 1
+showLevel(1);
+</script>
 </body>
 </html>

@@ -102,8 +102,8 @@ export function renderTransactions(container) {
         <button class="filter-toggle" id="filter-toggle">
           Filters <span class="filter-badge" id="filter-badge" style="display:none"></span>
         </button>
-        <button class="btn-ghost txn-data-btn" id="txn-import-btn" title="Import CSV">⬆</button>
-        <button class="btn-ghost txn-data-btn" id="txn-export-btn" title="Export CSV">⬇</button>
+        <button class="btn-ghost txn-data-btn" id="txn-import-btn">Import</button>
+        <button class="btn-ghost txn-data-btn" id="txn-export-btn">Export</button>
       </div>
       <div class="filter-panel" id="filter-panel"></div>
       <div id="dup-banner" style="display:none"></div>

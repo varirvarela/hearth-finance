@@ -32,14 +32,20 @@ export function renderAccounts(container) {
           <button class="btn-secondary" id="add-manual" style="flex:1">+ Manual</button>
         </div>
 
-        <div class="acct-sync-row">
+        <div class="acct-sync-row" style="flex-wrap:wrap">
           <select id="sync-range" style="flex:1;border:1.5px solid var(--border);border-radius:8px;padding:0.45rem 0.65rem;font-size:0.82rem;background:var(--surface);color:var(--text)">
             <option value="2">Last 2 days</option>
             <option value="30">Last 30 days</option>
             <option value="90" selected>Last 90 days</option>
             <option value="180">Last 6 months</option>
             <option value="365">Last year</option>
+            <option value="custom">Custom range…</option>
           </select>
+          <div id="sync-custom-dates" style="display:none;flex-direction:row;gap:5px;align-items:center;margin-top:6px">
+            <input type="date" id="sync-from" style="flex:1;border:1.5px solid var(--border);border-radius:8px;padding:0.4rem 0.6rem;font-size:0.78rem;background:var(--surface);color:var(--text)" />
+            <span style="font-size:0.75rem;color:var(--muted)">to</span>
+            <input type="date" id="sync-to" style="flex:1;border:1.5px solid var(--border);border-radius:8px;padding:0.4rem 0.6rem;font-size:0.78rem;background:var(--surface);color:var(--text)" />
+          </div>
           <button class="btn-primary" id="sync-now" style="width:auto;padding:0.45rem 1rem;font-size:0.82rem">Sync</button>
         </div>
 
@@ -94,6 +100,19 @@ export function renderAccounts(container) {
   container.querySelector('#link-account').addEventListener('click', () => openPlaidLink(uid));
   container.querySelector('#add-manual').addEventListener('click', () => openManualAccountForm(uid));
   container.querySelector('#sync-now').addEventListener('click', () => syncTransactions(uid));
+  container.querySelector('#sync-range').addEventListener('change', e => {
+    const custom = document.getElementById('sync-custom-dates');
+    if (custom) custom.style.display = e.target.value === 'custom' ? 'flex' : 'none';
+    // set defaults for custom dates when switching to custom
+    if (e.target.value === 'custom') {
+      const today = new Date().toISOString().slice(0, 10);
+      const ago30 = new Date(Date.now() - 30 * 86400000).toISOString().slice(0, 10);
+      const fromEl = document.getElementById('sync-from');
+      const toEl   = document.getElementById('sync-to');
+      if (fromEl && !fromEl.value) fromEl.value = ago30;
+      if (toEl   && !toEl.value)   toEl.value   = today;
+    }
+  });
   container.querySelector('#rationalize-accounts').addEventListener('click', () => openRationalizeSheet(uid));
 }
 
@@ -227,15 +246,18 @@ async function openRationalizeSheet(uid) {
 function syncStatusDot(account) {
   const status   = account.lastSyncStatus ?? (account.isManual ? 'manual' : null);
   const lastSync = account.lastSync;
+  const dateStr  = lastSync
+    ? new Date(lastSync).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+    : null;
 
   if (account.isManual) return { cls: 'dot-manual', label: 'manual' };
-  if (status === 'error') return { cls: 'dot-error', label: 'error' };
+  if (status === 'error') return { cls: 'dot-error', label: dateStr ? `error · ${dateStr}` : 'error' };
 
   if (lastSync) {
     const hoursSince = (Date.now() - new Date(lastSync).getTime()) / 3600000;
-    if (hoursSince <= 4)  return { cls: 'dot-ok',    label: 'synced ✓' };
-    if (hoursSince <= 48) return { cls: 'dot-stale', label: 'stale' };
-    return { cls: 'dot-error', label: 'stale' };
+    if (hoursSince <= 4)  return { cls: 'dot-ok',    label: `synced ${dateStr}` };
+    if (hoursSince <= 48) return { cls: 'dot-stale', label: `${dateStr} · refresh` };
+    return { cls: 'dot-error', label: `${dateStr} · stale` };
   }
   return { cls: 'dot-unknown', label: 'never synced' };
 }
@@ -385,10 +407,19 @@ async function openPlaidLink(uid) {
 }
 
 async function syncTransactions(uid) {
-  const btn   = document.getElementById('sync-now');
-  const days  = parseInt(document.getElementById('sync-range')?.value ?? '90', 10);
-  const today = new Date().toISOString().slice(0, 10);
-  const start = new Date(Date.now() - days * 86400000).toISOString().slice(0, 10);
+  const btn       = document.getElementById('sync-now');
+  const rangeEl   = document.getElementById('sync-range');
+  const rangeVal  = rangeEl?.value ?? '90';
+  let startDate, endDate;
+  if (rangeVal === 'custom') {
+    startDate = document.getElementById('sync-from')?.value;
+    endDate   = document.getElementById('sync-to')?.value;
+    if (!startDate || !endDate) { alert('Please set both start and end dates.'); return; }
+  } else {
+    const days = parseInt(rangeVal, 10);
+    endDate   = new Date().toISOString().slice(0, 10);
+    startDate = new Date(Date.now() - days * 86400000).toISOString().slice(0, 10);
+  }
   if (!btn) return;
   btn.textContent = 'Syncing…'; btn.disabled = true;
   try {
@@ -396,7 +427,7 @@ async function syncTransactions(uid) {
     const res = await fetch(`${WORKER_URL}/sync`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${idToken}` },
-      body: JSON.stringify({ startDate: start, endDate: today }),
+      body: JSON.stringify({ startDate, endDate }),
     });
     const { synced } = await res.json();
     btn.textContent = `Sync (${synced} new)`;

@@ -59,7 +59,7 @@ export function renderAutomation(container) {
 
   container.querySelector('#auto-search').addEventListener('input', e => {
     searchQuery = e.target.value.toLowerCase().trim();
-    renderRulesList(uid, allRules, searchQuery);
+    renderRulesList(uid, allRules, searchQuery, selectedCatId);
   });
 
   container.querySelector('#auto-apply-rules').addEventListener('click', () => applyAllRules(uid, allRules));
@@ -67,7 +67,7 @@ export function renderAutomation(container) {
   dbListen(`rules/${uid}`, rules => {
     allRules = rules ?? {};
     renderStats(container, allRules);
-    renderRulesList(uid, allRules, searchQuery);
+    renderRulesList(uid, allRules, searchQuery, selectedCatId);
   });
 
   dbListen(`recurring/${uid}`, items => renderRecurring(items ?? {}, uid));
@@ -92,32 +92,27 @@ function renderStats(container, rules) {
     : `${total} rule${total !== 1 ? 's' : ''}`;
 }
 
-function renderRulesList(uid, rules, query) {
+function renderRulesList(uid, rules, query, selectedCatId) {
   const listEl = document.getElementById('auto-rules-list');
   if (!listEl) return;
 
-  const entries = Object.entries(rules);
-  if (!entries.length) {
+  // Apply search filter across all rules
+  const allEntries = Object.entries(rules);
+  const filtered = query
+    ? allEntries.filter(([, r]) =>
+        r.matchValue?.toLowerCase().includes(query) ||
+        r.name?.toLowerCase().includes(query) ||
+        getCategoryById(r.actionValue)?.name?.toLowerCase().includes(query)
+      )
+    : allEntries;
+
+  if (!allEntries.length) {
     listEl.innerHTML = `
       <div class="auto-empty">
         <div class="auto-empty-icon">⚙</div>
         <div>No rules yet.</div>
         <div style="font-size:0.8rem;color:var(--muted);margin-top:4px">Rules automatically categorize transactions as they arrive.</div>
       </div>`;
-    return;
-  }
-
-  // Filter by search
-  const filtered = query
-    ? entries.filter(([, r]) =>
-        r.matchValue?.toLowerCase().includes(query) ||
-        r.name?.toLowerCase().includes(query) ||
-        getCategoryById(r.actionValue)?.name?.toLowerCase().includes(query)
-      )
-    : entries;
-
-  if (!filtered.length) {
-    listEl.innerHTML = `<div class="auto-empty"><div>No rules match "${query}".</div></div>`;
     return;
   }
 
@@ -129,77 +124,141 @@ function renderRulesList(uid, rules, query) {
     byCat.get(catId).push([id, r]);
   }
 
-  // Sort groups by rule count descending
-  const sortedGroups = [...byCat.entries()].sort((a, b) => b[1].length - a[1].length);
-
-  let html = '';
-  for (const [catId, catRules] of sortedGroups) {
-    const cat     = getCategoryById(catId);
-    const total   = catRules.length;
-    const paused  = catRules.filter(([, r]) => r.enabled === false).length;
-    const pausedBadge = paused > 0
-      ? `<span class="auto-paused-badge">${paused} paused</span>`
-      : '';
-
-    const rulesHtml = catRules
-      .sort((a, b) => (a[1].priority ?? 50) - (b[1].priority ?? 50))
-      .map(([id, r]) => renderRuleCard(id, r, cat)).join('');
-
-    html += `
-      <div class="auto-group" data-cat="${catId}">
-        <div class="auto-group-hdr">
-          <div class="auto-group-left">
-            <span class="auto-group-icon">${cat.icon}</span>
-            <span class="auto-group-name">${cat.name}</span>
-            <span class="auto-group-count">${total}</span>
-            ${pausedBadge}
-          </div>
-          <button class="auto-add-cat-btn" data-cat="${catId}">+ Add</button>
-        </div>
-        <div class="auto-group-body">
-          ${rulesHtml}
-          <button class="auto-add-inline-btn" data-cat="${catId}">+ Add rule to ${cat.name}</button>
-        </div>
-      </div>`;
+  if (!byCat.size) {
+    listEl.innerHTML = `<div class="auto-empty"><div>No rules match "${query}".</div></div>`;
+    return;
   }
 
-  listEl.innerHTML = html;
+  // ── CATEGORY DETAIL VIEW ──────────────────────────────────
+  if (selectedCatId && byCat.has(selectedCatId)) {
+    const cat      = getCategoryById(selectedCatId);
+    const catRules = byCat.get(selectedCatId);
 
-  // Wire toggle switches
-  listEl.querySelectorAll('.auto-rule-toggle').forEach(toggle => {
-    toggle.addEventListener('click', () => {
-      const { id } = toggle.dataset;
-      const current = toggle.classList.contains('is-on');
-      toggle.classList.toggle('is-on', !current);
-      dbSet(`rules/${auth.currentUser?.uid}/${id}/enabled`, !current);
+    // Group rules by matchField
+    const byField = new Map();
+    const FIELD_LABELS = {
+      description: 'Description',
+      merchant:    'Merchant Name',
+      accountName: 'Account Name',
+      amount:      'Amount',
+      source:      'Source',
+    };
+    for (const [id, r] of catRules) {
+      const field = r.matchField ?? 'description';
+      if (!byField.has(field)) byField.set(field, []);
+      byField.get(field).push([id, r]);
+    }
+
+    let html = `
+      <div class="auto-cat-detail-hdr">
+        <button class="auto-back-btn" id="auto-back-btn">← All categories</button>
+        <div class="auto-cat-detail-title">
+          <span class="auto-cat-detail-icon">${cat.icon}</span>
+          <span>${cat.name}</span>
+          <span class="auto-group-count">${catRules.length}</span>
+        </div>
+        <button class="btn-primary auto-add-btn" id="auto-add-cat-rule" style="font-size:0.75rem;padding:4px 12px" data-cat="${selectedCatId}">+ Add rule</button>
+      </div>`;
+
+    for (const [field, fieldRules] of byField) {
+      const label = FIELD_LABELS[field] ?? field;
+      html += `
+        <div class="auto-field-group">
+          <div class="auto-field-group-hdr">${label}</div>
+          <div class="auto-field-rules">
+            ${fieldRules.sort((a, b) => (a[1].priority ?? 50) - (b[1].priority ?? 50)).map(([id, r]) => `
+              <div class="auto-rule-card ${r.enabled !== false ? '' : 'is-paused'}">
+                <div class="auto-rule-when">
+                  <span class="auto-rule-op">${r.matchOp ?? 'contains'}</span>
+                  <span class="auto-rule-pattern">"${escHtml(r.matchValue ?? '')}"</span>
+                </div>
+                <div class="auto-rule-meta">
+                  <span class="auto-rule-priority">p${r.priority ?? 50}</span>
+                  <div class="auto-rule-actions">
+                    <button class="auto-rule-edit auto-link-btn" data-id="${id}">Edit</button>
+                    <button class="auto-rule-delete auto-link-btn" data-id="${id}" style="color:var(--danger,#dc2626)">✕</button>
+                    <div class="auto-rule-toggle ${r.enabled !== false ? 'is-on' : ''}" data-id="${id}"></div>
+                  </div>
+                </div>
+              </div>`).join('')}
+          </div>
+        </div>`;
+    }
+
+    listEl.innerHTML = html;
+
+    // Wire back button
+    listEl.querySelector('#auto-back-btn').addEventListener('click', () => {
+      selectedCatId = null;
+      renderRulesList(uid, rules, query, null);
+    });
+
+    // Wire add rule for this category
+    listEl.querySelector('#auto-add-cat-rule')?.addEventListener('click', e => {
+      openRuleEditor(uid, null, null, e.currentTarget.dataset.cat);
+    });
+
+    // Wire toggles, edits, deletes
+    listEl.querySelectorAll('.auto-rule-toggle').forEach(toggle => {
+      toggle.addEventListener('click', () => {
+        const current = toggle.classList.contains('is-on');
+        toggle.classList.toggle('is-on', !current);
+        dbSet(`rules/${auth.currentUser?.uid}/${toggle.dataset.id}/enabled`, !current);
+      });
+    });
+    listEl.querySelectorAll('.auto-rule-edit').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const rule = allRulesRef[btn.dataset.id];
+        if (rule) openRuleEditor(uid, btn.dataset.id, rule);
+      });
+    });
+    listEl.querySelectorAll('.auto-rule-delete').forEach(btn => {
+      btn.addEventListener('click', () => {
+        if (confirm('Delete this rule?')) dbRemove(`rules/${uid}/${btn.dataset.id}`);
+      });
+    });
+    allRulesRef = rules;
+    return;
+  }
+
+  // ── TILES GRID VIEW ──────────────────────────────────────
+  const sortedCats = [...byCat.entries()].sort((a, b) => b[1].length - a[1].length);
+
+  const tilesHtml = sortedCats.map(([catId, catRules]) => {
+    const cat    = getCategoryById(catId);
+    const total  = catRules.length;
+    const active = catRules.filter(([, r]) => r.enabled !== false).length;
+    const paused = total - active;
+    const fields = [...new Set(catRules.map(([, r]) => r.matchField ?? 'description'))];
+    const fieldLabels = { description: 'desc', merchant: 'merchant', accountName: 'account', amount: 'amount', source: 'source' };
+    const fieldBadges = fields.map(f => `<span class="auto-field-badge">${fieldLabels[f] ?? f}</span>`).join('');
+
+    return `
+      <div class="auto-cat-tile" data-cat="${catId}" role="button" tabindex="0">
+        <div class="auto-cat-tile-top">
+          <span class="auto-cat-tile-icon">${cat.icon}</span>
+          ${paused > 0 ? `<span class="auto-paused-badge">${paused} paused</span>` : ''}
+        </div>
+        <div class="auto-cat-tile-name">${cat.name}</div>
+        <div class="auto-cat-tile-count">${total} rule${total !== 1 ? 's' : ''}</div>
+        <div class="auto-cat-tile-fields">${fieldBadges}</div>
+      </div>`;
+  }).join('');
+
+  listEl.innerHTML = `<div class="auto-tiles-grid">${tilesHtml}</div>`;
+
+  // Wire tile clicks
+  listEl.querySelectorAll('.auto-cat-tile').forEach(tile => {
+    tile.addEventListener('click', () => {
+      selectedCatId = tile.dataset.cat;
+      renderRulesList(uid, rules, query, selectedCatId);
     });
   });
-
-  // Wire edit buttons
-  listEl.querySelectorAll('.auto-rule-edit').forEach(btn => {
-    btn.addEventListener('click', () => {
-      const rule = allRulesRef[btn.dataset.id];
-      if (rule) openRuleEditor(uid, btn.dataset.id, rule);
-    });
-  });
-
-  // Wire delete buttons
-  listEl.querySelectorAll('.auto-rule-delete').forEach(btn => {
-    btn.addEventListener('click', () => {
-      if (confirm('Delete this rule?')) dbRemove(`rules/${uid}/${btn.dataset.id}`);
-    });
-  });
-
-  // Wire category-specific add buttons
-  listEl.querySelectorAll('.auto-add-cat-btn, .auto-add-inline-btn').forEach(btn => {
-    btn.addEventListener('click', () => openRuleEditor(uid, null, null, btn.dataset.cat));
-  });
-
-  // Store for edit lookup
   allRulesRef = rules;
 }
 
 let allRulesRef = {};
+let selectedCatId = null;
 
 function renderRuleCard(id, rule, cat) {
   const enabled   = rule.enabled !== false;
