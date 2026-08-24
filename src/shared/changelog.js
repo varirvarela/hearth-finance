@@ -1,5 +1,14 @@
 export const CHANGELOG = [
   {
+    version: '1.7.7',
+    date:    '2026-08-24',
+    changes: [
+      'Transactions: AI category suggestions are now saved to Firebase — no re-analysis needed when you reload or return to the tab.',
+      'Accounts: "Merge duplicate accounts" rows now show account names and Merge button on separate lines — no more button overlap.',
+      'Budgets: annual view now has ✎ edit buttons on group and category tiles. All edits accept an annual amount and prorate across categories (÷ 12 saved as monthly).',
+    ],
+  },
+  {
     version: '1.7.6',
     date:    '2026-08-24',
     changes: [

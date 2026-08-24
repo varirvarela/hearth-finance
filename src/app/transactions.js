@@ -1,4 +1,4 @@
-import { dbListen, dbGet, dbUpdate, auth, getPartnerUid } from '../shared/firebase.js';
+import { dbListen, dbGet, dbSet, dbUpdate, auth, getPartnerUid } from '../shared/firebase.js';
 import { fmtCurrency, fmtDate }     from '../shared/format.js';
 import { openImportModal } from './import.js';
 import {
@@ -168,6 +168,13 @@ export function renderTransactions(container) {
 
   dbListen(`rules/${uid}`, rules => {
     allRulesSnapshot = rules ?? {};
+  });
+
+  // Pre-populate AI suggestion cache from Firebase so we don't re-call the Worker on reload
+  dbListen(`suggestions/${uid}`, saved => {
+    for (const [txnId, sug] of Object.entries(saved ?? {})) {
+      if (!_aiSugCache.has(txnId)) _aiSugCache.set(txnId, sug);
+    }
   });
 
   getPartnerUid(uid).then(p => {
@@ -597,9 +604,11 @@ async function fetchAiSuggestion(txnId, txn) {
     if (primary && primary !== 'uncategorized') {
       const sug = { catId: primary, source: 'ai', alts };
       _aiSugCache.set(txnId, sug);
+      const uid2 = auth.currentUser?.uid;
+      if (uid2) dbSet(`suggestions/${uid2}/${txnId}`, sug);
       updateSugStrip(txnId, sug);
     } else {
-      _aiSugCache.set(txnId, null); // no valid suggestion
+      _aiSugCache.set(txnId, null); // no valid suggestion — don't persist, allow retry next session
     }
   } catch { /* Worker unavailable — silent fail */ }
 }

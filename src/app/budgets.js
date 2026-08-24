@@ -507,6 +507,7 @@ function renderAnnualGroupTiles(el, rootCats, rootMap, budgets, spentByCat, list
     const catCount    = leaves.length;
 
     return `<div class="bud-group-tile ${status}" data-group="${root.id}">
+      <button class="bud-tile-edit-btn" data-group="${root.id}" title="Edit group budget">✎</button>
       <div class="bud-tile-hdr">
         <span class="bud-tile-icon">${root.icon}</span>
         <span class="bud-tile-cat-count">${catCount} cat${catCount !== 1 ? 's' : ''}</span>
@@ -525,6 +526,14 @@ function renderAnnualGroupTiles(el, rootCats, rootMap, budgets, spentByCat, list
   }).join('');
 
   el.innerHTML = `<div class="bud-group-tiles-grid">${tiles || '<p class="empty">No budgets set this year.</p>'}</div>`;
+
+  el.querySelectorAll('.bud-tile-edit-btn').forEach(btn => {
+    btn.addEventListener('click', e => {
+      e.stopPropagation();
+      const uid2 = auth.currentUser?.uid;
+      openAnnualGroupBudgetEdit(btn.dataset.group, rootMap, budgets, uid2, listEl, allRoots, txns, pacePct, year);
+    });
+  });
 
   el.querySelectorAll('.bud-group-tile').forEach(tile => {
     tile.addEventListener('click', () => {
@@ -548,6 +557,7 @@ function renderAnnualCategoryTiles(el, groupId, rootMap, budgets, spentByCat, li
     const badge       = leaf.isFixed ? '<span class="bud-fixed-badge">Fixed</span>' : leaf.isAnnual ? '<span class="bud-fixed-badge annual">Annual</span>' : '';
 
     return `<div class="bud-cat-tile ${status}" data-cat="${leaf.id}">
+      ${annualLimit > 0 ? `<button class="bud-tile-edit-btn" data-cat="${leaf.id}" title="Edit budget">✎</button>` : ''}
       <div class="bud-tile-hdr">
         <div class="bud-cat-tile-icon" style="background:${leaf.color ? leaf.color + '28' : 'var(--faint)'}">${leaf.icon}</div>
         <div class="bud-tile-status-dot"></div>
@@ -560,7 +570,7 @@ function renderAnnualCategoryTiles(el, groupId, rootMap, budgets, spentByCat, li
       ${annualLimit > 0
         ? `<div class="bud-tile-bar-track"><div class="bud-tile-bar-fill" style="width:${pct}%"></div></div>
            <div class="bud-tile-pct">${pct}%${leaf.isFixed ? ' — fixed' : pct >= 100 ? ' ↑ over' : ''}</div>`
-        : `<div class="bud-set-link" data-cat="${leaf.id}">No budget</div>`
+        : `<div class="bud-set-link" data-cat="${leaf.id}">Set annual budget</div>`
       }
     </div>`;
   }).join('');
@@ -570,6 +580,22 @@ function renderAnnualCategoryTiles(el, groupId, rootMap, budgets, spentByCat, li
       <span class="bud-cat-tiles-group-name">${root?.icon ?? ''} ${root?.name ?? ''}</span>
     </div>
     <div class="bud-cat-tiles-grid">${tiles || '<p class="empty" style="padding:16px">No categories with budgets in this group.</p>'}</div>`;
+
+  el.querySelectorAll('.bud-cat-tile .bud-tile-edit-btn').forEach(btn => {
+    btn.addEventListener('click', e => {
+      e.stopPropagation();
+      const uid2 = auth.currentUser?.uid;
+      openAnnualCatBudgetEdit(btn, uid2, btn.dataset.cat, budgets[btn.dataset.cat]?.monthly ?? 0);
+    });
+  });
+
+  el.querySelectorAll('.bud-set-link').forEach(link => {
+    link.addEventListener('click', e => {
+      e.stopPropagation();
+      const uid2 = auth.currentUser?.uid;
+      openAnnualCatBudgetEdit(link, uid2, link.dataset.cat, 0);
+    });
+  });
 
   el.querySelectorAll('.bud-cat-tile').forEach(tile => {
     tile.addEventListener('click', () => {
@@ -655,14 +681,113 @@ function renderAnnualCategoryDetail(el, catId, budgets, spentByCat, txns, year) 
 
     <div class="bud-detail-txn-title">Recent transactions</div>
     ${txnRows}
-    ${annualLimit > 0 ? `
     <div style="margin-top:14px">
-      <button class="bud-edit-budget-btn" data-cat="${catId}">Edit monthly budget (${fmtCurrency(monthlyLimit)}/mo) →</button>
-    </div>` : ''}
+      <button class="bud-edit-budget-btn" data-cat="${catId}">${annualLimit > 0 ? `Edit annual budget (${fmtCurrency(annualLimit)}/yr) →` : 'Set annual budget →'}</button>
+    </div>
   `;
 
   el.querySelector('.bud-edit-budget-btn')?.addEventListener('click', e => {
-    openInlineEdit(e.currentTarget, auth.currentUser?.uid, catId, budgets[catId]?.monthly ?? 0);
+    openAnnualCatBudgetEdit(e.currentTarget, auth.currentUser?.uid, catId, monthlyLimit);
+  });
+}
+
+// Opens a modal to edit a single category's ANNUAL budget; saves as monthly = annual / 12
+function openAnnualCatBudgetEdit(triggerEl, uid, catId, currentMonthly) {
+  const currentAnnual = Math.round(currentMonthly * 12);
+
+  const overlay = document.createElement('div');
+  overlay.className = 'modal-overlay';
+  overlay.innerHTML = `
+    <div class="modal" style="max-width:320px">
+      <div class="modal-hdr">
+        <span class="modal-title">Edit annual budget</span>
+        <button class="modal-close" id="ann-cat-edit-close">✕</button>
+      </div>
+      <div style="padding:16px">
+        <p style="font-size:0.78rem;color:var(--muted);margin:0 0 14px;line-height:1.5">
+          Enter the annual amount. It will be saved as a monthly budget (÷ 12).
+        </p>
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:16px">
+          <span style="font-size:0.78rem;color:var(--muted);white-space:nowrap">Annual total</span>
+          <input type="number" id="ann-cat-budget-input" min="0" step="100" value="${currentAnnual}"
+            style="flex:1;border:1.5px solid var(--border);border-radius:8px;padding:8px 10px;font-size:0.9rem;font-weight:700;background:var(--bg);color:var(--text);text-align:right" />
+        </div>
+        <button class="btn-primary" id="ann-cat-budget-save" style="width:100%;font-size:0.85rem;padding:10px">Save</button>
+      </div>
+    </div>`;
+  document.body.appendChild(overlay);
+  requestAnimationFrame(() => overlay.classList.add('open'));
+  overlay.querySelector('#ann-cat-budget-input').focus();
+  overlay.querySelector('#ann-cat-budget-input').select();
+
+  const close = () => { overlay.classList.remove('open'); setTimeout(() => overlay.remove(), 260); };
+  overlay.querySelector('#ann-cat-edit-close').addEventListener('click', close);
+  overlay.addEventListener('click', e => { if (e.target === overlay) close(); });
+
+  overlay.querySelector('#ann-cat-budget-save').addEventListener('click', async () => {
+    const newAnnual = parseFloat(overlay.querySelector('#ann-cat-budget-input').value);
+    if (isNaN(newAnnual) || newAnnual < 0) return;
+    const newMonthly = Math.round(newAnnual / 12);
+    await dbSet(`budgets/${uid}/${catId}/monthly`, newMonthly);
+    close();
+  });
+}
+
+// Opens a modal to edit a group's total ANNUAL budget; prorates across leaf categories proportionally
+function openAnnualGroupBudgetEdit(groupId, rootMap, budgets, uid, listEl, allRoots, txns, pacePct, year) {
+  const leaves = (rootMap.get(groupId) ?? []).filter(l => !l.isIncome);
+  const currentMonthlyTotal = leaves.reduce((s, l) => s + (budgets[l.id]?.monthly ?? 0), 0);
+  const currentAnnualTotal  = Math.round(currentMonthlyTotal * 12);
+
+  const overlay = document.createElement('div');
+  overlay.className = 'modal-overlay';
+  overlay.innerHTML = `
+    <div class="modal" style="max-width:340px">
+      <div class="modal-hdr">
+        <span class="modal-title">Edit group annual budget</span>
+        <button class="modal-close" id="ann-grp-edit-close">✕</button>
+      </div>
+      <div style="padding:16px">
+        <p style="font-size:0.78rem;color:var(--muted);margin:0 0 14px;line-height:1.5">
+          Set a total annual budget for this group. The amount will be distributed proportionally across categories and saved as monthly budgets (÷ 12).
+          ${currentMonthlyTotal === 0 ? ' Since no budgets are set, the amount will be split equally.' : ''}
+        </p>
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:16px">
+          <span style="font-size:0.78rem;color:var(--muted);white-space:nowrap">Annual total</span>
+          <input type="number" id="ann-grp-budget-input" min="0" step="100" value="${currentAnnualTotal}"
+            style="flex:1;border:1.5px solid var(--border);border-radius:8px;padding:8px 10px;font-size:0.9rem;font-weight:700;background:var(--bg);color:var(--text);text-align:right" />
+        </div>
+        <div style="font-size:0.72rem;color:var(--muted);margin-bottom:14px">
+          Current allocation (annual):<br>
+          ${leaves.filter(l => (budgets[l.id]?.monthly ?? 0) > 0).map(l => `${l.icon} ${l.name}: ${fmtCurrency((budgets[l.id]?.monthly ?? 0) * 12)}/yr`).join(' · ') || 'None set'}
+        </div>
+        <button class="btn-primary" id="ann-grp-budget-save" style="width:100%;font-size:0.85rem;padding:10px">Apply &amp; prorate</button>
+      </div>
+    </div>`;
+  document.body.appendChild(overlay);
+  requestAnimationFrame(() => overlay.classList.add('open'));
+
+  const close = () => { overlay.classList.remove('open'); setTimeout(() => overlay.remove(), 260); };
+  overlay.querySelector('#ann-grp-edit-close').addEventListener('click', close);
+  overlay.addEventListener('click', e => { if (e.target === overlay) close(); });
+
+  overlay.querySelector('#ann-grp-budget-save').addEventListener('click', async () => {
+    const newAnnual = parseFloat(overlay.querySelector('#ann-grp-budget-input').value);
+    if (isNaN(newAnnual) || newAnnual < 0) return;
+
+    const leavesWithBudget = leaves.filter(l => (budgets[l.id]?.monthly ?? 0) > 0);
+
+    if (leavesWithBudget.length === 0 || currentMonthlyTotal === 0) {
+      const monthlyShare = Math.round(newAnnual / 12 / Math.max(leaves.length, 1));
+      await Promise.all(leaves.map(l => dbSet(`budgets/${uid}/${l.id}/monthly`, monthlyShare)));
+    } else {
+      await Promise.all(leaves.map(l => {
+        const proportion  = (budgets[l.id]?.monthly ?? 0) / currentMonthlyTotal;
+        const newMonthly  = Math.round((newAnnual * proportion) / 12);
+        return dbSet(`budgets/${uid}/${l.id}/monthly`, newMonthly);
+      }));
+    }
+    close();
   });
 }
 
