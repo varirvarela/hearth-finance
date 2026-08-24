@@ -173,7 +173,10 @@ export function renderTransactions(container) {
   // Pre-populate AI suggestion cache from Firebase so we don't re-call the Worker on reload
   dbListen(`suggestions/${uid}`, saved => {
     for (const [txnId, sug] of Object.entries(saved ?? {})) {
-      if (!_aiSugCache.has(txnId)) _aiSugCache.set(txnId, sug);
+      if (!_aiSugCache.has(txnId)) {
+        _aiSugCache.set(txnId, sug);
+        updateSugStrip(txnId, sug); // patch any "Analyzing…" strip already in the DOM
+      }
     }
   });
 
@@ -608,9 +611,11 @@ async function fetchAiSuggestion(txnId, txn) {
       if (uid2) dbSet(`suggestions/${uid2}/${txnId}`, sug);
       updateSugStrip(txnId, sug);
     } else {
-      _aiSugCache.set(txnId, null); // no valid suggestion — don't persist, allow retry next session
+      _aiSugCache.set(txnId, false); // false = "no suggestion found" (distinct from null = "pending")
     }
-  } catch { /* Worker unavailable — silent fail */ }
+  } catch {
+    _aiSugCache.set(txnId, false); // Worker unavailable — mark done so we don't retry every render
+  }
 }
 
 function updateSugStrip(txnId, sug) {
@@ -618,13 +623,15 @@ function updateSugStrip(txnId, sug) {
   if (!row) return;
   const strip = row.closest('.txn-item')?.querySelector('.sug-strip');
   if (!strip) return;
-  const cat = getCategoryById(sug.catId);
-  const sourceLbl = sug.source === 'ai' ? 'AI suggest' : sug.source === 'rule' ? 'Rule' : 'Suggested';
+  const cat       = getCategoryById(sug.catId);
+  const parentCat = cat.parent ? getCategoryById(cat.parent) : null;
+  const catLabel  = parentCat ? `${parentCat.icon} ${parentCat.name} › ${cat.icon} ${cat.name}` : `${cat.icon} ${cat.name}`;
+  const sourceLbl = sug.source === 'ai' ? 'AI' : sug.source === 'rule' ? 'Rule' : 'Suggested';
   const cls = sug.source === 'ai' ? 'ai' : 'heuristic';
   strip.className = `sug-strip ${cls}`;
   strip.innerHTML = `
     <span class="sug-lbl ${cls}">${sourceLbl}</span>
-    <span class="sug-cat">${cat.icon} ${cat.name}</span>
+    <span class="sug-cat">${catLabel}</span>
     <button class="btn-quick-confirm" data-id="${txnId}" data-cat="${sug.catId}">✓ Confirm</button>
     <button class="btn-quick-change"  data-id="${txnId}" data-cat="${sug.catId}">Change</button>`;
   const uid = auth.currentUser?.uid;
@@ -693,25 +700,36 @@ function renderPage(filtered, state, uid, refresh, accountMap) {
         const sug = suggestCategory(id, t, allRulesSnapshot);
         if (sug) {
           const sugCat    = getCategoryById(sug.catId);
-          const sourceLbl = sug.source === 'rule' ? 'Rule' : sug.source === 'ai' ? 'AI suggest' : 'Suggested';
+          const parentCat = sugCat.parent ? getCategoryById(sugCat.parent) : null;
+          const catLabel  = parentCat ? `${parentCat.icon} ${parentCat.name} › ${sugCat.icon} ${sugCat.name}` : `${sugCat.icon} ${sugCat.name}`;
+          const sourceLbl = sug.source === 'rule' ? 'Rule' : sug.source === 'ai' ? 'AI' : 'Suggested';
           const stripCls  = sug.source === 'ai' ? 'ai' : 'heuristic';
           suggestionHTML = `
             <div class="sug-strip ${stripCls}">
               <span class="sug-lbl ${stripCls}">${sourceLbl}</span>
-              <span class="sug-cat">${sugCat.icon} ${sugCat.name}</span>
+              <span class="sug-cat">${catLabel}</span>
               <button class="btn-quick-confirm" data-id="${id}" data-cat="${sug.catId}">✓ Confirm</button>
               <button class="btn-quick-change"  data-id="${id}" data-cat="${sug.catId}">Change</button>
             </div>`;
         } else {
-          // No suggestion yet — show placeholder, then queue Worker call
-          suggestionHTML = `
-            <div class="sug-strip warn" id="sug-${id}">
-              <span class="sug-lbl warn">⚠ Uncategorized</span>
-              <span class="sug-loading" style="font-size:0.68rem;color:var(--muted);margin-left:6px">Analyzing…</span>
-              <button class="btn-quick-change" data-id="${id}" data-cat="${t.category}" style="margin-left:auto">Categorize →</button>
-            </div>`;
-          // Kick off async Worker call (will update the DOM when done)
-          setTimeout(() => fetchAiSuggestion(id, t), 100);
+          const cachedState = _aiSugCache.get(id);
+          if (cachedState === false) {
+            // Worker returned no suggestion — require manual categorization
+            suggestionHTML = `
+              <div class="sug-strip warn" id="sug-${id}">
+                <span class="sug-lbl warn">⚠ Uncategorized</span>
+                <button class="btn-quick-change" data-id="${id}" data-cat="${t.category}" style="margin-left:auto">Categorize →</button>
+              </div>`;
+          } else {
+            // undefined (not checked) or null (in-flight) — show Analyzing…
+            suggestionHTML = `
+              <div class="sug-strip warn" id="sug-${id}">
+                <span class="sug-lbl warn">⚠ Uncategorized</span>
+                <span class="sug-loading" style="font-size:0.68rem;color:var(--muted);margin-left:6px">Analyzing…</span>
+                <button class="btn-quick-change" data-id="${id}" data-cat="${t.category}" style="margin-left:auto">Categorize →</button>
+              </div>`;
+            setTimeout(() => fetchAiSuggestion(id, t), 100);
+          }
         }
       }
     }
@@ -786,6 +804,7 @@ function renderPage(filtered, state, uid, refresh, accountMap) {
       const catId = btn.dataset.cat;
       const cat   = getCategoryById(catId);
       await dbUpdate(`transactions/${uid}/${txnId}`, {
+        category:       catId,
         categorySource: 'manual',
         needsReview:    false,
       });

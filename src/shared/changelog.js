@@ -1,5 +1,15 @@
 export const CHANGELOG = [
   {
+    version: '1.7.8',
+    date:    '2026-08-24',
+    changes: [
+      'Transactions: "Analyzing…" no longer gets stuck — failed or slow Worker calls resolve correctly and show a manual Categorize button instead.',
+      'Transactions: confirming a suggestion now correctly saves the category (was only marking needsReview=false before).',
+      'Transactions: suggestion strip now shows the full category path (e.g. "Salidas › Restaurante") so the hierarchy is visible.',
+      'Accounts: duplicate merge no longer matches Plaid account names against their own aliases — only the original bank name is used for comparison.',
+    ],
+  },
+  {
     version: '1.7.7',
     date:    '2026-08-24',
     changes: [

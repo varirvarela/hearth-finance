@@ -186,12 +186,13 @@ async function openRationalizeSheet(uid) {
     .filter(w => w.length >= 3 && !stopWords.has(w));
 
   for (const [plaidId, acc] of plaidEntries) {
-    const existing = acc.mergedNames ?? [];
-    const dispName = acc.alias ?? acc.name;
-    const wordsP   = new Set(sigWords(dispName));
+    const existing  = acc.mergedNames ?? [];
+    const matchName = acc.name ?? '';        // use original Plaid name for fuzzy matching, NOT alias
+    const dispName  = acc.alias ?? acc.name; // display name shown in UI
+    const wordsP    = new Set(sigWords(matchName));
     for (const tName of tillerNames) {
       if (existing.includes(tName)) continue;
-      const pn = dispName.toLowerCase();
+      const pn = matchName.toLowerCase();
       const tn = tName.toLowerCase();
       const match = pn === tn || pn.includes(tn) || tn.includes(pn) ||
         sigWords(tName).some(w => wordsP.has(w));
