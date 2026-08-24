@@ -2,7 +2,6 @@ import { dbGet, dbSet, dbPush, auth } from '../shared/firebase.js';
 import { getCategoryById } from '../shared/categories.js';
 import { signOut } from 'firebase/auth';
 import { CHANGELOG } from '../shared/changelog.js';
-import { openImportModal } from './import.js';
 import { openChangelogSheet } from './accounts.js';
 
 export function renderSettings(container) {
@@ -11,15 +10,6 @@ export function renderSettings(container) {
       <section class="section">
         <h3>Partner Sharing</h3>
         <div id="partner-section"></div>
-      </section>
-      <section class="section">
-        <h3>Import Data</h3>
-        <p style="color:var(--muted);font-size:0.875rem;margin-bottom:0.75rem">Import a Tiller CSV export to load your transaction history.</p>
-        <button class="btn-secondary" id="import-csv" style="width:auto;padding:0.5rem 1rem">Import CSV…</button>
-      </section>
-      <section class="section">
-        <h3>Export</h3>
-        <button class="btn-secondary" id="export-csv" style="width:auto;padding:0.5rem 1rem">Export CSV</button>
       </section>
       <section class="section">
         <h3>About</h3>
@@ -39,8 +29,6 @@ export function renderSettings(container) {
 
   document.getElementById('sign-out').addEventListener('click', () => signOut(auth));
   container.querySelector('#show-changelog').addEventListener('click', () => openChangelogSheet());
-  document.getElementById('import-csv').addEventListener('click', () => openImportModal());
-  document.getElementById('export-csv').addEventListener('click', () => exportCsv(uid));
 }
 
 function renderPartnerSection(uid) {
@@ -85,17 +73,3 @@ async function acceptInvite(uid) {
   renderPartnerSection(uid);
 }
 
-async function exportCsv(uid) {
-  const txns = await dbGet(`transactions/${uid}`);
-  if (!txns) { alert('No transactions to export.'); return; }
-  const rows = [['Date', 'Description', 'Merchant', 'Amount', 'Category', 'Account', 'Notes']];
-  for (const t of Object.values(txns)) {
-    const cat = getCategoryById(t.category);
-    rows.push([t.date, t.description, t.merchantName ?? '', t.amount, cat.name, t.accountId, t.notes ?? '']);
-  }
-  const csv = rows.map(r => r.map(v => `"${String(v).replace(/"/g, '""')}"`).join(',')).join('\n');
-  const a = document.createElement('a');
-  a.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv' }));
-  a.download = `hearth-export-${new Date().toISOString().slice(0, 10)}.csv`;
-  a.click();
-}

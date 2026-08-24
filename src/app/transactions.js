@@ -1,5 +1,6 @@
 import { dbListen, dbGet, dbUpdate, auth, getPartnerUid } from '../shared/firebase.js';
 import { fmtCurrency, fmtDate }     from '../shared/format.js';
+import { openImportModal } from './import.js';
 import {
   getCategoryById,
   getRootCategories,
@@ -101,6 +102,8 @@ export function renderTransactions(container) {
         <button class="filter-toggle" id="filter-toggle">
           Filters <span class="filter-badge" id="filter-badge" style="display:none"></span>
         </button>
+        <button class="btn-ghost txn-data-btn" id="txn-import-btn" title="Import CSV">⬆</button>
+        <button class="btn-ghost txn-data-btn" id="txn-export-btn" title="Export CSV">⬇</button>
       </div>
       <div class="filter-panel" id="filter-panel"></div>
       <div id="dup-banner" style="display:none"></div>
@@ -194,6 +197,9 @@ export function renderTransactions(container) {
     panel.classList.toggle('open');
     toggle.classList.toggle('active', panel.classList.contains('open'));
   });
+
+  document.getElementById('txn-import-btn').addEventListener('click', () => openImportModal());
+  document.getElementById('txn-export-btn').addEventListener('click', () => exportTxnCsv(uid));
 }
 
 function renderFilterPanel(state, accountMap, refresh) {
@@ -506,7 +512,7 @@ function renderPage(filtered, state, uid, refresh, accountMap) {
     const review         = needsReview(t);
     const isUncategorized = t.category === 'uncategorized' || !t.category;
     const isPartner      = !!t._owner;
-    const acctName       = t.accountName || accountMap[t.accountId]?.name || '';
+    const acctName = accountMap[t.accountId]?.alias ?? accountMap[t.accountId]?.name ?? t.accountName ?? '';
 
     const partnerBadge = isPartner
       ? `<span style="background:#dbeafe;color:#1e40af;border-radius:8px;padding:1px 6px;font-size:0.68rem;font-weight:700;flex-shrink:0">${partnerInitial}</span>`
@@ -934,4 +940,18 @@ function openDupReview(pairs, uid) {
 
   renderPair();
   overlay.addEventListener('click', e => { if (e.target === overlay) close(); });
+}
+
+async function exportTxnCsv(uid) {
+  const txns = await dbGet(`transactions/${uid}`);
+  if (!txns) { alert('No transactions to export.'); return; }
+  const rows = [['Date','Description','Merchant','Amount','Category','Account','Notes']];
+  for (const t of Object.values(txns)) {
+    rows.push([t.date, t.description, t.merchantName ?? '', t.amount, t.category, t.accountId, t.notes ?? '']);
+  }
+  const csv = rows.map(r => r.map(v => `"${String(v).replace(/"/g,'""')}"`).join(',')).join('\n');
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv' }));
+  a.download = `hearth-export-${new Date().toISOString().slice(0,10)}.csv`;
+  a.click();
 }

@@ -1,0 +1,620 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Hearth Finance · Budget Tiles — Design Recommendation</title>
+<style>
+  :root {
+    --bg:      #0c1017;
+    --surface: #161c27;
+    --card:    #1e2636;
+    --border:  rgba(255,255,255,.08);
+    --text:    #e2e8f0;
+    --muted:   #64748b;
+    --faint:   #334155;
+    --brand:   #16a34a;
+    --brand-l: rgba(22,163,74,.22);
+    --amber:   #f59e0b;
+    --red:     #ef4444;
+    --r-md:    10px;
+    --r-lg:    14px;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    background: var(--bg); color: var(--text);
+    min-height: 100vh;
+  }
+
+  /* ── Layout ── */
+  .app-shell { display: flex; height: 100vh; overflow: hidden; }
+  .sidebar {
+    width: 196px; flex-shrink: 0;
+    background: #0f1623;
+    border-right: 1px solid var(--border);
+    display: flex; flex-direction: column;
+    padding: 20px 0;
+  }
+  .sidebar-brand {
+    display: flex; align-items: center; gap: 10px;
+    padding: 0 16px 20px;
+    font-weight: 700; font-size: 0.9rem; color: var(--text);
+    border-bottom: 1px solid var(--border);
+    margin-bottom: 12px;
+  }
+  .sidebar-brand svg { flex-shrink: 0; }
+  .nav-item {
+    display: flex; align-items: center; gap: 10px;
+    padding: 8px 16px; font-size: 0.78rem; color: var(--muted);
+    cursor: pointer; border-radius: 0; border: none; background: none;
+    width: 100%; text-align: left; position: relative;
+  }
+  .nav-item.active {
+    color: var(--text); background: rgba(255,255,255,.04);
+  }
+  .nav-item.active::before {
+    content: ''; position: absolute; left: 0; top: 6px; bottom: 6px;
+    width: 3px; background: var(--brand); border-radius: 0 2px 2px 0;
+  }
+  .main { flex: 1; overflow-y: auto; background: var(--bg); }
+
+  /* ── Budget page ── */
+  .budget-page { padding: 0 0 60px; }
+
+  /* Month header */
+  .budget-header {
+    position: sticky; top: 0; z-index: 10;
+    background: var(--bg); border-bottom: 1px solid var(--border);
+    padding: 14px 24px;
+    display: flex; align-items: center; gap: 16px;
+  }
+  .budget-title { font-size: 1rem; font-weight: 700; flex: 1; }
+  .month-nav { display: flex; align-items: center; gap: 8px; }
+  .month-nav-btn {
+    background: none; border: 1.5px solid var(--border);
+    border-radius: 8px; color: var(--muted);
+    width: 30px; height: 30px; cursor: pointer;
+    font-size: 0.75rem; display: flex; align-items: center; justify-content: center;
+  }
+  .month-nav-btn:hover { border-color: var(--brand); color: var(--text); }
+  .month-label { font-size: 0.82rem; font-weight: 600; color: var(--text); min-width: 96px; text-align: center; }
+  .view-toggle {
+    display: flex; background: var(--faint); border-radius: 8px; padding: 2px;
+  }
+  .view-btn {
+    border: none; border-radius: 6px; padding: 4px 12px;
+    font-size: 0.75rem; cursor: pointer; color: var(--muted); background: none;
+    font-weight: 500;
+  }
+  .view-btn.active { background: var(--surface); color: var(--text); font-weight: 600; }
+
+  /* Summary strip */
+  .budget-summary {
+    padding: 14px 24px 0;
+    display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px;
+    margin-bottom: 6px;
+  }
+  .summary-card {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: var(--r-md); padding: 12px 14px;
+  }
+  .summary-label { font-size: 0.65rem; font-weight: 600; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); margin-bottom: 4px; }
+  .summary-val { font-size: 1.05rem; font-weight: 700; }
+  .summary-val.good { color: var(--brand); }
+  .summary-val.warn { color: var(--amber); }
+  .summary-val.over { color: var(--red); }
+
+  /* Overall progress bar */
+  .overall-bar-wrap { padding: 12px 24px 18px; }
+  .overall-bar-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; font-size: 0.75rem; }
+  .overall-bar-label { color: var(--muted); }
+  .overall-bar-pct { font-weight: 700; color: var(--amber); }
+  .progress-track {
+    height: 6px; background: var(--faint); border-radius: 3px; position: relative; overflow: visible;
+  }
+  .progress-fill {
+    height: 100%; border-radius: 3px; transition: width .3s;
+  }
+  .progress-fill.good { background: var(--brand); }
+  .progress-fill.warn { background: var(--amber); }
+  .progress-fill.over { background: var(--red); }
+  .pace-tick {
+    position: absolute; top: -4px; width: 2px; height: 14px;
+    background: rgba(255,255,255,.6); border-radius: 1px;
+  }
+
+  /* ── Group section ── */
+  .group-section { padding: 0 24px; margin-bottom: 24px; }
+  .group-hdr {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 10px 0 10px;
+    border-bottom: 1px solid var(--border);
+    margin-bottom: 12px;
+  }
+  .group-hdr-left { display: flex; align-items: center; gap: 8px; }
+  .group-icon { font-size: 1rem; }
+  .group-name { font-size: 0.72rem; font-weight: 700; text-transform: uppercase; letter-spacing: .07em; color: var(--muted); }
+  .group-total-spent { font-size: 0.78rem; font-weight: 700; color: var(--text); }
+  .group-total-budget { font-size: 0.72rem; color: var(--muted); }
+
+  /* ── Tile grid ── */
+  .tile-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 10px;
+  }
+
+  /* ── Individual tile ── */
+  .cat-tile {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: var(--r-lg);
+    padding: 14px 12px 12px;
+    display: flex; flex-direction: column; gap: 6px;
+    cursor: pointer;
+    transition: border-color .15s, transform .1s;
+    position: relative;
+    overflow: hidden;
+  }
+  .cat-tile:hover { border-color: rgba(255,255,255,.18); transform: translateY(-1px); }
+
+  /* Left accent bar = status color */
+  .cat-tile::before {
+    content: ''; position: absolute; left: 0; top: 0; bottom: 0;
+    width: 3px; border-radius: var(--r-lg) 0 0 var(--r-lg);
+  }
+  .cat-tile.good::before { background: var(--brand); }
+  .cat-tile.warn::before { background: var(--amber); }
+  .cat-tile.over::before { background: var(--red); }
+  .cat-tile.zero::before { background: var(--faint); }
+
+  .tile-icon-row { display: flex; align-items: center; justify-content: space-between; }
+  .tile-icon {
+    width: 36px; height: 36px; border-radius: 10px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 1.1rem;
+  }
+  .tile-status-dot {
+    width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0;
+  }
+  .good .tile-status-dot  { background: var(--brand); }
+  .warn .tile-status-dot  { background: var(--amber); }
+  .over .tile-status-dot  { background: var(--red); box-shadow: 0 0 6px rgba(239,68,68,.6); }
+  .zero .tile-status-dot  { background: var(--faint); }
+
+  .tile-name {
+    font-size: 0.72rem; font-weight: 600; color: var(--text);
+    line-height: 1.2; margin-top: 4px;
+  }
+  .tile-amounts {
+    display: flex; align-items: baseline; gap: 4px;
+  }
+  .tile-spent { font-size: 0.88rem; font-weight: 700; color: var(--text); }
+  .tile-budget { font-size: 0.65rem; color: var(--muted); }
+  .tile-bar-track {
+    height: 3px; background: var(--faint); border-radius: 2px; overflow: hidden;
+  }
+  .tile-bar-fill { height: 100%; border-radius: 2px; }
+  .good .tile-bar-fill  { background: var(--brand); }
+  .warn .tile-bar-fill  { background: var(--amber); }
+  .over .tile-bar-fill  { background: var(--red); }
+  .zero .tile-bar-fill  { background: var(--faint); }
+  .tile-pct { font-size: 0.62rem; color: var(--muted); font-weight: 600; }
+  .over .tile-pct  { color: var(--red); font-weight: 700; }
+  .warn .tile-pct  { color: var(--amber); }
+
+  /* ── Design notes panel ── */
+  .design-notes {
+    background: var(--surface); border: 1px solid var(--brand);
+    border-radius: var(--r-lg); margin: 0 24px 24px;
+    padding: 16px 20px;
+  }
+  .design-notes h3 { font-size: 0.8rem; color: var(--brand); margin-bottom: 10px; text-transform: uppercase; letter-spacing: .07em; }
+  .design-notes ul { list-style: none; display: flex; flex-direction: column; gap: 6px; }
+  .design-notes li { font-size: 0.8rem; color: var(--muted); padding-left: 16px; position: relative; line-height: 1.5; }
+  .design-notes li::before { content: '→'; position: absolute; left: 0; color: var(--brand); }
+  .design-notes li strong { color: var(--text); }
+
+  /* annotation badge */
+  .annotation {
+    display: inline-flex; align-items: center;
+    background: rgba(22,163,74,.15); border: 1px solid rgba(22,163,74,.35);
+    color: var(--brand); font-size: 0.62rem; font-weight: 700;
+    border-radius: 4px; padding: 1px 6px; letter-spacing: .04em;
+    margin-left: 6px; vertical-align: middle;
+  }
+</style>
+</head>
+<body>
+<div class="app-shell">
+
+  <!-- Desktop sidebar (reference) -->
+  <nav class="sidebar">
+    <div class="sidebar-brand">
+      <svg width="22" height="22" viewBox="0 0 20 20" fill="none">
+        <rect x="3" y="10" width="4" height="8" rx="1" fill="#16a34a" opacity=".8"/>
+        <rect x="8" y="6"  width="4" height="12" rx="1" fill="#16a34a"/>
+        <rect x="13" y="8" width="4" height="10" rx="1" fill="#16a34a" opacity=".8"/>
+        <path d="M1 10 L10 3 L19 10" stroke="#16a34a" stroke-width="1.5" fill="none" stroke-linecap="round"/>
+      </svg>
+      Hearth
+    </div>
+    <button class="nav-item">🏠 Dashboard</button>
+    <button class="nav-item">↕ Transactions</button>
+    <button class="nav-item active">◉ Budgets</button>
+    <button class="nav-item">🏦 Accounts</button>
+    <button class="nav-item">✦ Insights</button>
+    <button class="nav-item">⚙ Rules</button>
+    <button class="nav-item">⋯ Settings</button>
+  </nav>
+
+  <!-- Main content -->
+  <main class="main">
+    <div class="budget-page">
+
+      <!-- Page header -->
+      <div class="budget-header">
+        <span class="budget-title">Budgets</span>
+        <div class="month-nav">
+          <button class="month-nav-btn">‹</button>
+          <span class="month-label">August 2026</span>
+          <button class="month-nav-btn">›</button>
+        </div>
+        <div class="view-toggle">
+          <button class="view-btn active">Monthly</button>
+          <button class="view-btn">Annual</button>
+        </div>
+      </div>
+
+      <!-- Summary cards -->
+      <div class="budget-summary">
+        <div class="summary-card">
+          <div class="summary-label">Spent</div>
+          <div class="summary-val warn">$14,820</div>
+        </div>
+        <div class="summary-card">
+          <div class="summary-label">Budget</div>
+          <div class="summary-val">$24,250</div>
+        </div>
+        <div class="summary-card">
+          <div class="summary-label">Remaining</div>
+          <div class="summary-val good">$9,430</div>
+        </div>
+      </div>
+
+      <!-- Overall bar -->
+      <div class="overall-bar-wrap">
+        <div class="overall-bar-header">
+          <span class="overall-bar-label">Overall spending pace</span>
+          <span class="overall-bar-pct">61% spent · 68% of month elapsed</span>
+        </div>
+        <div class="progress-track">
+          <div class="progress-fill warn" style="width:61%"></div>
+          <div class="pace-tick" style="left:68%"></div>
+        </div>
+      </div>
+
+      <!-- ═══════════════════════════════════════════ -->
+      <!-- GROUP: Casa -->
+      <!-- ═══════════════════════════════════════════ -->
+      <div class="group-section">
+        <div class="group-hdr">
+          <div class="group-hdr-left">
+            <span class="group-icon">🏡</span>
+            <span class="group-name">Casa</span>
+          </div>
+          <div>
+            <span class="group-total-spent">$12,800</span>
+            <span class="group-total-budget"> / $14,210</span>
+          </div>
+        </div>
+        <div class="tile-grid">
+
+          <!-- Mortgage — Fixed, on track -->
+          <div class="cat-tile good">
+            <div class="tile-icon-row">
+              <div class="tile-icon" style="background:#16a34a28">🏠</div>
+              <div class="tile-status-dot"></div>
+            </div>
+            <div class="tile-name">Mortgage</div>
+            <div class="tile-amounts">
+              <span class="tile-spent">$10,300</span>
+              <span class="tile-budget">/ $10,300</span>
+            </div>
+            <div class="tile-bar-track"><div class="tile-bar-fill" style="width:100%"></div></div>
+            <div class="tile-pct">100% — fixed</div>
+          </div>
+
+          <!-- Utilities — Over pace -->
+          <div class="cat-tile warn">
+            <div class="tile-icon-row">
+              <div class="tile-icon" style="background:#f59e0b28">💡</div>
+              <div class="tile-status-dot"></div>
+            </div>
+            <div class="tile-name">Utilities</div>
+            <div class="tile-amounts">
+              <span class="tile-spent">$540</span>
+              <span class="tile-budget">/ $620</span>
+            </div>
+            <div class="tile-bar-track"><div class="tile-bar-fill" style="width:87%"></div></div>
+            <div class="tile-pct">87% · on pace ⚠</div>
+          </div>
+
+          <!-- Cleaning — Good -->
+          <div class="cat-tile good">
+            <div class="tile-icon-row">
+              <div class="tile-icon" style="background:#0ea5e928">🧹</div>
+              <div class="tile-status-dot"></div>
+            </div>
+            <div class="tile-name">Cleaning</div>
+            <div class="tile-amounts">
+              <span class="tile-spent">$1,200</span>
+              <span class="tile-budget">/ $2,692</span>
+            </div>
+            <div class="tile-bar-track"><div class="tile-bar-fill" style="width:45%"></div></div>
+            <div class="tile-pct">45% · under pace</div>
+          </div>
+
+          <!-- Home repairs — Zero spent -->
+          <div class="cat-tile zero">
+            <div class="tile-icon-row">
+              <div class="tile-icon" style="background:#33415528">🔧</div>
+              <div class="tile-status-dot"></div>
+            </div>
+            <div class="tile-name">Repairs</div>
+            <div class="tile-amounts">
+              <span class="tile-spent">$0</span>
+              <span class="tile-budget">/ $458</span>
+            </div>
+            <div class="tile-bar-track"><div class="tile-bar-fill" style="width:0%"></div></div>
+            <div class="tile-pct">0% spent</div>
+          </div>
+
+          <!-- Telecom -->
+          <div class="cat-tile good">
+            <div class="tile-icon-row">
+              <div class="tile-icon" style="background:#8b5cf628">📡</div>
+              <div class="tile-status-dot"></div>
+            </div>
+            <div class="tile-name">Telecom</div>
+            <div class="tile-amounts">
+              <span class="tile-spent">$240</span>
+              <span class="tile-budget">/ $240</span>
+            </div>
+            <div class="tile-bar-track"><div class="tile-bar-fill" style="width:100%"></div></div>
+            <div class="tile-pct">100% — fixed</div>
+          </div>
+
+          <!-- Insurance -->
+          <div class="cat-tile zero">
+            <div class="tile-icon-row">
+              <div class="tile-icon" style="background:#06b6d428">🛡</div>
+              <div class="tile-status-dot"></div>
+            </div>
+            <div class="tile-name">Insurance</div>
+            <div class="tile-amounts">
+              <span class="tile-spent">$0</span>
+              <span class="tile-budget">/ $63</span>
+            </div>
+            <div class="tile-bar-track"><div class="tile-bar-fill" style="width:0%"></div></div>
+            <div class="tile-pct">annual — not yet</div>
+          </div>
+
+        </div>
+      </div>
+
+      <!-- ═══════════════════════════════════════════ -->
+      <!-- GROUP: Kids -->
+      <!-- ═══════════════════════════════════════════ -->
+      <div class="group-section">
+        <div class="group-hdr">
+          <div class="group-hdr-left">
+            <span class="group-icon">👧</span>
+            <span class="group-name">Kids</span>
+          </div>
+          <div>
+            <span class="group-total-spent">$2,850</span>
+            <span class="group-total-budget"> / $2,775</span>
+          </div>
+        </div>
+        <div class="tile-grid">
+
+          <!-- Tuition — Over budget -->
+          <div class="cat-tile over">
+            <div class="tile-icon-row">
+              <div class="tile-icon" style="background:#ef444428">🎓</div>
+              <div class="tile-status-dot"></div>
+            </div>
+            <div class="tile-name">Tuition & School</div>
+            <div class="tile-amounts">
+              <span class="tile-spent">$975</span>
+              <span class="tile-budget">/ $900</span>
+            </div>
+            <div class="tile-bar-track"><div class="tile-bar-fill" style="width:100%"></div></div>
+            <div class="tile-pct">108% ↑ over budget</div>
+          </div>
+
+          <!-- Activities — Amber -->
+          <div class="cat-tile warn">
+            <div class="tile-icon-row">
+              <div class="tile-icon" style="background:#f59e0b28">🏃</div>
+              <div class="tile-status-dot"></div>
+            </div>
+            <div class="tile-name">Activities</div>
+            <div class="tile-amounts">
+              <span class="tile-spent">$1,875</span>
+              <span class="tile-budget">/ $1,875</span>
+            </div>
+            <div class="tile-bar-track"><div class="tile-bar-fill" style="width:100%"></div></div>
+            <div class="tile-pct">100% — on pace</div>
+          </div>
+
+        </div>
+      </div>
+
+      <!-- ═══════════════════════════════════════════ -->
+      <!-- GROUP: Salidas -->
+      <!-- ═══════════════════════════════════════════ -->
+      <div class="group-section">
+        <div class="group-hdr">
+          <div class="group-hdr-left">
+            <span class="group-icon">🍽</span>
+            <span class="group-name">Salidas</span>
+          </div>
+          <div>
+            <span class="group-total-spent">$980</span>
+            <span class="group-total-budget"> / $1,967</span>
+          </div>
+        </div>
+        <div class="tile-grid">
+          <div class="cat-tile good">
+            <div class="tile-icon-row">
+              <div class="tile-icon" style="background:#16a34a28">🥂</div>
+              <div class="tile-status-dot"></div>
+            </div>
+            <div class="tile-name">Dining & Bars</div>
+            <div class="tile-amounts">
+              <span class="tile-spent">$760</span>
+              <span class="tile-budget">/ $1,800</span>
+            </div>
+            <div class="tile-bar-track"><div class="tile-bar-fill" style="width:42%"></div></div>
+            <div class="tile-pct">42% · under pace</div>
+          </div>
+          <div class="cat-tile zero">
+            <div class="tile-icon-row">
+              <div class="tile-icon" style="background:#33415528">🎭</div>
+              <div class="tile-status-dot"></div>
+            </div>
+            <div class="tile-name">Events</div>
+            <div class="tile-amounts">
+              <span class="tile-spent">$220</span>
+              <span class="tile-budget">/ $167</span>
+            </div>
+            <div class="tile-bar-track"><div class="tile-bar-fill warn" style="width:100%;background:var(--amber)"></div></div>
+            <div class="tile-pct">132% — over</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ═══════════════════════════════════════════ -->
+      <!-- GROUP: Auto -->
+      <!-- ═══════════════════════════════════════════ -->
+      <div class="group-section">
+        <div class="group-hdr">
+          <div class="group-hdr-left">
+            <span class="group-icon">🚗</span>
+            <span class="group-name">Auto</span>
+          </div>
+          <div>
+            <span class="group-total-spent">$820</span>
+            <span class="group-total-budget"> / $808</span>
+          </div>
+        </div>
+        <div class="tile-grid">
+          <div class="cat-tile good">
+            <div class="tile-icon-row">
+              <div class="tile-icon" style="background:#16a34a28">🏦</div>
+              <div class="tile-status-dot"></div>
+            </div>
+            <div class="tile-name">Car Payment</div>
+            <div class="tile-amounts">
+              <span class="tile-spent">$460</span>
+              <span class="tile-budget">/ $460</span>
+            </div>
+            <div class="tile-bar-track"><div class="tile-bar-fill" style="width:100%"></div></div>
+            <div class="tile-pct">100% — fixed</div>
+          </div>
+          <div class="cat-tile good">
+            <div class="tile-icon-row">
+              <div class="tile-icon" style="background:#16a34a28">⛽</div>
+              <div class="tile-status-dot"></div>
+            </div>
+            <div class="tile-name">Gas & Tolls</div>
+            <div class="tile-amounts">
+              <span class="tile-spent">$185</span>
+              <span class="tile-budget">/ $265</span>
+            </div>
+            <div class="tile-bar-track"><div class="tile-bar-fill" style="width:70%"></div></div>
+            <div class="tile-pct">70% · under pace</div>
+          </div>
+          <div class="cat-tile zero">
+            <div class="tile-icon-row">
+              <div class="tile-icon" style="background:#33415528">🔩</div>
+              <div class="tile-status-dot"></div>
+            </div>
+            <div class="tile-name">Service</div>
+            <div class="tile-amounts">
+              <span class="tile-spent">$175</span>
+              <span class="tile-budget">/ $83</span>
+            </div>
+            <div class="tile-bar-track"><div class="tile-bar-fill" style="width:100%;background:var(--amber)"></div></div>
+            <div class="tile-pct">211% — over (annual)</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ═══════════════════════════════════════════ -->
+      <!-- Shopping -->
+      <!-- ═══════════════════════════════════════════ -->
+      <div class="group-section">
+        <div class="group-hdr">
+          <div class="group-hdr-left">
+            <span class="group-icon">🛍</span>
+            <span class="group-name">Shopping</span>
+          </div>
+          <div>
+            <span class="group-total-spent">$1,340</span>
+            <span class="group-total-budget"> / $2,000</span>
+          </div>
+        </div>
+        <div class="tile-grid">
+          <div class="cat-tile good">
+            <div class="tile-icon-row">
+              <div class="tile-icon" style="background:#16a34a28">🛒</div>
+              <div class="tile-status-dot"></div>
+            </div>
+            <div class="tile-name">Super &amp; Farmacia</div>
+            <div class="tile-amounts">
+              <span class="tile-spent">$1,340</span>
+              <span class="tile-budget">/ $2,000</span>
+            </div>
+            <div class="tile-bar-track"><div class="tile-bar-fill" style="width:67%"></div></div>
+            <div class="tile-pct">67% · under pace</div>
+          </div>
+          <div class="cat-tile good">
+            <div class="tile-icon-row">
+              <div class="tile-icon" style="background:#16a34a28">👗</div>
+              <div class="tile-status-dot"></div>
+            </div>
+            <div class="tile-name">Clothing &amp; Misc</div>
+            <div class="tile-amounts">
+              <span class="tile-spent">$0</span>
+              <span class="tile-budget">/ $2,000</span>
+            </div>
+            <div class="tile-bar-track"><div class="tile-bar-fill" style="width:0%"></div></div>
+            <div class="tile-pct">0% — not yet spent</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ─────────────── Design Notes ─────────────── -->
+      <div class="design-notes">
+        <h3>Design Recommendation — Budget Tiles</h3>
+        <ul>
+          <li><strong>Group sections with tile grids</strong> replace the current full-width row list. Each group has a header showing total spent vs budget, then a 4-column grid (desktop) / 2-column (mobile) of category tiles.</li>
+          <li><strong>Left accent bar color</strong> encodes status at a glance: <span style="color:var(--brand)">green = under pace</span>, <span style="color:var(--amber)">amber = over pace (approaching limit)</span>, <span style="color:var(--red)">red = over budget</span>.</li>
+          <li><strong>Status dot</strong> (top-right of tile) gives a second color signal without needing to read numbers. Over-budget dot pulses with a red glow.</li>
+          <li><strong>Mini bar + percentage</strong> at the tile bottom is the most compact way to show progress — no full-width bar needed per row.</li>
+          <li><strong>Pace tick</strong> on the overall bar shows today's elapsed month proportion so you can instantly see if you're ahead or behind on total spending.</li>
+          <li><strong>Clicking a tile</strong> could navigate to Transactions pre-filtered to that category + current month (same drill-down that exists from Dashboard today).</li>
+          <li><strong>Annual categories</strong> (car service, insurance) show a note "annual — not yet" rather than forcing a monthly % comparison that would always look alarming.</li>
+          <li><strong>Tile grid vs current list:</strong> shows ~3× more categories without scrolling on desktop; groups collapse the hierarchy so context is maintained.</li>
+        </ul>
+      </div>
+
+    </div><!-- /budget-page -->
+  </main>
+</div>
+</body>
+</html>

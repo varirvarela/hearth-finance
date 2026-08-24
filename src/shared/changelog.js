@@ -1,5 +1,17 @@
 export const CHANGELOG = [
   {
+    version: '1.7.2',
+    date:    '2026-08-23',
+    changes: [
+      'Accounts: removed duplicate Settings section (partner, import/export, about) — those now live in Settings and Transactions tabs only.',
+      'Accounts: sync row redesigned — replaced two tiny date-input boxes with a clean range preset (2 days / 30 days / 90 days / 6 months / 1 year).',
+      'Transactions: Import CSV and Export CSV buttons (⬆ ⬇) added to the toolbar.',
+      'Transactions: account name in each row now always shows the alias (if set) instead of the raw Plaid account name.',
+      'Automation tab: label renamed to "Rules" in the nav; added as a visible nav item.',
+      'Settings: Import and Export sections removed (moved to Transactions toolbar).',
+    ],
+  },
+  {
     version: '1.7.1',
     date:    '2026-08-21',
     changes: [

@@ -1,15 +1,10 @@
 import { dbGet, dbSet, dbListen, auth, getPartnerUid } from '../shared/firebase.js';
 import { fmtCurrency, fmtDate } from '../shared/format.js';
-import { signOut } from 'firebase/auth';
-import { openImportModal } from './import.js';
 import { CHANGELOG } from '../shared/changelog.js';
 
 const WORKER_URL = import.meta.env.VITE_WORKER_URL ?? 'http://localhost:8787';
 
 export function renderAccounts(container) {
-  const today     = new Date().toISOString().slice(0, 10);
-  const ninetyAgo = new Date(Date.now() - 90 * 86400000).toISOString().slice(0, 10);
-
   container.innerHTML = `
     <div class="page accounts" style="padding:0">
       <!-- Dark hero: Assets · Debt · Net Worth -->
@@ -38,39 +33,20 @@ export function renderAccounts(container) {
         </div>
 
         <div class="acct-sync-row">
-          <input type="date" id="sync-from" value="${ninetyAgo}" />
-          <input type="date" id="sync-to"   value="${today}" />
-          <button class="btn-ghost" id="sync-now">Sync</button>
+          <select id="sync-range" style="flex:1;border:1.5px solid var(--border);border-radius:8px;padding:0.45rem 0.65rem;font-size:0.82rem;background:var(--surface);color:var(--text)">
+            <option value="2">Last 2 days</option>
+            <option value="30">Last 30 days</option>
+            <option value="90" selected>Last 90 days</option>
+            <option value="180">Last 6 months</option>
+            <option value="365">Last year</option>
+          </select>
+          <button class="btn-primary" id="sync-now" style="width:auto;padding:0.45rem 1rem;font-size:0.82rem">Sync</button>
         </div>
 
         <button class="acct-settings-btn" id="rationalize-accounts" style="margin-bottom:12px">
           Rationalize accounts — find duplicates →
         </button>
 
-        <!-- Settings section -->
-        <div class="acct-settings">
-          <div class="acct-settings-hdr">Settings</div>
-
-          <div class="acct-settings-group">
-            <div class="acct-settings-label">Partner Sharing</div>
-            <div id="partner-section"></div>
-          </div>
-
-          <div class="acct-settings-group">
-            <div class="acct-settings-label">Data</div>
-            <button class="acct-settings-btn" id="import-csv">Import Tiller CSV…</button>
-            <button class="acct-settings-btn" id="export-csv">Export CSV</button>
-            <button class="acct-settings-btn" id="go-automation">Manage categorization rules →</button>
-          </div>
-
-          <div class="acct-settings-group">
-            <div class="acct-settings-label">About</div>
-            <div class="acct-settings-about">Hearth Finance · v${CHANGELOG[0].version}</div>
-            <button class="acct-settings-btn" id="show-changelog">What's new →</button>
-          </div>
-
-          <button class="btn-danger" id="sign-out" style="margin-top:1rem;width:100%;border-radius:8px;font-size:0.78rem">Sign Out</button>
-        </div>
       </div>
     </div>
   `;
@@ -118,14 +94,7 @@ export function renderAccounts(container) {
   container.querySelector('#link-account').addEventListener('click', () => openPlaidLink(uid));
   container.querySelector('#add-manual').addEventListener('click', () => openManualAccountForm(uid));
   container.querySelector('#sync-now').addEventListener('click', () => syncTransactions(uid));
-  container.querySelector('#import-csv').addEventListener('click', () => openImportModal());
-  container.querySelector('#export-csv').addEventListener('click', () => exportCsv(uid));
-  container.querySelector('#sign-out').addEventListener('click', () => signOut(auth));
-  container.querySelector('#go-automation').addEventListener('click', () => { location.hash = 'automation'; });
-  container.querySelector('#show-changelog').addEventListener('click', () => openChangelogSheet());
   container.querySelector('#rationalize-accounts').addEventListener('click', () => openRationalizeSheet(uid));
-
-  renderPartnerSection(uid);
 }
 
 export function openChangelogSheet() {
@@ -416,9 +385,10 @@ async function openPlaidLink(uid) {
 }
 
 async function syncTransactions(uid) {
-  const btn       = document.getElementById('sync-now');
-  const startDate = document.getElementById('sync-from').value;
-  const endDate   = document.getElementById('sync-to').value;
+  const btn   = document.getElementById('sync-now');
+  const days  = parseInt(document.getElementById('sync-range')?.value ?? '90', 10);
+  const today = new Date().toISOString().slice(0, 10);
+  const start = new Date(Date.now() - days * 86400000).toISOString().slice(0, 10);
   if (!btn) return;
   btn.textContent = 'Syncing…'; btn.disabled = true;
   try {
@@ -426,7 +396,7 @@ async function syncTransactions(uid) {
     const res = await fetch(`${WORKER_URL}/sync`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${idToken}` },
-      body: JSON.stringify({ startDate, endDate }),
+      body: JSON.stringify({ startDate: start, endDate: today }),
     });
     const { synced } = await res.json();
     btn.textContent = `Sync (${synced} new)`;
@@ -538,56 +508,3 @@ function openManualAccountForm(uid) {
   modal.addEventListener('click', e => { if (e.target === modal) modal.remove(); });
 }
 
-function renderPartnerSection(uid) {
-  const el = document.getElementById('partner-section');
-  if (!el) return;
-  dbGet(`users/${uid}`).then(user => {
-    if (user?.partnerUid) {
-      dbGet(`users/${user.partnerUid}`).then(partner => {
-        el.innerHTML = `<div class="acct-settings-about">Sharing with <strong>${partner?.name ?? partner?.email ?? 'your partner'}</strong>.</div>`;
-      });
-    } else {
-      el.innerHTML = `
-        <button class="acct-settings-btn" id="send-invite">Send invite code</button>
-        <div style="display:flex;gap:6px;margin-top:6px">
-          <input id="invite-code-input" placeholder="Enter invite code" style="flex:1;border:1.5px solid var(--border);border-radius:8px;padding:8px 10px;font-size:0.85rem" />
-          <button class="btn-primary" id="accept-invite" style="width:auto;padding:8px 14px">Join</button>
-        </div>
-      `;
-      el.querySelector('#send-invite').addEventListener('click', () => generateInvite(uid));
-      el.querySelector('#accept-invite').addEventListener('click', () => acceptInvite(uid));
-    }
-  });
-}
-
-async function generateInvite(uid) {
-  const code = Math.random().toString(36).slice(2, 8).toUpperCase();
-  await dbSet(`invites/${code}`, { fromUid: uid, email: auth.currentUser.email, createdAt: Date.now(), accepted: false });
-  await dbSet(`users/${uid}/inviteCode`, code);
-  alert(`Your invite code: ${code}\n\nShare this with your partner.`);
-}
-
-async function acceptInvite(uid) {
-  const code   = document.getElementById('invite-code-input').value.trim().toUpperCase();
-  const invite = await dbGet(`invites/${code}`);
-  if (!invite || invite.accepted) { alert('Invalid or already-used invite code.'); return; }
-  await dbSet(`invites/${code}/accepted`, true);
-  await dbSet(`invites/${code}/acceptedBy`, uid);
-  await dbSet(`users/${uid}/partnerUid`, invite.fromUid);
-  await dbSet(`users/${invite.fromUid}/partnerUid`, uid);
-  renderPartnerSection(uid);
-}
-
-async function exportCsv(uid) {
-  const txns = await dbGet(`transactions/${uid}`);
-  if (!txns) { alert('No transactions to export.'); return; }
-  const rows = [['Date', 'Description', 'Merchant', 'Amount', 'Category', 'Account', 'Notes']];
-  for (const t of Object.values(txns)) {
-    rows.push([t.date, t.description, t.merchantName ?? '', t.amount, t.category, t.accountId, t.notes ?? '']);
-  }
-  const csv = rows.map(r => r.map(v => `"${String(v).replace(/"/g, '""')}"`).join(',')).join('\n');
-  const a = document.createElement('a');
-  a.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv' }));
-  a.download = `hearth-export-${new Date().toISOString().slice(0, 10)}.csv`;
-  a.click();
-}

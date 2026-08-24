@@ -147,6 +147,8 @@ input:focus, select:focus, textarea:focus { outline: none; }
   border-top: 1px solid var(--border);
   box-shadow: 0 -1px 0 var(--border), 0 -4px 20px rgba(0,0,0,.05);
   display: flex;
+  overflow-x: auto;
+  scrollbar-width: none;
   z-index: 100;
 }
 
@@ -410,6 +412,20 @@ input:focus, select:focus, textarea:focus { outline: none; }
   flex-shrink: 0;
   align-self: center;
 }
+
+.txn-data-btn {
+  width: auto;
+  padding: 0 10px;
+  font-size: 1rem;
+  flex-shrink: 0;
+  border: 1.5px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface);
+  color: var(--muted);
+  height: 36px;
+  line-height: 1;
+}
+.txn-data-btn:hover { color: var(--text); border-color: var(--brand); }
 
 /* Filter toggle button */
 .filter-toggle {
