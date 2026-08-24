@@ -502,40 +502,70 @@ function updateLeafSection(state, refresh) {
 // ── Tiered category suggestion helpers ────────────────────────────────────────
 
 function suggestCategory(txnId, txn, allRules) {
-  // Tier 1: rules
-  if (allRules && Object.keys(allRules).length > 0) {
-    const match = evaluateRules(txn, Object.values(allRules));
-    if (match) return { catId: match, source: 'rule' };
-  }
+  const isValidCat = id => id && id !== 'uncategorized' && getCategoryById(id).id !== 'uncategorized';
 
-  // Tier 2: keyword heuristics
+  // Tier 1: rules (evaluated against the rules object directly)
+  const ruleMatch = evaluateRules(txn, allRules);
+  if (ruleMatch && isValidCat(ruleMatch)) return { catId: ruleMatch, source: 'rule' };
+
+  // Tier 2: keyword heuristics — all IDs match the real taxonomy
   const text = ((txn.merchantName ?? '') + ' ' + (txn.description ?? '')).toLowerCase();
   const KEYWORDS = [
-    [/netflix|spotify|disney\+|hbo|apple.*subscription|amazon prime/i, 'suscripciones'],
-    [/uber eats|rappi|didi food|doordash|grubhub|pedidos ya/i, 'delivery'],
-    [/uber|didi|lyft|cabify|bolt/i, 'taxi'],
-    [/cfe|gas natural|telmex|totalplay|megacable|izzi|infinitum/i, 'utilities'],
-    [/walmart|costco|sam.s club|soriana|chedraui|h-e-b|oxxo|7-eleven/i, 'super'],
-    [/amazon|mercado libre|shein|liverpool|palacio de hierro/i, 'clothing'],
-    [/gym|fitness|sport|equinox|smartfit/i, 'gym'],
-    [/doctor|medico|farmacia|similares|benavides|hospital/i, 'health'],
-    [/gasolina|pemex|bp|shell|total.*gas/i, 'gas'],
-    [/cinepolis|cinemex|teatro|concierto|ticketmaster/i, 'events'],
-    [/restaurant|cafe|coffee|starbucks|sushi|pizza|taco|burger|mcdonald|kfc/i, 'dining'],
-    [/school|colegio|universidad|tuition|academia/i, 'school'],
-    [/airbnb|hotel|booking|expedia|vrbo/i, 'hotel'],
-    [/american airlines|aeromexico|volaris|vivaaerobus|delta|united/i, 'flights'],
-    [/mortgage|hipoteca|infonavit/i, 'mortgage'],
-    [/insurance|seguro|allianz|gnp|axa/i, 'insurance'],
-    [/electric|luz|cfe/i, 'utilities'],
-    [/internet|fibra|modem/i, 'telecom'],
+    // Transfers (must be first — high confidence)
+    [/\btransfer\b|transferencia|entre cuentas|wire transfer|sent to|received from/i, 'transfer_cuentas'],
+    [/pago.*tarjeta|card payment|tarjeta.*pago|credit card payment/i,               'transfer_tarjeta'],
+    // Delivery
+    [/uber eats|rappi|didi food|doordash|grubhub|pedidos ya/i,                     'salidas_delivery'],
+    // Dining & bars
+    [/restaurante|restaurant|café|cafe|coffee|starbucks|sushi|pizza|taco|burger|mcdonald|kfc|subway|bar |cantina/i, 'salidas_comunes'],
+    // Streaming & subscriptions
+    [/netflix|spotify|disney\+|hbo|apple.*sub|amazon prime|youtube premium|deezer|paramount/i, 'suscripciones_comunes'],
+    // Telecom (before utilities so it matches first)
+    [/telmex|totalplay|izzi|megacable|infinitum|at&t|att fijo|teléfono fijo|internet.*hogar/i, 'telecom_fijo'],
+    // Utilities
+    [/\bcfe\b|luz eléctrica|sacmex|\bconagua\b|gas natural fenosa|sempra|agua potable/i, 'utilities_comunes'],
+    // Super & farmacia
+    [/walmart|costco|sam.?s club|soriana|chedraui|h.?e.?b|oxxo|7.?eleven|farmacia|similares|benavides|san pablo|superama|coppel/i, 'super_farmacia_comunes'],
+    // Shopping
+    [/amazon|mercado libre|shein|liverpool|palacio de hierro|zara|h&m|forever 21|sears/i, 'shopping_comunes'],
+    // Auto — fuel & tolls
+    [/gasolina|pemex|bp |shell|total.?gas|combustible|\bpeaje\b|\bcaseta\b|tag iave|autopass/i, 'auto_comunes'],
+    // Auto — service & insurance
+    [/seguro.*auto|auto.*seguro|car insurance|mantenimiento auto|servicio.*auto|nissan|honda service/i, 'auto_comunes_anual'],
+    // Kids — school
+    [/colegio|escuela|material escolar|útiles|papelería|librería escolar/i,         'kids_colegio'],
+    [/\btuition\b|inscripción|matrícula|cuota escolar/i,                             'kids_tuition'],
+    // Kids activities
+    [/kids.*actividad|actividad.*niños|fútbol.*niños|clases.*niños/i,               'kids_activities'],
+    // Salud
+    [/doctor|médico|medico|hospital|clínica|clinica|dentista|farmacia benavides|farmacias del ahorro|laboratorio/i, 'salud_comunes'],
+    // Entertainment & events
+    [/cinepolis|cinemex|cineteca|teatro|concierto|ticketmaster|superboletos|show|espectáculo/i, 'salidas_eventos'],
+    // Casa — cleaning
+    [/limpieza|cleaning service|servicio hogar|mucama|srvc hogar/i,                  'casa_comunes_mensual'],
+    // Casa — mortgage/rent
+    [/hipoteca|mortgage|infonavit|fovissste|\brenta\b|arrendamiento/i,              'casa_fijo_mensual'],
+    // Gym & fitness
+    [/smartfit|equinox|sport.?city|gym|crossfit|\bspin\b|gimnasio/i,                'adult_activities'],
+    // Travel
+    [/airbnb|booking\b|expedia|vrbo|marriott|hilton|hyatt|four seasons|hotel\b/i,   'travel_vari'],
+    [/aeromexico|volaris|vivaaerobus|delta|united|american airlines|aerol[ií]nea/i,  'travel_vari'],
+    // Venmo
+    [/\bvenmo\b/i, 'venmo'],
+    // Donations
+    [/donación|donation|donativo|charity|cruz roja/i,                                'donation'],
+    // Business
+    [/accenture|infosys|deloitte|kpmg|expense report/i,                              'business_accenture'],
   ];
   for (const [pattern, catId] of KEYWORDS) {
-    if (pattern.test(text)) return { catId, source: 'heuristic' };
+    if (pattern.test(text) && isValidCat(catId)) return { catId, source: 'heuristic' };
   }
 
   // Tier 3: cached Worker result if already fetched
-  if (_aiSugCache.has(txnId)) return _aiSugCache.get(txnId);
+  const cached = _aiSugCache.get(txnId);
+  if (cached !== undefined) {
+    return cached && isValidCat(cached.catId) ? cached : null;
+  }
 
   // Return null if nothing found yet (Worker call triggered separately)
   return null;
@@ -562,9 +592,14 @@ async function fetchAiSuggestion(txnId, txn) {
     });
     if (!res.ok) return;
     const data = await res.json();
-    if (data.category) {
-      _aiSugCache.set(txnId, { catId: data.category, source: 'ai' });
-      updateSugStrip(txnId, { catId: data.category, source: 'ai' });
+    const primary = data.category;
+    const alts    = (data.alternatives ?? []).slice(0, 2); // up to 2 extra options
+    if (primary && primary !== 'uncategorized') {
+      const sug = { catId: primary, source: 'ai', alts };
+      _aiSugCache.set(txnId, sug);
+      updateSugStrip(txnId, sug);
+    } else {
+      _aiSugCache.set(txnId, null); // no valid suggestion
     }
   } catch { /* Worker unavailable — silent fail */ }
 }

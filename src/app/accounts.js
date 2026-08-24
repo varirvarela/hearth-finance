@@ -214,17 +214,23 @@ async function openRationalizeSheet(uid) {
     const rows = suggestions.map((s, i) => `
       <div class="rat-row" data-i="${i}">
         <div class="rat-row-info">
-          <span class="rat-plaid">${s.plaidName}</span>
-          <span class="rat-arrow">←</span>
-          <span class="rat-tiller">${s.tillerName}</span>
+          <div class="rat-row-account">
+            <span class="rat-label">Linked bank</span>
+            <span class="rat-plaid">${s.plaidName}</span>
+          </div>
+          <div class="rat-row-arrow">↔</div>
+          <div class="rat-row-account">
+            <span class="rat-label">Tiller import</span>
+            <span class="rat-tiller">${s.tillerName}</span>
+          </div>
         </div>
-        <button class="rat-merge-btn btn-primary" data-i="${i}" style="font-size:0.72rem;padding:5px 12px;border-radius:6px">Merge</button>
+        <button class="rat-merge-btn btn-primary" data-i="${i}" style="font-size:0.72rem;padding:5px 14px;border-radius:6px;flex-shrink:0">Merge</button>
       </div>`).join('');
     sheet.innerHTML = `
       <div class="sheet-handle"></div>
-      <div class="sheet-hdr"><span class="sheet-title">Account suggestions (${suggestions.length})</span><button class="sheet-close" id="rat-close">✕</button></div>
+      <div class="sheet-hdr"><span class="sheet-title">Merge duplicate accounts (${suggestions.length})</span><button class="sheet-close" id="rat-close">✕</button></div>
       <div style="padding:8px 16px 16px">
-        <p style="font-size:0.72rem;color:var(--muted);margin:0 0 10px">These Tiller import accounts look like the same physical account as a linked bank. Merging hides duplicates in the filter and matches their transactions together.</p>
+        <p style="font-size:0.75rem;color:var(--muted);margin:0 0 14px;line-height:1.5">These pairs look like the same account — one linked via Plaid and one imported from Tiller. <strong style="color:var(--text)">Merging</strong> hides the Tiller duplicate from filters and links their transactions together.</p>
         <div id="rat-list">${rows}</div>
       </div>`;
 

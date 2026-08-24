@@ -1557,6 +1557,25 @@ button:active  { opacity: 0.7; transform: scale(0.97); }
 }
 .bud-set-link:hover { text-decoration: underline; }
 
+.bud-tile-edit-btn {
+  background: none;
+  border: none;
+  color: var(--muted);
+  font-size: 0.7rem;
+  cursor: pointer;
+  padding: 1px 3px;
+  border-radius: 4px;
+  line-height: 1;
+  opacity: 0;
+  transition: opacity .15s;
+  position: absolute;
+  top: 8px;
+  right: 8px;
+}
+.bud-group-tile:hover .bud-tile-edit-btn,
+.bud-cat-tile:hover .bud-tile-edit-btn { opacity: 1; }
+.bud-tile-edit-btn:hover { color: var(--brand); background: var(--faint); }
+
 /* Level 3 category detail */
 .bud-detail-hdr {
   display: flex; align-items: center; gap: 12px;
@@ -2958,17 +2977,22 @@ button:active  { opacity: 0.7; transform: scale(0.97); }
 /* Rationalize sheet rows */
 .rat-row {
   display: flex;
-  align-items: center;
+  align-items: stretch;
   justify-content: space-between;
   gap: 8px;
   padding: 9px 0;
   border-bottom: 1px solid var(--border);
 }
 .rat-row:last-child { border-bottom: none; }
-.rat-row-info { flex: 1; min-width: 0; display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
-.rat-plaid  { font-size: 0.78rem; font-weight: 600; color: var(--text); }
-.rat-arrow  { font-size: 0.75rem; color: var(--faint); }
-.rat-tiller { font-size: 0.75rem; color: var(--muted); }
+.rat-row-info {
+  flex: 1; min-width: 0;
+  display: flex; align-items: center; gap: 10px;
+}
+.rat-row-account { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.rat-label  { font-size: 0.58rem; font-weight: 700; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); }
+.rat-plaid  { font-size: 0.8rem; font-weight: 700; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.rat-tiller { font-size: 0.78rem; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.rat-row-arrow { font-size: 0.9rem; color: var(--faint); flex-shrink: 0; }
 
 /* ── Changelog sheet ───────────────────────────────────── */
 .changelog-list {

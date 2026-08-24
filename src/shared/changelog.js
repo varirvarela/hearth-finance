@@ -1,5 +1,14 @@
 export const CHANGELOG = [
   {
+    version: '1.7.5',
+    date:    '2026-08-24',
+    changes: [
+      'Transactions: category suggestions no longer show "No Category" — if no valid match is found after rules, heuristics, and AI, the row requires manual categorization instead.',
+      'Transactions: "Transfer" keyword now correctly triggers a Transfer category suggestion.',
+      'Accounts: "Merge duplicate accounts" sheet redesigned — clearer two-column layout with labeled bank/import columns.',
+    ],
+  },
+  {
     version: '1.7.4',
     date:    '2026-08-24',
     changes: [
