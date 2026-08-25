@@ -1,5 +1,27 @@
 export const CHANGELOG = [
   {
+    version: '1.9.0',
+    date:    '2026-08-25',
+    changes: [
+      'Transactions: confirming a category suggestion now saves a learned merchant rule — future transactions from the same merchant are categorized instantly, without AI.',
+      'Transactions: AI suggestion strips now show "Learned" when a confirmed merchant rule is the source.',
+      'AI categorization: the Worker now receives your 12 most recent manually-confirmed transactions as few-shot examples, improving accuracy for familiar merchants.',
+      'AI categorization: Gemini 429 quota errors now degrade gracefully — the Worker returns no suggestion instead of an error, and the batch script saves partial results and exits cleanly.',
+      'Batch script: added Tier 0.5 (learned merchant rules from Firebase) — these fire before keyword heuristics and have 100% confidence.',
+      'Batch script: added ~60 US merchant patterns covering airlines, restaurants, parks, shopping, health, and home improvement.',
+    ],
+  },
+  {
+    version: '1.8.2',
+    date:    '2026-08-25',
+    changes: [
+      'Transactions: skipping a duplicate is now pair-scoped — it only excludes that specific A↔B pair, so transaction A can still be matched with C in the future.',
+      'Transactions: "Keep A / Keep B" now correctly removes the deleted transaction from the transaction list immediately.',
+      'Transactions: pending → settled Plaid duplicates are auto-dismissed on banner load — the pending version is hidden when a matching settled transaction exists within 5 days.',
+      'Transactions: duplicate review shows a warning when one side is a pending transaction, recommending the settled version.',
+    ],
+  },
+  {
     version: '1.8.1',
     date:    '2026-08-25',
     changes: [

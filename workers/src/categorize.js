@@ -1,18 +1,19 @@
 import { CATEGORIES, getCategoryById } from '../../src/shared/categories.js';
+import { normalizeMerchant }           from '../../src/shared/normalize-merchant.js';
 
-// Only leaf expense categories are valid targets for AI categorization.
-const EXPENSE_CATS = CATEGORIES.filter(
-  c => c.parent && !c.isIncome && c.parent !== 'transfer' && !c.hide,
-);
+// Only leaf categories (expense + transfer + income) are valid targets.
+const ALL_CATS = CATEGORIES.filter(c => c.parent && !c.hide);
+const EXPENSE_CATS = ALL_CATS.filter(c => !c.isIncome && c.parent !== 'transfer');
 
-const SYSTEM_PROMPT = `You are a household transaction categorizer for a bilingual (English/Spanish) family based in Mexico and the USA.
-Given transaction details, return JSON with your best categorization.
+const SYSTEM_PROMPT = `You are a household transaction categorizer for a bilingual (English/Spanish) family based in Connecticut, USA.
+Transactions are primarily from US merchants. Return JSON with your best categorization.
 
 Rules:
-- Transfers between own accounts (wire, transferencia, SPEI, sent to, received from) → do NOT categorize, return category "uncategorized"
+- Credit card payments → "transfer_tarjeta"
+- Inter-account wire transfers (wire transfer, transferencia, SPEI, entre cuentas) → "transfer_cuentas"
 - Only pick category ids from the provided list
 - Use at most 2 alternatives
-- If truly ambiguous, lower confidence and include alternatives
+- Lower confidence and include alternatives when ambiguous
 
 Response format (JSON only, no explanation, no markdown):
 {
@@ -23,7 +24,32 @@ Response format (JSON only, no explanation, no markdown):
   ]
 }`;
 
-export async function categorizeTransaction(txn, env) {
+// context = { merchantRules, examples }
+// merchantRules: { [normalizedName]: { catId } }  — confirmed by user in the app
+// examples: [{ merchantName, description, category, date, amount }]  — recent confirmed txns
+export async function categorizeTransaction(txn, env, context = {}) {
+  const { merchantRules = {}, examples = [] } = context;
+
+  // Tier 0: learned merchant rule (exact normalized name, written when user confirms)
+  const key = normalizeMerchant(txn.merchantName ?? txn.description);
+  if (key) {
+    const rule = merchantRules[key];
+    if (rule?.catId && rule.catId !== 'uncategorized') {
+      const cat = getCategoryById(rule.catId);
+      return {
+        category:    rule.catId,
+        group:       cat.parent ?? rule.catId,
+        isFixed:     cat.isFixed  ?? false,
+        isAnnual:    cat.isAnnual ?? false,
+        confidence:  1.0,
+        source:      'learned',
+        alternatives: [],
+        needsReview: false,
+      };
+    }
+  }
+
+  // Tier 1: Gemini AI
   const catList = EXPENSE_CATS.map(c => {
     const parent = CATEGORIES.find(p => p.id === c.parent);
     return `${c.id}: ${c.name} [group: ${parent?.name ?? c.parent}]`;
@@ -38,32 +64,48 @@ export async function categorizeTransaction(txn, env) {
   if (txn.accountName)   lines.push(`Account: ${txn.accountName}`);
   if (txn.plaidCategory) lines.push(`Bank category: ${txn.plaidCategory}`);
 
-  const prompt = `${SYSTEM_PROMPT}
+  const examplesBlock = examples.length
+    ? '\n\nSimilar transactions already categorized:\n' +
+      examples.map(e =>
+        `- "${e.merchantName ?? e.description}" (${e.date ?? ''}, $${Math.abs(e.amount ?? 0).toFixed(2)}) → ${e.category}`
+      ).join('\n')
+    : '';
 
-Transaction:
-${lines.join('\n')}
-
-Available categories:
-${catList}`;
+  const prompt = `${SYSTEM_PROMPT}\n\nTransaction:\n${lines.join('\n')}${examplesBlock}\n\nAvailable categories:\n${catList}`;
 
   const res = await fetch(
-    `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${env.GOOGLE_AI_API_KEY}`,
+    'https://generativelanguage.googleapis.com/v1beta/models/gemini-3.6-flash:generateContent',
     {
       method:  'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', 'x-goog-api-key': env.GOOGLE_AI_API_KEY },
       body:    JSON.stringify({
         contents:         [{ parts: [{ text: prompt }] }],
-        generationConfig: { responseMimeType: 'application/json', maxOutputTokens: 200 },
+        generationConfig: { responseMimeType: 'application/json', maxOutputTokens: 512 },
       }),
     },
   );
 
+  // 429 = quota exhausted — return gracefully so the app can degrade silently
+  if (res.status === 429) {
+    return { category: 'uncategorized', group: 'uncategorized', isFixed: false, isAnnual: false, confidence: 0, alternatives: [], needsReview: false, quotaExhausted: true };
+  }
+
+  if (!res.ok) {
+    return { category: 'uncategorized', group: 'uncategorized', isFixed: false, isAnnual: false, confidence: 0, alternatives: [], needsReview: true };
+  }
+
   let parsed;
   try {
     const data = await res.json();
-    const text = data.candidates?.[0]?.content?.parts?.[0]?.text ?? '';
-    parsed = JSON.parse(text);
+    let text = data.candidates?.[0]?.content?.parts?.[0]?.text ?? '';
+    text = text.trim().replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, '').trim();
+    const jsonMatch = text.match(/\{[\s\S]*\}/);
+    parsed = jsonMatch ? JSON.parse(jsonMatch[0]) : null;
   } catch {
+    return { category: 'uncategorized', group: 'uncategorized', isFixed: false, isAnnual: false, confidence: 0, alternatives: [], needsReview: true };
+  }
+
+  if (!parsed) {
     return { category: 'uncategorized', group: 'uncategorized', isFixed: false, isAnnual: false, confidence: 0, alternatives: [], needsReview: true };
   }
 
@@ -82,6 +124,7 @@ ${catList}`;
     isFixed:     cat.isFixed  ?? false,
     isAnnual:    cat.isAnnual ?? false,
     confidence:  conf,
+    source:      'ai',
     alternatives,
     needsReview: conf < 0.75,
   };

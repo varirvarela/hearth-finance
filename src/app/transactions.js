@@ -8,6 +8,7 @@ import {
 } from '../shared/categories.js';
 import { blankState, needsReview, applyFilters, countActive, normalizeSource, findDuplicates } from '../shared/filter-utils.js';
 import { buildRule, evaluateRules } from '../shared/rules.js';
+import { normalizeMerchant } from '../shared/normalize-merchant.js';
 
 const PAGE_SIZE = 100;
 const WORKER_URL = import.meta.env.VITE_WORKER_URL ?? 'http://localhost:8787';
@@ -29,6 +30,7 @@ let partnerAllTxns   = [];
 let partnerInitial   = 'P';
 let accountMap       = {};
 let allRulesSnapshot = {};
+let _merchantRules   = {}; // normalizedName → { catId, confirmedAt }
 const _aiSugCache    = new Map(); // txnId → { catId, source }
 
 function getSourceBadge(source) {
@@ -169,6 +171,9 @@ export function renderTransactions(container) {
   dbListen(`rules/${uid}`, rules => {
     allRulesSnapshot = rules ?? {};
   });
+
+  // Load learned merchant rules — written each time the user confirms a suggestion
+  dbListen(`merchantRules/${uid}`, rules => { _merchantRules = rules ?? {}; });
 
   // Pre-populate AI suggestion cache from Firebase so we don't re-call the Worker on reload
   dbListen(`suggestions/${uid}`, saved => {
@@ -591,17 +596,27 @@ async function fetchAiSuggestion(txnId, txn) {
   try {
     const idToken = await auth.currentUser?.getIdToken();
     if (!idToken) { clearTimeout(timeoutId); _aiSugCache.set(txnId, false); return; }
+    // Recent manually-confirmed transactions as few-shot examples for the AI
+    const examples = allTxns
+      .filter(([, t]) => t.categorySource === 'manual' && t.category && t.category !== 'uncategorized')
+      .slice(0, 12)
+      .map(([, t]) => ({ merchantName: t.merchantName ?? '', description: t.description ?? '', category: t.category, date: t.date, amount: t.amount }));
+
     const res = await fetch(`${WORKER_URL}/categorize`, {
       method: 'POST',
       signal: controller.signal,
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${idToken}` },
       body: JSON.stringify({
-        description:   txn.description ?? txn.merchantName,
-        merchantName:  txn.merchantName,
-        amount:        txn.amount,
-        date:          txn.date,
-        accountName:   txn.accountName,
-        plaidCategory: txn.plaidCategory,
+        txn: {
+          description:   txn.description ?? txn.merchantName,
+          merchantName:  txn.merchantName,
+          amount:        txn.amount,
+          date:          txn.date,
+          accountName:   txn.accountName,
+          plaidCategory: txn.plaidCategory,
+        },
+        merchantRules: _merchantRules,
+        examples,
       }),
     });
     clearTimeout(timeoutId);
@@ -624,6 +639,22 @@ async function fetchAiSuggestion(txnId, txn) {
   }
 }
 
+// Writes a merchant → category mapping to Firebase so future transactions are auto-matched.
+function learnMerchant(uid, txnId, catId) {
+  const txn = (allTxns.find(([id]) => id === txnId) ?? partnerAllTxns.find(([id]) => id === txnId))?.[1];
+  const key = normalizeMerchant(txn?.merchantName ?? txn?.description);
+  if (key && key.length >= 3) {
+    dbSet(`merchantRules/${uid}/${key}`, { catId, confirmedAt: Date.now() });
+  }
+}
+
+function sugSourceLabel(sug) {
+  const base = sug.source === 'ai' ? 'AI' : sug.source === 'rule' ? 'Rule' : sug.source === 'learned' ? 'Learned' : 'Suggested';
+  const conf = sug.conf != null ? ` · ${Math.round(sug.conf * 100)}%` : '';
+  const hint = sug.hint ? ` · ${sug.hint}` : '';
+  return `${base}${conf}${hint}`;
+}
+
 function updateSugStrip(txnId, sug) {
   const row = document.querySelector(`.txn-row[data-id="${txnId}"]`);
   if (!row) return;
@@ -632,11 +663,10 @@ function updateSugStrip(txnId, sug) {
   const cat       = getCategoryById(sug.catId);
   const parentCat = cat.parent ? getCategoryById(cat.parent) : null;
   const catLabel  = parentCat ? `${parentCat.icon} ${parentCat.name} › ${cat.icon} ${cat.name}` : `${cat.icon} ${cat.name}`;
-  const sourceLbl = sug.source === 'ai' ? 'AI' : sug.source === 'rule' ? 'Rule' : 'Suggested';
   const cls = sug.source === 'ai' ? 'ai' : 'heuristic';
   strip.className = `sug-strip ${cls}`;
   strip.innerHTML = `
-    <span class="sug-lbl ${cls}">${sourceLbl}</span>
+    <span class="sug-lbl ${cls}">${sugSourceLabel(sug)}</span>
     <span class="sug-cat">${catLabel}</span>
     <button class="btn-quick-confirm" data-id="${txnId}" data-cat="${sug.catId}">✓ Confirm</button>
     <button class="btn-quick-change"  data-id="${txnId}" data-cat="${sug.catId}">Change</button>`;
@@ -648,6 +678,7 @@ function updateSugStrip(txnId, sug) {
     row.classList.remove('needs-review', 'is-uncategorized');
     const catBtn = row.querySelector('.cat-btn');
     if (catBtn) { catBtn.textContent = cat.icon; catBtn.style.setProperty('--cat-bg', cat.color ? cat.color + '28' : 'var(--faint)'); }
+    learnMerchant(uid, txnId, sug.catId);
     dbUpdate(`transactions/${uid}/${txnId}`, { category: sug.catId, categorySource: 'manual', needsReview: false });
   });
   strip.querySelector('.btn-quick-change')?.addEventListener('click', e => {
@@ -698,9 +729,10 @@ function renderPage(filtered, state, uid, refresh, accountMap) {
     let suggestionHTML = '';
     if (review && !isPartner) {
       if (t.category !== 'uncategorized' && t.categorySource === 'ai' && (t.aiConfidence ?? 0) > 0) {
+        const confLabel = ` · ${Math.round(t.aiConfidence * 100)}%`;
         suggestionHTML = `
           <div class="sug-strip ai">
-            <span class="sug-lbl ai">AI</span>
+            <span class="sug-lbl ai">AI${confLabel}</span>
             <span class="sug-cat">${cat.icon} ${cat.name}</span>
             <button class="btn-quick-confirm" data-id="${id}" data-cat="${t.category}">✓ Confirm</button>
             <button class="btn-quick-change"  data-id="${id}" data-cat="${t.category}">Change</button>
@@ -712,11 +744,10 @@ function renderPage(filtered, state, uid, refresh, accountMap) {
           const sugCat    = getCategoryById(sug.catId);
           const parentCat = sugCat.parent ? getCategoryById(sugCat.parent) : null;
           const catLabel  = parentCat ? `${parentCat.icon} ${parentCat.name} › ${sugCat.icon} ${sugCat.name}` : `${sugCat.icon} ${sugCat.name}`;
-          const sourceLbl = sug.source === 'rule' ? 'Rule' : sug.source === 'ai' ? 'AI' : 'Suggested';
           const stripCls  = sug.source === 'ai' ? 'ai' : 'heuristic';
           suggestionHTML = `
             <div class="sug-strip ${stripCls}">
-              <span class="sug-lbl ${stripCls}">${sourceLbl}</span>
+              <span class="sug-lbl ${stripCls}">${sugSourceLabel(sug)}</span>
               <span class="sug-cat">${catLabel}</span>
               <button class="btn-quick-confirm" data-id="${id}" data-cat="${sug.catId}">✓ Confirm</button>
               <button class="btn-quick-change"  data-id="${id}" data-cat="${sug.catId}">Change</button>
@@ -820,6 +851,7 @@ function renderPage(filtered, state, uid, refresh, accountMap) {
       item?.querySelector('.cat-btn')?.setAttribute('data-cat', catId);
       item?.querySelector('.cat-btn')?.style.setProperty('--cat-bg', cat.color ? cat.color + '28' : 'var(--faint)');
       if (item?.querySelector('.cat-btn')) item.querySelector('.cat-btn').textContent = cat.icon;
+      learnMerchant(uid, txnId, catId);
       await dbUpdate(`transactions/${uid}/${txnId}`, {
         category:       catId,
         categorySource: 'manual',
@@ -1016,6 +1048,7 @@ function openCategoryPicker(txnId, currentCat, uid, rowEl) {
     modal.querySelectorAll('.picker-leaf-btn').forEach(btn => {
       btn.addEventListener('click', async () => {
         const cat = getCategoryById(btn.dataset.id);
+        learnMerchant(uid, txnId, btn.dataset.id);
         await dbUpdate(`transactions/${uid}/${txnId}`, {
           category:       btn.dataset.id,
           group:          cat.parent ?? btn.dataset.id,
@@ -1045,11 +1078,37 @@ function openCategoryPicker(txnId, currentCat, uid, rowEl) {
 let _dupPairs = [];
 let _dupReviewOverlay = null;
 
-function updateDupBanner(txnEntries, uid) {
+async function updateDupBanner(txnEntries, uid) {
   const banner = document.getElementById('dup-banner');
   if (!banner) return;
   if (_dupReviewOverlay) return; // don't update banner while review is open
-  _dupPairs = findDuplicates(txnEntries);
+
+  // Auto-dismiss pending → settled Plaid pairs (same amount, merchant, within 5 days)
+  const clean = s => (s ?? '').toLowerCase().replace(/[^a-z0-9 ]/g, '').trim();
+  const autoDismissed = new Set();
+  for (const [pid, pt] of txnEntries) {
+    if (!pt.pending || pt.ignored || pt.isTransfer || pt.group === 'transfer') continue;
+    const cents = Math.round((pt.amount ?? 0) * 100);
+    const nameP = clean(pt.merchantName ?? pt.description);
+    if (!nameP) continue;
+    const match = txnEntries.find(([sid, st]) => {
+      if (sid === pid || st.pending || st.ignored || st.isTransfer) return false;
+      if (Math.round((st.amount ?? 0) * 100) !== cents) return false;
+      if (Math.abs(new Date(pt.date) - new Date(st.date)) > 5 * 86400000) return false;
+      const nameS = clean(st.merchantName ?? st.description);
+      return nameS === nameP || nameS.includes(nameP) || nameP.includes(nameS);
+    });
+    if (match) {
+      autoDismissed.add(pid);
+      dbUpdate(`transactions/${uid}/${pid}`, { ignored: true }); // fire-and-forget
+    }
+  }
+
+  const filtered = autoDismissed.size
+    ? txnEntries.filter(([id]) => !autoDismissed.has(id))
+    : txnEntries;
+
+  _dupPairs = findDuplicates(filtered);
   if (_dupPairs.length === 0) {
     banner.style.display = 'none';
     return;
@@ -1107,6 +1166,12 @@ function openDupReview(pairs, uid) {
         </div>`;
     };
 
+    const isPendingPair = !!a.pending !== !!b.pending;
+    const pendingHint = isPendingPair ? `
+      <div style="background:#fef3c7;border:1px solid #f59e0b;border-radius:6px;padding:8px 12px;margin-bottom:10px;font-size:0.78rem;color:#92400e">
+        ⏳ <b>Pending → Settled:</b> Same transaction at different stages. Keep the settled version (${a.pending ? 'B' : 'A'}).
+      </div>` : '';
+
     overlay.innerHTML = `
       <div class="sheet" style="max-height:85vh">
         <div class="sheet-handle"></div>
@@ -1115,6 +1180,7 @@ function openDupReview(pairs, uid) {
           <button class="sheet-close" id="dc">✕</button>
         </div>
         <div style="padding:12px 16px">
+          ${pendingHint}
           <p style="font-size:0.75rem;color:var(--muted);margin:0 0 10px">Same amount, date, and merchant. Keep one and delete the other.</p>
           <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:12px">
             ${fmt(a)}${fmt(b)}
@@ -1137,9 +1203,12 @@ function openDupReview(pairs, uid) {
       idx++; renderPair();
     });
     overlay.querySelector('#dup-skip').addEventListener('click', async () => {
+      const normOk = v => Array.isArray(v) ? [...v] : Object.values(v ?? {});
+      const okA = normOk(a.dupOk); if (!okA.includes(idB)) okA.push(idB);
+      const okB = normOk(b.dupOk); if (!okB.includes(idA)) okB.push(idA);
       await Promise.all([
-        dbUpdate(`transactions/${uid}/${idA}`, { dupReviewed: true }),
-        dbUpdate(`transactions/${uid}/${idB}`, { dupReviewed: true }),
+        dbUpdate(`transactions/${uid}/${idA}`, { dupOk: okA }),
+        dbUpdate(`transactions/${uid}/${idB}`, { dupOk: okB }),
       ]);
       idx++; renderPair();
     });

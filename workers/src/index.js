@@ -48,8 +48,11 @@ export default {
         const uid   = uidFromJwt(token);
         if (!uid) return json({ error: 'Unauthorized' }, 401);
 
-        const txn    = await request.json();
-        const result = await categorizeTransaction(txn, env);
+        const body = await request.json();
+        // Body may be { txn, merchantRules, examples } (new) or a bare txn object (legacy)
+        const txn     = body.txn ?? body;
+        const context = { merchantRules: body.merchantRules ?? {}, examples: body.examples ?? [] };
+        const result  = await categorizeTransaction(txn, env, context);
         return json(result);
       }
 

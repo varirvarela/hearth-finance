@@ -35,6 +35,7 @@ export function normalizeSource(t) {
 
 export function applyFilters(txns, state) {
   return txns.filter(([, t]) => {
+    if (t.ignored) return false;
     if (state.hideTransfers && (t.isTransfer || t.group === 'transfer')) return false;
 
     if (state.query) {
@@ -82,11 +83,11 @@ export function applyFilters(txns, state) {
 }
 
 // Returns [[idA, txnA, idB, txnB], ...] pairs of potential duplicates.
-// Duplicates = same amount (±1¢), date within 2 days, same merchant/description.
+// Duplicates = same amount (±1¢), date within 2 days (5 for pending→settled), same merchant.
 export function findDuplicates(txnEntries) {
   const byAmountCents = new Map();
   for (const [id, t] of txnEntries) {
-    // dupReviewed = user explicitly kept both sides of a pair — exclude from all future checks
+    // dupReviewed = legacy flag (v1.8.1) — still honoured for backward compat
     if (t.ignored || t.isTransfer || t.group === 'transfer' || t.dupReviewed) continue;
     const cents = Math.round(t.amount * 100);
     if (!byAmountCents.has(cents)) byAmountCents.set(cents, []);
@@ -95,6 +96,7 @@ export function findDuplicates(txnEntries) {
 
   const pairs = [];
   const used  = new Set();
+  const normOk = v => Array.isArray(v) ? v : Object.values(v ?? {});
 
   for (const group of byAmountCents.values()) {
     if (group.length < 2) continue;
@@ -104,8 +106,14 @@ export function findDuplicates(txnEntries) {
         const [idB, b] = group[j];
         if (used.has(idA) || used.has(idB)) continue;
 
-        // Date within 2 days
-        if (Math.abs(new Date(a.date) - new Date(b.date)) > 2 * 86400000) continue;
+        // Pairwise skip: user explicitly kept both for this specific pair
+        const okA = normOk(a.dupOk);
+        const okB = normOk(b.dupOk);
+        if (okA.includes(idB) || okB.includes(idA)) continue;
+
+        // 5-day window for pending→settled, 2 days otherwise
+        const dayWindow = (!!a.pending !== !!b.pending) ? 5 : 2;
+        if (Math.abs(new Date(a.date) - new Date(b.date)) > dayWindow * 86400000) continue;
 
         // Same name (case-insensitive; strip punctuation)
         const clean = s => (s ?? '').toLowerCase().replace(/[^a-z0-9 ]/g, '').trim();
