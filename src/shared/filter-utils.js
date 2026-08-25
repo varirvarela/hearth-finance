@@ -21,6 +21,7 @@ export function blankState() {
 }
 
 export function needsReview(t) {
+  if (t.categorySource === 'manual') return false; // user confirmed — never prompt again
   return t.needsReview === true || t.category === 'uncategorized' || (t.aiConfidence != null && t.aiConfidence < 0.75);
 }
 
@@ -112,7 +113,10 @@ export function findDuplicates(txnEntries) {
         if (!nameA || !nameB) continue;
         if (nameA !== nameB && !nameA.includes(nameB) && !nameB.includes(nameA)) continue;
 
-        if (a.dupOk?.includes(idB) || b.dupOk?.includes(idA)) continue;
+        // Firebase RTDB may deserialize short arrays as objects — normalize both
+        const okA = Array.isArray(a.dupOk) ? a.dupOk : Object.values(a.dupOk ?? {});
+        const okB = Array.isArray(b.dupOk) ? b.dupOk : Object.values(b.dupOk ?? {});
+        if (okA.includes(idB) || okB.includes(idA)) continue;
         pairs.push([idA, a, idB, b]);
         used.add(idA);
         used.add(idB);

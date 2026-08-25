@@ -749,6 +749,7 @@ button:active  { opacity: 0.7; transform: scale(0.97); }
   max-width: 640px;
   max-height: 85dvh;
   overflow-y: auto;
+  overflow-x: hidden;
   padding-bottom: env(safe-area-inset-bottom);
   transform: translateY(100%);
   transition: transform 0.28s cubic-bezier(0.32, 0.72, 0, 1);
@@ -2991,9 +2992,10 @@ button:active  { opacity: 0.7; transform: scale(0.97); }
 .rat-plaid  { font-size: 0.85rem; font-weight: 700; color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .rat-tiller { font-size: 0.8rem; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .rat-row-arrow { font-size: 0.9rem; color: var(--faint); flex-shrink: 0; }
-.rat-actions { display: flex; gap: 6px; align-items: center; }
+.rat-actions { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
 .rat-merge-btn { flex-shrink: 0; }
-.rat-txn-preview { margin-top: 8px; padding-top: 4px; border-top: 1px solid var(--border); }
+.rat-txn-preview { margin-top: 8px; padding-top: 4px; border-top: 1px solid var(--border); overflow: hidden; }
+.rat-txn-preview div { white-space: normal; word-break: break-word; }
 
 /* ── Changelog sheet ───────────────────────────────────── */
 .changelog-list {

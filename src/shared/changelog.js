@@ -1,5 +1,15 @@
 export const CHANGELOG = [
   {
+    version: '1.8.0',
+    date:    '2026-08-25',
+    changes: [
+      'Transactions: confirmed suggestions no longer reappear after refresh — manually confirmed category is permanent.',
+      'Transactions: AI "Analyzing…" now times out after 15 seconds and falls back to a manual Categorize button instead of spinning forever.',
+      'Transactions: skipped duplicate pairs now stay skipped — fixed a Firebase array serialization issue that caused the skip to be ignored on re-check.',
+      'Accounts: merge sheet no longer shows horizontal scrollbars; transaction preview text wraps cleanly.',
+    ],
+  },
+  {
     version: '1.7.9',
     date:    '2026-08-24',
     changes: [

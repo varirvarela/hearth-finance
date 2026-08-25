@@ -585,11 +585,15 @@ async function fetchAiSuggestion(txnId, txn) {
   if (_aiSugCache.has(txnId)) return;
   _aiSugCache.set(txnId, null); // mark as pending so we don't double-call
 
+  const controller = new AbortController();
+  const timeoutId  = setTimeout(() => controller.abort(), 15000); // 15s hard timeout
+
   try {
     const idToken = await auth.currentUser?.getIdToken();
-    if (!idToken) { _aiSugCache.set(txnId, false); return; }
+    if (!idToken) { clearTimeout(timeoutId); _aiSugCache.set(txnId, false); return; }
     const res = await fetch(`${WORKER_URL}/categorize`, {
       method: 'POST',
+      signal: controller.signal,
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${idToken}` },
       body: JSON.stringify({
         description:   txn.description ?? txn.merchantName,
@@ -600,6 +604,7 @@ async function fetchAiSuggestion(txnId, txn) {
         plaidCategory: txn.plaidCategory,
       }),
     });
+    clearTimeout(timeoutId);
     if (!res.ok) { _aiSugCache.set(txnId, false); return; }
     const data = await res.json();
     const primary = data.category;
@@ -614,7 +619,8 @@ async function fetchAiSuggestion(txnId, txn) {
       _aiSugCache.set(txnId, false); // false = "no suggestion found" (distinct from null = "pending")
     }
   } catch {
-    _aiSugCache.set(txnId, false); // Worker unavailable — mark done so we don't retry every render
+    clearTimeout(timeoutId);
+    _aiSugCache.set(txnId, false); // timeout / network error — mark done so we don't retry every render
   }
 }
 
