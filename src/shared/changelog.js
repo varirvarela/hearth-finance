@@ -1,5 +1,12 @@
 export const CHANGELOG = [
   {
+    version: '1.8.1',
+    date:    '2026-08-25',
+    changes: [
+      'Transactions: skipping a duplicate now permanently marks both transactions as reviewed — they will never re-pair with any other transaction, fixing the "same duplicates keep appearing" loop.',
+    ],
+  },
+  {
     version: '1.8.0',
     date:    '2026-08-25',
     changes: [

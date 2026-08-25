@@ -1,5 +1,6 @@
-// Bulk-dismiss all current duplicate pairs by writing dupOk to both transactions.
-// Safe to re-run: only writes to pairs that haven't been dismissed yet.
+// Bulk-dismiss all current duplicate pairs by writing dupReviewed:true on both transactions.
+// This permanently excludes each transaction from future duplicate checks (regardless of pairing).
+// Safe to re-run: skips transactions already marked dupReviewed.
 // Run: node scripts/bulk-skip-duplicates.js
 
 import { initializeApp, cert } from 'firebase-admin/app';
@@ -18,6 +19,7 @@ const UID = 'M8n6Fow8QcUm5DLLmE0aIajNNr72';
 function findDuplicatePairs(allTxns) {
   const byKey = {};
   for (const [id, t] of allTxns) {
+    if (t.ignored || t.isTransfer || t.group === 'transfer' || t.dupReviewed) continue;
     const amt = Math.round((t.amount ?? 0) * 100);
     const key = `${amt}_${t.date ?? ''}`;
     if (!byKey[key]) byKey[key] = [];
@@ -40,7 +42,6 @@ function findDuplicatePairs(allTxns) {
         const nameB = clean(b.merchantName ?? b.description);
         if (!nameA || !nameB) continue;
         if (nameA !== nameB && !nameA.includes(nameB) && !nameB.includes(nameA)) continue;
-        if (a.dupOk?.includes(idB) || b.dupOk?.includes(idA)) continue;
         pairs.push([idA, a, idB, b]);
         used.add(idA);
         used.add(idB);
@@ -64,13 +65,13 @@ async function main() {
   if (!pairs.length) { console.log('Nothing to do.'); process.exit(0); }
 
   const patch = {};
-  for (const [idA, a, idB, b] of pairs) {
-    patch[`transactions/${UID}/${idA}/dupOk`] = [...(a.dupOk ?? []), idB];
-    patch[`transactions/${UID}/${idB}/dupOk`] = [...(b.dupOk ?? []), idA];
+  for (const [idA, , idB] of pairs) {
+    patch[`transactions/${UID}/${idA}/dupReviewed`] = true;
+    patch[`transactions/${UID}/${idB}/dupReviewed`] = true;
   }
 
   await db.ref().update(patch);
-  console.log(`✓ Dismissed ${pairs.length} pairs (${pairs.length * 2} transactions updated).`);
+  console.log(`✓ Dismissed ${pairs.length} pairs (${Object.keys(patch).length} transactions marked dupReviewed).`);
   process.exit(0);
 }
 

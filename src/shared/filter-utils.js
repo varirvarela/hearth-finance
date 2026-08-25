@@ -86,7 +86,8 @@ export function applyFilters(txns, state) {
 export function findDuplicates(txnEntries) {
   const byAmountCents = new Map();
   for (const [id, t] of txnEntries) {
-    if (t.ignored || t.isTransfer || t.group === 'transfer') continue;
+    // dupReviewed = user explicitly kept both sides of a pair — exclude from all future checks
+    if (t.ignored || t.isTransfer || t.group === 'transfer' || t.dupReviewed) continue;
     const cents = Math.round(t.amount * 100);
     if (!byAmountCents.has(cents)) byAmountCents.set(cents, []);
     byAmountCents.get(cents).push([id, t]);
@@ -113,10 +114,6 @@ export function findDuplicates(txnEntries) {
         if (!nameA || !nameB) continue;
         if (nameA !== nameB && !nameA.includes(nameB) && !nameB.includes(nameA)) continue;
 
-        // Firebase RTDB may deserialize short arrays as objects — normalize both
-        const okA = Array.isArray(a.dupOk) ? a.dupOk : Object.values(a.dupOk ?? {});
-        const okB = Array.isArray(b.dupOk) ? b.dupOk : Object.values(b.dupOk ?? {});
-        if (okA.includes(idB) || okB.includes(idA)) continue;
         pairs.push([idA, a, idB, b]);
         used.add(idA);
         used.add(idB);
