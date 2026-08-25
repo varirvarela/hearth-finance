@@ -1,5 +1,17 @@
 export const CHANGELOG = [
   {
+    version: '1.7.9',
+    date:    '2026-08-24',
+    changes: [
+      'Transactions: AI suggestions no longer get stuck "Analyzing…" when the Worker returns an error — correctly falls back to "Categorize →" button.',
+      'Transactions: confirming a suggestion now immediately updates the icon and removes the strip — no more waiting for a full refresh.',
+      'Transactions: duplicate pairs you skipped no longer reappear after closing the review.',
+      'Transactions: AI Worker prompt now includes date, bank account, and Plaid category in the context sent to Gemini for better accuracy.',
+      'Accounts: "Last 10 txns" button shows recent transactions for each merge pair so you can verify before merging.',
+      'Accounts: "Not same" button permanently dismisses a merge suggestion so it never reappears.',
+    ],
+  },
+  {
     version: '1.7.8',
     date:    '2026-08-24',
     changes: [

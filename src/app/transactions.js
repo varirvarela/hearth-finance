@@ -587,7 +587,7 @@ async function fetchAiSuggestion(txnId, txn) {
 
   try {
     const idToken = await auth.currentUser?.getIdToken();
-    if (!idToken) return;
+    if (!idToken) { _aiSugCache.set(txnId, false); return; }
     const res = await fetch(`${WORKER_URL}/categorize`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${idToken}` },
@@ -600,7 +600,7 @@ async function fetchAiSuggestion(txnId, txn) {
         plaidCategory: txn.plaidCategory,
       }),
     });
-    if (!res.ok) return;
+    if (!res.ok) { _aiSugCache.set(txnId, false); return; }
     const data = await res.json();
     const primary = data.category;
     const alts    = (data.alternatives ?? []).slice(0, 2); // up to 2 extra options
@@ -638,6 +638,10 @@ function updateSugStrip(txnId, sug) {
   strip.querySelector('.btn-quick-confirm')?.addEventListener('click', e => {
     e.stopPropagation();
     if (!uid) return;
+    strip.remove();
+    row.classList.remove('needs-review', 'is-uncategorized');
+    const catBtn = row.querySelector('.cat-btn');
+    if (catBtn) { catBtn.textContent = cat.icon; catBtn.style.setProperty('--cat-bg', cat.color ? cat.color + '28' : 'var(--faint)'); }
     dbUpdate(`transactions/${uid}/${txnId}`, { category: sug.catId, categorySource: 'manual', needsReview: false });
   });
   strip.querySelector('.btn-quick-change')?.addEventListener('click', e => {
@@ -803,12 +807,19 @@ function renderPage(filtered, state, uid, refresh, accountMap) {
       const txnId = btn.dataset.id;
       const catId = btn.dataset.cat;
       const cat   = getCategoryById(catId);
+      // Immediate DOM update — don't wait for Firebase round-trip
+      const item = btn.closest('.txn-item');
+      item?.querySelector('.sug-strip')?.remove();
+      item?.querySelector('.txn-row')?.classList.remove('needs-review', 'is-uncategorized');
+      item?.querySelector('.cat-btn')?.setAttribute('data-cat', catId);
+      item?.querySelector('.cat-btn')?.style.setProperty('--cat-bg', cat.color ? cat.color + '28' : 'var(--faint)');
+      if (item?.querySelector('.cat-btn')) item.querySelector('.cat-btn').textContent = cat.icon;
       await dbUpdate(`transactions/${uid}/${txnId}`, {
         category:       catId,
         categorySource: 'manual',
         needsReview:    false,
       });
-      const row = btn.closest('.txn-item')?.querySelector('.txn-row');
+      const row = item?.querySelector('.txn-row');
       if (row) {
         const entry = slice.find(([sid]) => sid === txnId);
         showRulePrompt(row, entry?.[1] ?? {}, cat, uid);
@@ -1060,7 +1071,10 @@ function openDupReview(pairs, uid) {
   const close = () => {
     _dupReviewOverlay = null;
     overlay.classList.remove('open');
-    setTimeout(() => overlay.remove(), 260);
+    setTimeout(() => {
+      overlay.remove();
+      updateDupBanner(allTxns, uid); // refresh with fresh dupOk data after review closes
+    }, 260);
   };
 
   function renderPair() {

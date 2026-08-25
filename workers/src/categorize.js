@@ -5,8 +5,14 @@ const EXPENSE_CATS = CATEGORIES.filter(
   c => c.parent && !c.isIncome && c.parent !== 'transfer' && !c.hide,
 );
 
-const SYSTEM_PROMPT = `You are a household transaction categorizer for a family in the USA.
-Given a transaction description and amount, return JSON with your best categorization.
+const SYSTEM_PROMPT = `You are a household transaction categorizer for a bilingual (English/Spanish) family based in Mexico and the USA.
+Given transaction details, return JSON with your best categorization.
+
+Rules:
+- Transfers between own accounts (wire, transferencia, SPEI, sent to, received from) → do NOT categorize, return category "uncategorized"
+- Only pick category ids from the provided list
+- Use at most 2 alternatives
+- If truly ambiguous, lower confidence and include alternatives
 
 Response format (JSON only, no explanation, no markdown):
 {
@@ -15,22 +21,27 @@ Response format (JSON only, no explanation, no markdown):
   "alternatives": [
     { "id": "<category_id>", "confidence": <0.0-1.0> }
   ]
-}
-
-Use at most 2 alternatives. Only pick ids from the provided list.`;
+}`;
 
 export async function categorizeTransaction(txn, env) {
   const catList = EXPENSE_CATS.map(c => {
     const parent = CATEGORIES.find(p => p.id === c.parent);
-    return `${c.id}: ${c.name} [${parent?.name ?? c.parent}]`;
+    return `${c.id}: ${c.name} [group: ${parent?.name ?? c.parent}]`;
   }).join('\n');
+
+  const lines = [
+    `Description: ${txn.description ?? ''}`,
+    `Merchant: ${txn.merchantName ?? 'Unknown'}`,
+    `Amount: $${Math.abs(txn.amount ?? 0).toFixed(2)}`,
+  ];
+  if (txn.date)          lines.push(`Date: ${txn.date}`);
+  if (txn.accountName)   lines.push(`Account: ${txn.accountName}`);
+  if (txn.plaidCategory) lines.push(`Bank category: ${txn.plaidCategory}`);
 
   const prompt = `${SYSTEM_PROMPT}
 
 Transaction:
-Description: ${txn.description}
-Merchant: ${txn.merchantName ?? 'Unknown'}
-Amount: $${Math.abs(txn.amount ?? 0).toFixed(2)}
+${lines.join('\n')}
 
 Available categories:
 ${catList}`;

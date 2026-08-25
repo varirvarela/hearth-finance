@@ -2991,7 +2991,9 @@ button:active  { opacity: 0.7; transform: scale(0.97); }
 .rat-plaid  { font-size: 0.85rem; font-weight: 700; color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .rat-tiller { font-size: 0.8rem; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .rat-row-arrow { font-size: 0.9rem; color: var(--faint); flex-shrink: 0; }
-.rat-merge-btn { align-self: flex-end; }
+.rat-actions { display: flex; gap: 6px; align-items: center; }
+.rat-merge-btn { flex-shrink: 0; }
+.rat-txn-preview { margin-top: 8px; padding-top: 4px; border-top: 1px solid var(--border); }
 
 /* ── Changelog sheet ───────────────────────────────────── */
 .changelog-list {

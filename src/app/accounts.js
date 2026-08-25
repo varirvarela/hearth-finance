@@ -187,11 +187,13 @@ async function openRationalizeSheet(uid) {
 
   for (const [plaidId, acc] of plaidEntries) {
     const existing  = acc.mergedNames ?? [];
+    const excluded  = acc.excludedMerges ?? [];
     const matchName = acc.name ?? '';        // use original Plaid name for fuzzy matching, NOT alias
     const dispName  = acc.alias ?? acc.name; // display name shown in UI
     const wordsP    = new Set(sigWords(matchName));
     for (const tName of tillerNames) {
       if (existing.includes(tName)) continue;
+      if (excluded.includes(tName)) continue;
       const pn = matchName.toLowerCase();
       const tn = tName.toLowerCase();
       const match = pn === tn || pn.includes(tn) || tn.includes(pn) ||
@@ -212,6 +214,20 @@ async function openRationalizeSheet(uid) {
       <div class="sheet-hdr"><span class="sheet-title">Rationalize accounts</span><button class="sheet-close" id="rat-close">✕</button></div>
       <div style="padding:16px;font-size:0.8rem;color:var(--muted)">No potential merges found. Tiller accounts (${tillerNames.size}): ${[...tillerNames].join(', ')}.</div>`;
   } else {
+    // Build a lookup: accountName (tiller or plaid) → last 10 transactions
+    const txnsByAcct = {};
+    for (const [, t] of Object.entries(txns)) {
+      const key = (t.accountName ?? '').toLowerCase();
+      if (!key) continue;
+      if (!txnsByAcct[key]) txnsByAcct[key] = [];
+      txnsByAcct[key].push(t);
+    }
+    for (const key of Object.keys(txnsByAcct)) {
+      txnsByAcct[key].sort((a, b) => (b.date ?? '').localeCompare(a.date ?? '')).splice(10);
+    }
+
+    const fmtAmt = n => (n < 0 ? '+' : '') + '$' + Math.abs(n).toFixed(2);
+
     const rows = suggestions.map((s, i) => `
       <div class="rat-row" data-i="${i}">
         <div class="rat-row-info">
@@ -225,7 +241,12 @@ async function openRationalizeSheet(uid) {
             <span class="rat-tiller">${s.tillerName}</span>
           </div>
         </div>
-        <button class="rat-merge-btn btn-primary" data-i="${i}" style="font-size:0.72rem;padding:5px 14px;border-radius:6px;flex-shrink:0">Merge</button>
+        <div class="rat-actions">
+          <button class="rat-txns-btn btn-secondary" data-i="${i}" style="font-size:0.7rem;padding:4px 10px;border-radius:6px">Last 10 txns</button>
+          <button class="rat-merge-btn btn-primary" data-i="${i}" style="font-size:0.7rem;padding:4px 10px;border-radius:6px">Merge</button>
+          <button class="rat-skip-btn" data-i="${i}" style="font-size:0.7rem;padding:4px 8px;border-radius:6px;background:none;border:1px solid var(--border);color:var(--muted);cursor:pointer">Not same</button>
+        </div>
+        <div class="rat-txn-preview" id="rat-preview-${i}" style="display:none"></div>
       </div>`).join('');
     sheet.innerHTML = `
       <div class="sheet-handle"></div>
@@ -243,6 +264,43 @@ async function openRationalizeSheet(uid) {
         btn.textContent = '✓ Merged';
         btn.disabled    = true;
         btn.style.background = 'var(--brand)';
+        btn.closest('.rat-row').querySelector('.rat-skip-btn')?.remove();
+        btn.closest('.rat-row').querySelector('.rat-txns-btn')?.remove();
+      });
+    });
+
+    sheet.querySelectorAll('.rat-skip-btn').forEach(btn => {
+      btn.addEventListener('click', async () => {
+        const s = suggestions[Number(btn.dataset.i)];
+        const current = (await dbGet(`accounts/${uid}/${s.plaidId}`))?.excludedMerges ?? [];
+        await dbSet(`accounts/${uid}/${s.plaidId}/excludedMerges`, [...new Set([...current, s.tillerName])]);
+        const row = btn.closest('.rat-row');
+        row.style.opacity = '0.4';
+        row.style.pointerEvents = 'none';
+        btn.textContent = '✓ Dismissed';
+      });
+    });
+
+    sheet.querySelectorAll('.rat-txns-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const s       = suggestions[Number(btn.dataset.i)];
+        const preview = document.getElementById(`rat-preview-${btn.dataset.i}`);
+        if (preview.style.display !== 'none') { preview.style.display = 'none'; return; }
+        const keyP = s.plaidName.toLowerCase();
+        const keyT = s.tillerName.toLowerCase();
+        const pTxns = txnsByAcct[keyP] ?? [];
+        const tTxns = txnsByAcct[keyT] ?? [];
+        const allTxns = [...pTxns, ...tTxns].sort((a, b) => (b.date ?? '').localeCompare(a.date ?? '')).slice(0, 10);
+        if (!allTxns.length) { preview.innerHTML = '<p style="font-size:0.72rem;color:var(--muted);padding:6px 0">No transactions found.</p>'; }
+        else {
+          preview.innerHTML = allTxns.map(t => `
+            <div style="display:flex;gap:8px;align-items:baseline;padding:3px 0;font-size:0.72rem;border-bottom:1px solid var(--border)">
+              <span style="color:var(--muted);flex-shrink:0">${t.date ?? ''}</span>
+              <span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${t.merchantName ?? t.description ?? ''}</span>
+              <span style="flex-shrink:0;font-weight:600">${fmtAmt(t.amount)}</span>
+            </div>`).join('');
+        }
+        preview.style.display = 'block';
       });
     });
   }
