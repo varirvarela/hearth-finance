@@ -169,30 +169,28 @@ export function renderTransactions(container) {
   // Load learned merchant rules — written each time the user confirms a suggestion
   dbListen(`merchantRules/${uid}`, rules => { _merchantRules = rules ?? {}; });
 
-  // Pre-load suggestion cache BEFORE the first transactions render to avoid "Analyzing..." flash.
-  // .catch ensures transactions always load even if suggestions read fails.
-  dbGet(`suggestions/${uid}`)
-    .then(saved => {
-      for (const [txnId, sug] of Object.entries(saved ?? {})) {
-        _aiSugCache.set(txnId, sug);
-      }
-    })
-    .catch(() => {})
-    .finally(() => {
-      dbListen(`transactions/${uid}`, txns => {
-        allTxns = Object.entries(txns ?? {}).sort((a, b) => b[1].date.localeCompare(a[1].date));
-        refresh();
-        updateDupBanner(allTxns, uid);
-      });
-    });
+  dbListen(`transactions/${uid}`, txns => {
+    allTxns = Object.entries(txns ?? {}).sort((a, b) => b[1].date.localeCompare(a[1].date));
+    refresh();
+    updateDupBanner(allTxns, uid);
+  });
 
-  // Live listener keeps cache current for new AI suggestions written during the session.
+  // Suggestions listener: on first fire populate cache and re-render so any "Analyzing…"
+  // rows that rendered before suggestions arrived pick up their suggestions immediately.
+  // On subsequent fires (new AI result written) use updateSugStrip for surgical updates.
+  let _sugFirstLoad = true;
   dbListen(`suggestions/${uid}`, saved => {
+    let anyNew = false;
     for (const [txnId, sug] of Object.entries(saved ?? {})) {
       const current = _aiSugCache.get(txnId);
       if (current && current !== null && current !== false) continue;
       _aiSugCache.set(txnId, sug);
-      updateSugStrip(txnId, sug);
+      anyNew = true;
+      if (!_sugFirstLoad) updateSugStrip(txnId, sug);
+    }
+    if (_sugFirstLoad) {
+      _sugFirstLoad = false;
+      if (anyNew) refresh(); // re-render with populated cache — fixes timing race
     }
   });
 
