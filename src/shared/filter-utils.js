@@ -95,7 +95,6 @@ export function findDuplicates(txnEntries) {
   }
 
   const pairs = [];
-  const used  = new Set();
   const normOk = v => Array.isArray(v) ? v : Object.values(v ?? {});
 
   for (const group of byAmountCents.values()) {
@@ -104,7 +103,6 @@ export function findDuplicates(txnEntries) {
       for (let j = i + 1; j < group.length; j++) {
         const [idA, a] = group[i];
         const [idB, b] = group[j];
-        if (used.has(idA) || used.has(idB)) continue;
 
         // Pairwise skip: user explicitly kept both for this specific pair
         const okA = normOk(a.dupOk);
@@ -123,8 +121,7 @@ export function findDuplicates(txnEntries) {
         if (nameA !== nameB && !nameA.includes(nameB) && !nameB.includes(nameA)) continue;
 
         pairs.push([idA, a, idB, b]);
-        used.add(idA);
-        used.add(idB);
+        if (pairs.length >= 100) return pairs; // safety cap
       }
     }
   }

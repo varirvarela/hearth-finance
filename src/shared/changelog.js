@@ -1,5 +1,13 @@
 export const CHANGELOG = [
   {
+    version: '1.9.2',
+    date:    '2026-08-25',
+    changes: [
+      'Transactions: fixed race condition where Firebase suggestions (from batch script) didn\'t surface on first page load — suggestions are now pre-loaded before the first render.',
+      'Duplicates: skip count now reflects all transitive pairs — if A, B, C are all duplicates of each other, all three pairs are shown upfront instead of revealing them one round at a time.',
+    ],
+  },
+  {
     version: '1.9.1',
     date:    '2026-08-25',
     changes: [

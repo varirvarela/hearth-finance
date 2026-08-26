@@ -157,12 +157,6 @@ export function renderTransactions(container) {
     renderPage(filtered, state, uid, refresh, accountMap);
   };
 
-  dbListen(`transactions/${uid}`, txns => {
-    allTxns = Object.entries(txns ?? {}).sort((a, b) => b[1].date.localeCompare(a[1].date));
-    refresh();
-    updateDupBanner(allTxns, uid);
-  });
-
   dbListen(`accounts/${uid}`, accounts => {
     accountMap = accounts ?? {};
     refresh();
@@ -175,12 +169,24 @@ export function renderTransactions(container) {
   // Load learned merchant rules — written each time the user confirms a suggestion
   dbListen(`merchantRules/${uid}`, rules => { _merchantRules = rules ?? {}; });
 
-  // Pre-populate AI suggestion cache from Firebase so we don't re-call the Worker on reload.
-  // Always overwrite null/false states so suggestions from patch scripts surface immediately.
+  // Pre-load suggestion cache BEFORE the first transactions render to avoid "Analyzing..." flash.
+  // dbGet resolves once; the live listener below handles updates written during the session.
+  dbGet(`suggestions/${uid}`).then(saved => {
+    for (const [txnId, sug] of Object.entries(saved ?? {})) {
+      _aiSugCache.set(txnId, sug);
+    }
+    // Register transactions listener AFTER cache is warm so first render sees suggestions.
+    dbListen(`transactions/${uid}`, txns => {
+      allTxns = Object.entries(txns ?? {}).sort((a, b) => b[1].date.localeCompare(a[1].date));
+      refresh();
+      updateDupBanner(allTxns, uid);
+    });
+  });
+
+  // Live listener keeps cache current for new AI suggestions written during the session.
   dbListen(`suggestions/${uid}`, saved => {
     for (const [txnId, sug] of Object.entries(saved ?? {})) {
       const current = _aiSugCache.get(txnId);
-      // Skip only if we already have a confirmed real suggestion in the cache
       if (current && current !== null && current !== false) continue;
       _aiSugCache.set(txnId, sug);
       updateSugStrip(txnId, sug);
