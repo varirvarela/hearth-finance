@@ -608,6 +608,31 @@ function suggestCategory(txnId, txn, allRules) {
 }
 
 
+const _EXAMPLE_STOP = new Set(['payment', 'purchase', 'debit', 'credit', 'charge', 'transfer', 'from', 'received', 'sent', 'with', 'using']);
+
+function buildExamples(txn, confirmedTxns, max = 10) {
+  const words = ((txn.merchantName ?? '') + ' ' + (txn.description ?? ''))
+    .toLowerCase().split(/\W+/).filter(w => w.length > 3 && !_EXAMPLE_STOP.has(w));
+
+  const scored = confirmedTxns.map(t => {
+    const tText = ((t.merchantName ?? '') + ' ' + (t.description ?? '')).toLowerCase();
+    const score = words.reduce((n, w) => n + (tText.includes(w) ? 1 : 0), 0);
+    return { t, score };
+  });
+
+  const withMatch = scored.filter(x => x.score > 0).sort((a, b) => b.score - a.score).slice(0, max);
+  const matchSet  = new Set(withMatch.map(x => x.t));
+  const recent    = confirmedTxns.filter(t => !matchSet.has(t)).slice(0, max - withMatch.length);
+
+  return [...withMatch.map(x => x.t), ...recent].map(t => ({
+    merchantName: t.merchantName,
+    description:  t.description,
+    category:     t.category,
+    amount:       t.amount,
+    date:         t.date,
+  }));
+}
+
 // Tier 4: call the AI Worker when Tiers 1–3 all missed.
 // Saves the result to Firebase so it becomes a Tier 3 hit on next load.
 async function fetchAiSuggestion(txnId, txn, uid) {
@@ -616,6 +641,11 @@ async function fetchAiSuggestion(txnId, txn, uid) {
   try {
     const idToken = await auth.currentUser?.getIdToken();
     if (!idToken) { _aiSugCache.set(txnId, false); resetSugStrip(txnId); return; }
+
+    const confirmedTxns = [...allTxns, ...partnerAllTxns]
+      .filter(([, t]) => t.category && t.category !== 'uncategorized' && t.categorySource !== 'ai')
+      .map(([, t]) => t);
+    const examples = buildExamples(txn, confirmedTxns);
 
     const res = await fetch(`${WORKER_URL}/categorize`, {
       method:  'POST',
@@ -630,6 +660,7 @@ async function fetchAiSuggestion(txnId, txn, uid) {
             .filter(([, c]) => c.parent)
             .map(([id, c]) => [id, _catDescriptions[id] || c.description || ''])
         ),
+        examples,
       }),
     });
 

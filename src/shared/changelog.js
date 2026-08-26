@@ -1,5 +1,13 @@
 export const CHANGELOG = [
   {
+    version: '1.11.2',
+    date:    '2026-08-26',
+    changes: [
+      'AI categorization: similar previously-confirmed transactions are now sent as examples so the AI can learn from your history (e.g. Zelle payments to the same person).',
+      'AI categorization: daily sync now passes your learned merchant rules and category descriptions to the AI — new transactions get the same context as the browser.',
+    ],
+  },
+  {
     version: '1.11.1',
     date:    '2026-08-26',
     changes: [

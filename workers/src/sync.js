@@ -3,6 +3,32 @@ import { getTransactions } from './plaid.js';
 import { categorizeTransaction } from './categorize.js';
 import { evaluateRules } from '../../src/shared/rules.js';
 
+// Words too generic to use as similarity signals (payment method names, verb noise, etc.)
+const EXAMPLE_STOP = new Set(['payment', 'purchase', 'debit', 'credit', 'charge', 'transfer', 'from', 'received', 'sent', 'with', 'using']);
+
+function buildExamples(txn, confirmedTxns, max = 10) {
+  const words = ((txn.merchantName ?? '') + ' ' + (txn.description ?? ''))
+    .toLowerCase().split(/\W+/).filter(w => w.length > 3 && !EXAMPLE_STOP.has(w));
+
+  const scored = confirmedTxns.map(t => {
+    const tText = ((t.merchantName ?? '') + ' ' + (t.description ?? '')).toLowerCase();
+    const score = words.reduce((n, w) => n + (tText.includes(w) ? 1 : 0), 0);
+    return { t, score };
+  });
+
+  const withMatch = scored.filter(x => x.score > 0).sort((a, b) => b.score - a.score).slice(0, max);
+  const matchSet  = new Set(withMatch.map(x => x.t));
+  const recent    = confirmedTxns.filter(t => !matchSet.has(t)).slice(0, max - withMatch.length);
+
+  return [...withMatch.map(x => x.t), ...recent].map(t => ({
+    merchantName: t.merchantName,
+    description:  t.description,
+    category:     t.category,
+    amount:       t.amount,
+    date:         t.date,
+  }));
+}
+
 export async function handleSync(env) {
   const users = await fbGet(env, 'users');
   if (!users) return;
@@ -42,9 +68,23 @@ export async function handleUserSync(env, uid, { startDate, endDate } = {}) {
     itemsSeen.get(account.plaidItemId).accountKeys.push(key);
   }
 
-  const existing         = await fbGet(env, `transactions/${uid}`).catch(() => ({})) ?? {};
-  const rules            = await fbGet(env, `rules/${uid}`).catch(() => ({})) ?? {};
+  const existing        = await fbGet(env, `transactions/${uid}`).catch(() => ({})) ?? {};
+  const rules           = await fbGet(env, `rules/${uid}`).catch(() => ({})) ?? {};
+  const merchantRules   = await fbGet(env, `merchantRules/${uid}`).catch(() => ({})) ?? {};
+  const catDescOverrides = await fbGet(env, `categoryDescriptions/${uid}`).catch(() => ({})) ?? {};
   const existingPlaidIds = new Set(Object.values(existing).map(t => t.plaidId).filter(Boolean));
+
+  const { CATEGORY_MAP, getCategoryBudgetFields } = await import('../../src/shared/categories.js');
+  const categoryDescriptions = Object.fromEntries(
+    Object.entries(CATEGORY_MAP)
+      .filter(([, c]) => c.parent)
+      .map(([id, c]) => [id, catDescOverrides[id] || c.description || ''])
+  );
+
+  // Confirmed non-AI transactions sorted newest-first — used as examples for the AI
+  const confirmedTxns = Object.values(existing)
+    .filter(t => t.category && t.category !== 'uncategorized' && t.categorySource !== 'ai')
+    .sort((a, b) => (b.date ?? '').localeCompare(a.date ?? ''));
 
   let synced = 0;
   let errors = 0;
@@ -81,7 +121,6 @@ export async function handleUserSync(env, uid, { startDate, endDate } = {}) {
 
       const ruleCategory = evaluateRules(txn, rules);
       if (ruleCategory) {
-        const { getCategoryBudgetFields } = await import('../../src/shared/categories.js');
         const fields       = getCategoryBudgetFields(ruleCategory);
         txn.category       = ruleCategory;
         txn.group          = fields.group;
@@ -90,7 +129,8 @@ export async function handleUserSync(env, uid, { startDate, endDate } = {}) {
         txn.categorySource = 'rule';
         txn.needsReview    = false;
       } else {
-        const ai           = await categorizeTransaction(txn, env);
+        const examples     = buildExamples(txn, confirmedTxns);
+        const ai           = await categorizeTransaction(txn, env, { merchantRules, categoryDescriptions, examples });
         txn.category       = ai.category;
         txn.group          = ai.group;
         txn.isFixed        = ai.isFixed;
