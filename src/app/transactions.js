@@ -604,6 +604,57 @@ function suggestCategory(txnId, txn, allRules) {
 }
 
 
+// Tier 4: call the AI Worker when Tiers 1–3 all missed.
+// Saves the result to Firebase so it becomes a Tier 3 hit on next load.
+async function fetchAiSuggestion(txnId, txn, uid) {
+  if (_aiSugCache.has(txnId)) return;
+  _aiSugCache.set(txnId, null); // mark in-flight
+  try {
+    const idToken = await auth.currentUser?.getIdToken();
+    if (!idToken) { _aiSugCache.set(txnId, false); resetSugStrip(txnId); return; }
+
+    const res = await fetch(`${WORKER_URL}/categorize`, {
+      method:  'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${idToken}` },
+      body:    JSON.stringify({ txn, merchantRules: _merchantRules }),
+    });
+
+    if (!res.ok) { _aiSugCache.set(txnId, false); resetSugStrip(txnId); return; }
+
+    const result = await res.json();
+
+    if (result.quotaExhausted || !result.category || result.category === 'uncategorized') {
+      _aiSugCache.set(txnId, false);
+      resetSugStrip(txnId);
+      return;
+    }
+
+    const sug = { catId: result.category, source: 'ai', conf: result.confidence };
+    _aiSugCache.set(txnId, sug);
+    dbSet(`suggestions/${uid}/${txnId}`, sug); // persist so next load skips the AI call
+    updateSugStrip(txnId, sug);
+  } catch {
+    _aiSugCache.set(txnId, false);
+    resetSugStrip(txnId);
+  }
+}
+
+// Resets an "Analyzing…" strip back to "Uncategorized" when AI returns nothing.
+function resetSugStrip(txnId) {
+  const row = document.querySelector(`.txn-row[data-id="${txnId}"]`);
+  if (!row) return;
+  const strip = row.closest('.txn-item')?.querySelector('.sug-strip');
+  if (!strip) return;
+  strip.className = 'sug-strip warn';
+  strip.innerHTML = `
+    <span class="sug-lbl warn">⚠ Uncategorized</span>
+    <button class="btn-quick-change" data-id="${txnId}" data-cat="uncategorized" style="margin-left:auto">Categorize →</button>`;
+  strip.querySelector('.btn-quick-change')?.addEventListener('click', e => {
+    e.stopPropagation();
+    row.querySelector('.cat-btn')?.click();
+  });
+}
+
 // Writes a merchant → category mapping to Firebase so future transactions are auto-matched.
 function learnMerchant(uid, txnId, catId) {
   const txn = (allTxns.find(([id]) => id === txnId) ?? partnerAllTxns.find(([id]) => id === txnId))?.[1];
@@ -718,11 +769,22 @@ function renderPage(filtered, state, uid, refresh, accountMap) {
               <button class="btn-quick-change"  data-id="${id}" data-cat="${sug.catId}">Change</button>
             </div>`;
         } else {
-          suggestionHTML = `
-            <div class="sug-strip warn" id="sug-${id}">
-              <span class="sug-lbl warn">⚠ Uncategorized</span>
-              <button class="btn-quick-change" data-id="${id}" data-cat="${t.category}" style="margin-left:auto">Categorize →</button>
-            </div>`;
+          const cacheState = _aiSugCache.get(id);
+          if (cacheState === false) {
+            // AI confirmed no category available
+            suggestionHTML = `
+              <div class="sug-strip warn">
+                <span class="sug-lbl warn">⚠ Uncategorized</span>
+                <button class="btn-quick-change" data-id="${id}" data-cat="${t.category}" style="margin-left:auto">Categorize →</button>
+              </div>`;
+          } else {
+            // undefined (not yet tried) or null (in-flight) → show Analyzing
+            suggestionHTML = `
+              <div class="sug-strip analyzing" id="sug-${id}">
+                <span class="sug-lbl analyzing">Analyzing…</span>
+              </div>`;
+            if (cacheState === undefined) setTimeout(() => fetchAiSuggestion(id, t, uid), 0);
+          }
         }
       }
     }

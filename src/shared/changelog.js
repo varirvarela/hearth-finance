@@ -1,5 +1,12 @@
 export const CHANGELOG = [
   {
+    version: '1.9.7',
+    date:    '2026-08-26',
+    changes: [
+      'Transactions: AI suggestions re-enabled as Tier 4 — fires only when rules, keywords, and stored Firebase suggestions all miss. Result is saved to Firebase so the AI call never repeats for the same transaction.',
+    ],
+  },
+  {
     version: '1.9.6',
     date:    '2026-08-26',
     changes: [
