@@ -1,5 +1,12 @@
 export const CHANGELOG = [
   {
+    version: '1.9.6',
+    date:    '2026-08-26',
+    changes: [
+      'Transactions: ACH Electronic debit, ACH debit, and scheduled online payments now auto-suggest Transfer category via Tier 2 keyword matching.',
+    ],
+  },
+  {
     version: '1.9.5',
     date:    '2026-08-26',
     changes: [

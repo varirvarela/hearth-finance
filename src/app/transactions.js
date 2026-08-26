@@ -174,10 +174,14 @@ export function renderTransactions(container) {
   ;(async () => {
     try {
       const sugs = await dbGet(`suggestions/${uid}`);
+      const count = Object.keys(sugs ?? {}).length;
+      console.log(`[Hearth] suggestions preload: ${count} entries loaded`);
       for (const [txnId, sug] of Object.entries(sugs ?? {})) {
         if (sug?.catId && sug.catId !== 'uncategorized') _aiSugCache.set(txnId, sug);
       }
-    } catch { /* cache stays empty; rows will show Uncategorized */ }
+    } catch (e) {
+      console.error('[Hearth] suggestions preload failed:', e);
+    }
 
     dbListen(`transactions/${uid}`, txns => {
       allTxns = Object.entries(txns ?? {}).sort((a, b) => b[1].date.localeCompare(a[1].date));
@@ -540,6 +544,7 @@ function suggestCategory(txnId, txn, allRules) {
   const KEYWORDS = [
     // Transfers (must be first — high confidence)
     [/\btransfer\b|transferencia|entre cuentas|wire transfer|sent to|received from/i, 'transfer_cuentas'],
+    [/\bach\b.*debit|ach electronic|electronic.*debit|online.*scheduled payment/i,   'transfer_cuentas'],
     [/pago.*tarjeta|card payment|tarjeta.*pago|credit card payment/i,               'transfer_tarjeta'],
     // Delivery
     [/uber eats|rappi|didi food|doordash|grubhub|pedidos ya/i,                     'salidas_delivery'],
