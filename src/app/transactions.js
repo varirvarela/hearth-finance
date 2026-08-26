@@ -170,18 +170,21 @@ export function renderTransactions(container) {
   dbListen(`merchantRules/${uid}`, rules => { _merchantRules = rules ?? {}; });
 
   // Pre-load suggestion cache BEFORE the first transactions render to avoid "Analyzing..." flash.
-  // dbGet resolves once; the live listener below handles updates written during the session.
-  dbGet(`suggestions/${uid}`).then(saved => {
-    for (const [txnId, sug] of Object.entries(saved ?? {})) {
-      _aiSugCache.set(txnId, sug);
-    }
-    // Register transactions listener AFTER cache is warm so first render sees suggestions.
-    dbListen(`transactions/${uid}`, txns => {
-      allTxns = Object.entries(txns ?? {}).sort((a, b) => b[1].date.localeCompare(a[1].date));
-      refresh();
-      updateDupBanner(allTxns, uid);
+  // .catch ensures transactions always load even if suggestions read fails.
+  dbGet(`suggestions/${uid}`)
+    .then(saved => {
+      for (const [txnId, sug] of Object.entries(saved ?? {})) {
+        _aiSugCache.set(txnId, sug);
+      }
+    })
+    .catch(() => {})
+    .finally(() => {
+      dbListen(`transactions/${uid}`, txns => {
+        allTxns = Object.entries(txns ?? {}).sort((a, b) => b[1].date.localeCompare(a[1].date));
+        refresh();
+        updateDupBanner(allTxns, uid);
+      });
     });
-  });
 
   // Live listener keeps cache current for new AI suggestions written during the session.
   dbListen(`suggestions/${uid}`, saved => {
