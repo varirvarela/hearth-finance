@@ -1,5 +1,12 @@
 export const CHANGELOG = [
   {
+    version: '1.11.3',
+    date:    '2026-08-26',
+    changes: [
+      'Transactions: tap any transaction to expand details, then delete it with a confirmation step.',
+    ],
+  },
+  {
     version: '1.11.2',
     date:    '2026-08-26',
     changes: [

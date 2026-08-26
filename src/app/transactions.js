@@ -1,4 +1,4 @@
-import { dbListen, dbGet, dbSet, dbUpdate, auth, getPartnerUid } from '../shared/firebase.js';
+import { dbListen, dbGet, dbSet, dbUpdate, dbRemove, auth, getPartnerUid } from '../shared/firebase.js';
 import { fmtCurrency, fmtDate }     from '../shared/format.js';
 import { openImportModal } from './import.js';
 import {
@@ -97,6 +97,26 @@ export function renderTransactions(container) {
         transition: border-color 0.15s;
       }
       .txn-notes-input:focus { border-color: var(--brand); outline: none; }
+      .txn-detail-actions {
+        margin-top: 0.9rem; padding-top: 0.7rem; border-top: 1px solid var(--border);
+        display: flex; align-items: center; gap: 0.6rem; flex-wrap: wrap;
+      }
+      .btn-delete-txn {
+        font-size: 0.8rem; color: #ef4444; background: none;
+        border: 1.5px solid #ef4444; border-radius: 8px; padding: 4px 12px;
+        cursor: pointer; opacity: 0.65; transition: opacity 0.15s;
+      }
+      .btn-delete-txn:hover { opacity: 1; }
+      .delete-confirm { display: flex; align-items: center; gap: 0.6rem; flex-wrap: wrap; }
+      .delete-confirm-msg { font-size: 0.82rem; color: var(--text); }
+      .btn-delete-confirm {
+        font-size: 0.8rem; background: #ef4444; color: #fff; border: none;
+        border-radius: 8px; padding: 4px 12px; cursor: pointer;
+      }
+      .btn-delete-cancel {
+        font-size: 0.8rem; background: none; border: 1.5px solid var(--border);
+        border-radius: 8px; padding: 4px 10px; cursor: pointer; color: var(--text);
+      }
     `;
     document.head.appendChild(style);
   }
@@ -981,6 +1001,15 @@ function renderPage(filtered, state, uid, refresh, accountMap) {
           <div class="txn-detail-row"><span class="txn-dl">Notes</span><span class="txn-dv"><textarea class="txn-notes-input" data-id="${id}" rows="2" placeholder="Add a note…"${isPartner ? ' disabled' : ''}>${t.notes ?? ''}</textarea></span></div>
           <div class="txn-detail-row"><span class="txn-dl">Transfer</span><span class="txn-dv"><label style="display:flex;align-items:center;gap:0.4rem;cursor:pointer"><input type="checkbox" class="txn-transfer-chk" data-id="${id}" ${t.isTransfer ? 'checked' : ''}${isPartner ? ' disabled' : ''}> Mark as inter-account transfer</label></span></div>
         </div>
+        ${!isPartner ? `
+        <div class="txn-detail-actions">
+          <button class="btn-delete-txn">Delete transaction</button>
+          <div class="delete-confirm" hidden>
+            <span class="delete-confirm-msg">Permanently delete this transaction?</span>
+            <button class="btn-delete-confirm">Delete</button>
+            <button class="btn-delete-cancel">Cancel</button>
+          </div>
+        </div>` : ''}
       `;
 
       item.insertAdjacentElement('afterend', detail);
@@ -994,6 +1023,22 @@ function renderPage(filtered, state, uid, refresh, accountMap) {
         });
         detail.querySelector('.txn-transfer-chk').addEventListener('change', e2 => {
           dbUpdate(`transactions/${uid}/${id}`, { isTransfer: e2.target.checked });
+        });
+
+        const deleteBtn  = detail.querySelector('.btn-delete-txn');
+        const confirmDiv = detail.querySelector('.delete-confirm');
+        deleteBtn.addEventListener('click', () => {
+          deleteBtn.hidden = true;
+          confirmDiv.hidden = false;
+        });
+        confirmDiv.querySelector('.btn-delete-cancel').addEventListener('click', () => {
+          deleteBtn.hidden = false;
+          confirmDiv.hidden = true;
+        });
+        confirmDiv.querySelector('.btn-delete-confirm').addEventListener('click', async () => {
+          item.remove();
+          detail.remove();
+          await dbRemove(`transactions/${uid}/${id}`);
         });
       }
     });
