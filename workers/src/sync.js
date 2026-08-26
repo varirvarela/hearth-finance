@@ -7,7 +7,11 @@ export async function handleSync(env) {
   const users = await fbGet(env, 'users');
   if (!users) return;
   for (const [uid] of Object.entries(users)) {
-    await handleUserSync(env, uid);
+    try {
+      await handleUserSync(env, uid);
+    } catch (err) {
+      console.error(`[sync] uid=${uid} fatal error:`, err.message);
+    }
   }
 }
 
@@ -24,7 +28,15 @@ export async function handleUserSync(env, uid, { startDate, endDate } = {}) {
     if (!itemsSeen.has(account.plaidItemId)) {
       const slot  = account.plaidSlot ?? 1;
       const token = await env.PLAID_TOKENS.get(`s${slot}:${uid}:${account.plaidItemId}`);
-      if (!token) continue;
+      if (!token) {
+        // Token missing from KV — mark account as error so the UI shows red instead of silently stale
+        console.warn(`[sync] uid=${uid} item=${account.plaidItemId} slot=${slot}: no token in KV`);
+        await fbPatch(env, '', {
+          [`accounts/${uid}/${key}/lastSyncStatus`]: 'error',
+          [`accounts/${uid}/${key}/lastSyncError`]:  'Access token missing — please reconnect',
+        }).catch(() => {});
+        continue;
+      }
       itemsSeen.set(account.plaidItemId, { token, slot, accountKeys: [], lastSync: account.lastSync ?? null });
     }
     itemsSeen.get(account.plaidItemId).accountKeys.push(key);
@@ -38,7 +50,12 @@ export async function handleUserSync(env, uid, { startDate, endDate } = {}) {
   let errors = 0;
 
   for (const [itemId, { token, slot, accountKeys, lastSync }] of itemsSeen) {
-    const resolvedStart = startDate ?? new Date(today - (lastSync ? 2 : 730) * 86400000).toISOString().slice(0, 10);
+    // Start from the last successful sync date (to catch any gap during an error period),
+    // but never more than 2 years back and never more recent than today-2 (overlap buffer).
+    const twoYearsAgo = new Date(today.getTime() - 730 * 86400000);
+    const twoDaysAgo  = new Date(today.getTime() -   2 * 86400000);
+    const sinceDate   = lastSync ? new Date(lastSync + 'T12:00:00') : twoYearsAgo;
+    const resolvedStart = startDate ?? new Date(Math.min(sinceDate.getTime(), twoDaysAgo.getTime())).toISOString().slice(0, 10);
     const resolvedEnd   = endDate ?? computedEnd;
 
     let plaidTxns;

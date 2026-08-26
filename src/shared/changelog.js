@@ -1,5 +1,16 @@
 export const CHANGELOG = [
   {
+    version: '1.11.1',
+    date:    '2026-08-26',
+    changes: [
+      'Accounts: reconnect now actually exchanges the token, clears the error status, and triggers an immediate backfill sync.',
+      'Accounts: accounts no longer stay red after reconnect (error status was not being cleared on exchange-token).',
+      'Sync: daily cron no longer skips all remaining users when one fails — each user is now isolated.',
+      'Sync: after an error period, the sync backfills from the last successful date instead of only the past 2 days.',
+      'Sync: accounts with missing KV tokens now show a red error dot with "please reconnect" instead of silently staying stale.',
+    ],
+  },
+  {
     version: '1.11.0',
     date:    '2026-08-26',
     changes: [

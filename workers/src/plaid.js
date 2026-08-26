@@ -164,14 +164,17 @@ export async function handlePlaid(request, env, path) {
         currentBalance:   a.balances.current    ?? 0,
         availableBalance: a.balances.available  ?? 0,
         currency:         a.balances.iso_currency_code ?? 'USD',
-        lastSync:         new Date().toISOString().slice(0, 10),
+        // Do NOT set lastSync here — leave the existing date so handleUserSync
+        // can backfill from the correct point when triggered after reconnect.
+        lastSyncStatus:   'ok',   // clear any prior error so UI stops showing red
+        lastSyncError:    null,
         isManual:         false,
         isHidden:         false,
       };
     }
     await fbPatch(env, '', updates);
 
-    return new Response(JSON.stringify({ ok: true, item_id, slot }), { headers: CORS });
+    return new Response(JSON.stringify({ ok: true, item_id, slot, accounts: accounts.length }), { headers: CORS });
   }
 
   if (path === '/plaid/remove-account' && request.method === 'POST') {

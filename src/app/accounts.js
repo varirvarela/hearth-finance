@@ -536,7 +536,24 @@ async function reconnectPlaid(uid, itemId, slot) {
 
     window.Plaid.create({
       token: link_token,
-      onSuccess: () => { if (btn) { btn.textContent = 'Reconnected!'; btn.disabled = false; } },
+      onSuccess: async (publicToken) => {
+        if (btn) { btn.textContent = 'Syncing…'; btn.disabled = true; }
+        try {
+          const idTok = await auth.currentUser.getIdToken();
+          await fetch(`${WORKER_URL}/plaid/exchange-token`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${idTok}` },
+            body: JSON.stringify({ public_token: publicToken, slot }),
+          });
+          // Trigger an immediate sync to backfill any missed transactions
+          await fetch(`${WORKER_URL}/sync`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${idTok}` },
+          });
+        } catch { /* non-fatal — Firebase was updated; cron will pick up the rest */ }
+        if (btn) { btn.textContent = 'Reconnected ✓'; btn.disabled = false; }
+        renderAccounts(document.getElementById('main'));
+      },
       onExit: () => { if (btn) { btn.textContent = 'Reconnect'; btn.disabled = false; } },
     }).open();
   } catch {
