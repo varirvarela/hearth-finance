@@ -175,22 +175,14 @@ export function renderTransactions(container) {
     updateDupBanner(allTxns, uid);
   });
 
-  // Suggestions listener: on first fire populate cache and re-render so any "Analyzing…"
-  // rows that rendered before suggestions arrived pick up their suggestions immediately.
-  // On subsequent fires (new AI result written) use updateSugStrip for surgical updates.
-  let _sugFirstLoad = true;
+  // Keep cache warm for session: when AI or batch scripts write new suggestions, update
+  // the strip immediately if the row is visible, otherwise just populate the cache.
   dbListen(`suggestions/${uid}`, saved => {
-    let anyNew = false;
     for (const [txnId, sug] of Object.entries(saved ?? {})) {
       const current = _aiSugCache.get(txnId);
       if (current && current !== null && current !== false) continue;
       _aiSugCache.set(txnId, sug);
-      anyNew = true;
-      if (!_sugFirstLoad) updateSugStrip(txnId, sug);
-    }
-    if (_sugFirstLoad) {
-      _sugFirstLoad = false;
-      if (anyNew) refresh(); // re-render with populated cache — fixes timing race
+      updateSugStrip(txnId, sug);
     }
   });
 
@@ -598,6 +590,20 @@ function suggestCategory(txnId, txn, allRules) {
 async function fetchAiSuggestion(txnId, txn) {
   if (_aiSugCache.has(txnId)) return;
   _aiSugCache.set(txnId, null); // mark as pending so we don't double-call
+
+  // Check Firebase for an existing suggestion (from batch script or prior AI run) before
+  // calling the Worker — avoids burning quota when a recommendation is already stored.
+  const uid0 = auth.currentUser?.uid;
+  if (uid0) {
+    try {
+      const existing = await dbGet(`suggestions/${uid0}/${txnId}`);
+      if (existing?.catId && existing.catId !== 'uncategorized') {
+        _aiSugCache.set(txnId, existing);
+        updateSugStrip(txnId, existing);
+        return;
+      }
+    } catch { /* fall through to Worker */ }
+  }
 
   const controller = new AbortController();
   const timeoutId  = setTimeout(() => controller.abort(), 15000); // 15s hard timeout
