@@ -1,5 +1,15 @@
 export const CHANGELOG = [
   {
+    version: '1.9.1',
+    date:    '2026-08-25',
+    changes: [
+      'Transactions: Firebase suggestions (from batch script or external writes) now surface immediately, even when a transaction was stuck in "Analyzing…".',
+      'Duplicates: skip button now closes the modal when the last pair is skipped, rather than showing an intermediate "All reviewed" screen.',
+      'Duplicates: fixed duplicate card background appearing dark (black) in light mode.',
+      'Duplicates: skip now uses a safer Firebase write path that avoids silent array serialization failures.',
+    ],
+  },
+  {
     version: '1.9.0',
     date:    '2026-08-25',
     changes: [

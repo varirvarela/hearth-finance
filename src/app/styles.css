@@ -1624,7 +1624,7 @@ button:active  { opacity: 0.7; transform: scale(0.97); }
 }
 .bud-detail-txn-icon {
   font-size: 0.9rem; width: 28px; height: 28px; border-radius: 8px;
-  background: var(--card, #1e2636);
+  background: var(--surface);
   display: flex; align-items: center; justify-content: center;
 }
 .bud-detail-txn-name { flex: 1; font-weight: 500; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -3074,7 +3074,7 @@ button:active  { opacity: 0.7; transform: scale(0.97); }
 }
 /* ── Duplicate review cards ──────────────────────────────── */
 .dup-card {
-  background: var(--card, #1e2636);
+  background: var(--surface);
   border: 1px solid var(--border);
   border-radius: 12px;
   padding: 14px;

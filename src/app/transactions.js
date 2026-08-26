@@ -175,13 +175,15 @@ export function renderTransactions(container) {
   // Load learned merchant rules — written each time the user confirms a suggestion
   dbListen(`merchantRules/${uid}`, rules => { _merchantRules = rules ?? {}; });
 
-  // Pre-populate AI suggestion cache from Firebase so we don't re-call the Worker on reload
+  // Pre-populate AI suggestion cache from Firebase so we don't re-call the Worker on reload.
+  // Always overwrite null/false states so suggestions from patch scripts surface immediately.
   dbListen(`suggestions/${uid}`, saved => {
     for (const [txnId, sug] of Object.entries(saved ?? {})) {
-      if (!_aiSugCache.has(txnId)) {
-        _aiSugCache.set(txnId, sug);
-        updateSugStrip(txnId, sug); // patch any "Analyzing…" strip already in the DOM
-      }
+      const current = _aiSugCache.get(txnId);
+      // Skip only if we already have a confirmed real suggestion in the cache
+      if (current && current !== null && current !== false) continue;
+      _aiSugCache.set(txnId, sug);
+      updateSugStrip(txnId, sug);
     }
   });
 
@@ -1206,11 +1208,17 @@ function openDupReview(pairs, uid) {
       const normOk = v => Array.isArray(v) ? [...v] : Object.values(v ?? {});
       const okA = normOk(a.dupOk); if (!okA.includes(idB)) okA.push(idB);
       const okB = normOk(b.dupOk); if (!okB.includes(idA)) okB.push(idA);
-      await Promise.all([
-        dbUpdate(`transactions/${uid}/${idA}`, { dupOk: okA }),
-        dbUpdate(`transactions/${uid}/${idB}`, { dupOk: okB }),
-      ]);
-      idx++; renderPair();
+      try {
+        // dbSet on the subpath avoids Firebase update() array serialization issues
+        await Promise.all([
+          dbSet(`transactions/${uid}/${idA}/dupOk`, okA),
+          dbSet(`transactions/${uid}/${idB}/dupOk`, okB),
+        ]);
+      } catch (err) {
+        console.error('dupOk write failed:', err);
+      }
+      idx++;
+      if (idx >= pairs.length) { close(); } else { renderPair(); }
     });
   }
 
