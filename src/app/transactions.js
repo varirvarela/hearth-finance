@@ -590,8 +590,16 @@ function suggestCategory(txnId, txn, allRules) {
 // Loads a stored suggestion from Firebase for a single transaction.
 // AI / Worker calls are disabled — only surfaces what was pre-loaded by batch scripts.
 async function loadFirebaseSuggestion(txnId) {
-  if (_aiSugCache.has(txnId)) return;
-  _aiSugCache.set(txnId, null); // pending — prevents duplicate calls
+  const cached = _aiSugCache.get(txnId);
+  if (cached === null) return; // already in-flight — don't double-fetch
+  if (cached !== undefined && cached !== false) {
+    // Valid suggestion already in cache (set by suggestions listener before DOM existed)
+    updateSugStrip(txnId, cached);
+    return;
+  }
+  if (cached === false) return; // already confirmed no suggestion
+  // cached === undefined: fetch from Firebase
+  _aiSugCache.set(txnId, null);
   const uid = auth.currentUser?.uid;
   if (!uid) { _aiSugCache.set(txnId, false); return; }
   try {
@@ -721,14 +729,11 @@ function renderPage(filtered, state, uid, refresh, accountMap) {
               <button class="btn-quick-change"  data-id="${id}" data-cat="${sug.catId}">Change</button>
             </div>`;
         } else {
-          // Show Uncategorized immediately; loadFirebaseSuggestion runs in background
-          // and calls updateSugStrip if a stored recommendation is found.
           suggestionHTML = `
             <div class="sug-strip warn" id="sug-${id}">
               <span class="sug-lbl warn">⚠ Uncategorized</span>
               <button class="btn-quick-change" data-id="${id}" data-cat="${t.category}" style="margin-left:auto">Categorize →</button>
             </div>`;
-          if (!_aiSugCache.has(id)) setTimeout(() => loadFirebaseSuggestion(id), 0);
         }
       }
     }
@@ -771,6 +776,13 @@ function renderPage(filtered, state, uid, refresh, accountMap) {
     <div class="card-rows">${rows}</div>
     ${paginationHTML}
   `;
+
+  // Post-render sweep: for every visible "Uncategorized" strip, surface any cached
+  // suggestion (handles the case where the suggestions listener fired before DOM existed)
+  // or fetch from Firebase if not yet checked.
+  el.querySelectorAll('.sug-strip[id^="sug-"]').forEach(strip => {
+    setTimeout(() => loadFirebaseSuggestion(strip.id.slice(4)), 0);
+  });
 
   // Wire chip clear buttons
   el.querySelectorAll('.txn-chip-clear').forEach(btn => {

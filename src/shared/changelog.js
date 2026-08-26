@@ -1,5 +1,12 @@
 export const CHANGELOG = [
   {
+    version: '1.9.4',
+    date:    '2026-08-25',
+    changes: [
+      'Transactions: Firebase recommendations now reliably appear on uncategorized rows — fixed a race condition where the suggestions listener populated the cache before the DOM existed, causing stored recommendations to be silently skipped.',
+    ],
+  },
+  {
     version: '1.9.3',
     date:    '2026-08-25',
     changes: [
