@@ -12,8 +12,9 @@ const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const sa   = JSON.parse(readFileSync(resolve(root, 'service-account.json'), 'utf8'));
 initializeApp({ credential: cert(sa), databaseURL: 'https://hearth-finance-9830c-default-rtdb.firebaseio.com' });
 
-const db  = getDatabase();
-const UID = 'M8n6Fow8QcUm5DLLmE0aIajNNr72';
+const db       = getDatabase();
+const UID      = 'M8n6Fow8QcUm5DLLmE0aIajNNr72';
+const DEV_ROOT = process.argv.includes('--dev') ? '_dev/' : '';
 
 // ── Rules: [regex, catId, confidence, hint] ───────────────────────────────────
 // Order matters — first match wins.
@@ -268,9 +269,10 @@ const RULES = [
 
 // ── Main ──────────────────────────────────────────────────────────────────────
 async function main() {
+  console.log(`Running in ${DEV_ROOT ? 'DEV' : 'PROD'} mode (${DEV_ROOT}transactions/...)\n`);
   const [txnsSnap, sugsSnap] = await Promise.all([
-    db.ref(`transactions/${UID}`).get(),
-    db.ref(`suggestions/${UID}`).get(),
+    db.ref(`${DEV_ROOT}transactions/${UID}`).get(),
+    db.ref(`${DEV_ROOT}suggestions/${UID}`).get(),
   ]);
 
   const txns     = txnsSnap.val() ?? {};
@@ -301,7 +303,7 @@ async function main() {
     const date   = txn.date ?? '';
 
     if (hit) {
-      patch[`suggestions/${UID}/${txnId}`] = { catId: hit.catId, source: 'heuristic', alts: [], conf: hit.conf, hint: hit.hint };
+      patch[`${DEV_ROOT}suggestions/${UID}/${txnId}`] = { catId: hit.catId, source: 'heuristic', alts: [], conf: hit.conf, hint: hit.hint };
       matched.push({ label, date, amount, catId: hit.catId, conf: hit.conf, hint: hit.hint });
     } else {
       missed.push({ label, date, amount, bankCat: txn.plaidCategory ?? '' });
