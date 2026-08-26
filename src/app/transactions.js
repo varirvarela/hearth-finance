@@ -587,70 +587,23 @@ function suggestCategory(txnId, txn, allRules) {
   return null;
 }
 
-async function fetchAiSuggestion(txnId, txn) {
+// Loads a stored suggestion from Firebase for a single transaction.
+// AI / Worker calls are disabled — only surfaces what was pre-loaded by batch scripts.
+async function loadFirebaseSuggestion(txnId) {
   if (_aiSugCache.has(txnId)) return;
-  _aiSugCache.set(txnId, null); // mark as pending so we don't double-call
-
-  // Check Firebase for an existing suggestion (from batch script or prior AI run) before
-  // calling the Worker — avoids burning quota when a recommendation is already stored.
-  const uid0 = auth.currentUser?.uid;
-  if (uid0) {
-    try {
-      const existing = await dbGet(`suggestions/${uid0}/${txnId}`);
-      if (existing?.catId && existing.catId !== 'uncategorized') {
-        _aiSugCache.set(txnId, existing);
-        updateSugStrip(txnId, existing);
-        return;
-      }
-    } catch { /* fall through to Worker */ }
-  }
-
-  const controller = new AbortController();
-  const timeoutId  = setTimeout(() => controller.abort(), 15000); // 15s hard timeout
-
+  _aiSugCache.set(txnId, null); // pending — prevents duplicate calls
+  const uid = auth.currentUser?.uid;
+  if (!uid) { _aiSugCache.set(txnId, false); return; }
   try {
-    const idToken = await auth.currentUser?.getIdToken();
-    if (!idToken) { clearTimeout(timeoutId); _aiSugCache.set(txnId, false); return; }
-    // Recent manually-confirmed transactions as few-shot examples for the AI
-    const examples = allTxns
-      .filter(([, t]) => t.categorySource === 'manual' && t.category && t.category !== 'uncategorized')
-      .slice(0, 12)
-      .map(([, t]) => ({ merchantName: t.merchantName ?? '', description: t.description ?? '', category: t.category, date: t.date, amount: t.amount }));
-
-    const res = await fetch(`${WORKER_URL}/categorize`, {
-      method: 'POST',
-      signal: controller.signal,
-      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${idToken}` },
-      body: JSON.stringify({
-        txn: {
-          description:   txn.description ?? txn.merchantName,
-          merchantName:  txn.merchantName,
-          amount:        txn.amount,
-          date:          txn.date,
-          accountName:   txn.accountName,
-          plaidCategory: txn.plaidCategory,
-        },
-        merchantRules: _merchantRules,
-        examples,
-      }),
-    });
-    clearTimeout(timeoutId);
-    if (!res.ok) { _aiSugCache.set(txnId, false); return; }
-    const data = await res.json();
-    const primary = data.category;
-    const alts    = (data.alternatives ?? []).slice(0, 2); // up to 2 extra options
-    if (primary && primary !== 'uncategorized') {
-      const sug = { catId: primary, source: 'ai', alts };
+    const sug = await dbGet(`suggestions/${uid}/${txnId}`);
+    if (sug?.catId && sug.catId !== 'uncategorized') {
       _aiSugCache.set(txnId, sug);
-      const uid2 = auth.currentUser?.uid;
-      if (uid2) dbSet(`suggestions/${uid2}/${txnId}`, sug);
       updateSugStrip(txnId, sug);
     } else {
-      _aiSugCache.set(txnId, false); // false = "no suggestion found" (distinct from null = "pending")
+      _aiSugCache.set(txnId, false);
     }
   } catch {
-    clearTimeout(timeoutId);
-    _aiSugCache.set(txnId, false); // timeout / network error — mark done so we don't retry every render
+    _aiSugCache.set(txnId, false);
   }
 }
 
@@ -768,24 +721,14 @@ function renderPage(filtered, state, uid, refresh, accountMap) {
               <button class="btn-quick-change"  data-id="${id}" data-cat="${sug.catId}">Change</button>
             </div>`;
         } else {
-          const cachedState = _aiSugCache.get(id);
-          if (cachedState === false) {
-            // Worker returned no suggestion — require manual categorization
-            suggestionHTML = `
-              <div class="sug-strip warn" id="sug-${id}">
-                <span class="sug-lbl warn">⚠ Uncategorized</span>
-                <button class="btn-quick-change" data-id="${id}" data-cat="${t.category}" style="margin-left:auto">Categorize →</button>
-              </div>`;
-          } else {
-            // undefined (not checked) or null (in-flight) — show Analyzing…
-            suggestionHTML = `
-              <div class="sug-strip warn" id="sug-${id}">
-                <span class="sug-lbl warn">⚠ Uncategorized</span>
-                <span class="sug-loading" style="font-size:0.68rem;color:var(--muted);margin-left:6px">Analyzing…</span>
-                <button class="btn-quick-change" data-id="${id}" data-cat="${t.category}" style="margin-left:auto">Categorize →</button>
-              </div>`;
-            setTimeout(() => fetchAiSuggestion(id, t), 100);
-          }
+          // Show Uncategorized immediately; loadFirebaseSuggestion runs in background
+          // and calls updateSugStrip if a stored recommendation is found.
+          suggestionHTML = `
+            <div class="sug-strip warn" id="sug-${id}">
+              <span class="sug-lbl warn">⚠ Uncategorized</span>
+              <button class="btn-quick-change" data-id="${id}" data-cat="${t.category}" style="margin-left:auto">Categorize →</button>
+            </div>`;
+          if (!_aiSugCache.has(id)) setTimeout(() => loadFirebaseSuggestion(id), 0);
         }
       }
     }

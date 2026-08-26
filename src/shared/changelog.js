@@ -1,5 +1,13 @@
 export const CHANGELOG = [
   {
+    version: '1.9.3',
+    date:    '2026-08-25',
+    changes: [
+      'Transactions: uncategorized rows now show "Uncategorized" immediately and update to a suggestion as soon as the stored recommendation is found in Firebase — no more stuck "Analyzing…" spinner.',
+      'Transactions: AI / Worker calls disabled; recommendations come exclusively from pre-loaded batch-script suggestions.',
+    ],
+  },
+  {
     version: '1.9.2',
     date:    '2026-08-25',
     changes: [
