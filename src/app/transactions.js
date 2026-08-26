@@ -159,7 +159,7 @@ export function renderTransactions(container) {
 
   dbListen(`accounts/${uid}`, accounts => {
     accountMap = accounts ?? {};
-    refresh();
+    if (allTxns.length) refresh(); // skip until transactions are loaded
   });
 
   dbListen(`rules/${uid}`, rules => {
@@ -169,22 +169,33 @@ export function renderTransactions(container) {
   // Load learned merchant rules — written each time the user confirms a suggestion
   dbListen(`merchantRules/${uid}`, rules => { _merchantRules = rules ?? {}; });
 
-  dbListen(`transactions/${uid}`, txns => {
-    allTxns = Object.entries(txns ?? {}).sort((a, b) => b[1].date.localeCompare(a[1].date));
-    refresh();
-    updateDupBanner(allTxns, uid);
-  });
+  // Preload ALL stored suggestions into cache before the first render so that
+  // suggestCategory() can surface them synchronously — no async strip-patching needed.
+  ;(async () => {
+    try {
+      const sugs = await dbGet(`suggestions/${uid}`);
+      for (const [txnId, sug] of Object.entries(sugs ?? {})) {
+        if (sug?.catId && sug.catId !== 'uncategorized') _aiSugCache.set(txnId, sug);
+      }
+    } catch { /* cache stays empty; rows will show Uncategorized */ }
 
-  // Keep cache warm for session: when AI or batch scripts write new suggestions, update
-  // the strip immediately if the row is visible, otherwise just populate the cache.
-  dbListen(`suggestions/${uid}`, saved => {
-    for (const [txnId, sug] of Object.entries(saved ?? {})) {
-      const current = _aiSugCache.get(txnId);
-      if (current && current !== null && current !== false) continue;
-      _aiSugCache.set(txnId, sug);
-      updateSugStrip(txnId, sug);
-    }
-  });
+    dbListen(`transactions/${uid}`, txns => {
+      allTxns = Object.entries(txns ?? {}).sort((a, b) => b[1].date.localeCompare(a[1].date));
+      refresh();
+      updateDupBanner(allTxns, uid);
+    });
+
+    // Keep listening so suggestions written after load (e.g. new batch run) still appear.
+    dbListen(`suggestions/${uid}`, saved => {
+      for (const [txnId, sug] of Object.entries(saved ?? {})) {
+        if (_aiSugCache.has(txnId)) continue;
+        if (sug?.catId && sug.catId !== 'uncategorized') {
+          _aiSugCache.set(txnId, sug);
+          updateSugStrip(txnId, sug);
+        }
+      }
+    });
+  })();
 
   getPartnerUid(uid).then(p => {
     if (p) {
@@ -587,33 +598,6 @@ function suggestCategory(txnId, txn, allRules) {
   return null;
 }
 
-// Loads a stored suggestion from Firebase for a single transaction.
-// AI / Worker calls are disabled — only surfaces what was pre-loaded by batch scripts.
-async function loadFirebaseSuggestion(txnId) {
-  const cached = _aiSugCache.get(txnId);
-  if (cached === null) return; // already in-flight — don't double-fetch
-  if (cached !== undefined && cached !== false) {
-    // Valid suggestion already in cache (set by suggestions listener before DOM existed)
-    updateSugStrip(txnId, cached);
-    return;
-  }
-  if (cached === false) return; // already confirmed no suggestion
-  // cached === undefined: fetch from Firebase
-  _aiSugCache.set(txnId, null);
-  const uid = auth.currentUser?.uid;
-  if (!uid) { _aiSugCache.set(txnId, false); return; }
-  try {
-    const sug = await dbGet(`suggestions/${uid}/${txnId}`);
-    if (sug?.catId && sug.catId !== 'uncategorized') {
-      _aiSugCache.set(txnId, sug);
-      updateSugStrip(txnId, sug);
-    } else {
-      _aiSugCache.set(txnId, false);
-    }
-  } catch {
-    _aiSugCache.set(txnId, false);
-  }
-}
 
 // Writes a merchant → category mapping to Firebase so future transactions are auto-matched.
 function learnMerchant(uid, txnId, catId) {
@@ -776,13 +760,6 @@ function renderPage(filtered, state, uid, refresh, accountMap) {
     <div class="card-rows">${rows}</div>
     ${paginationHTML}
   `;
-
-  // Post-render sweep: for every visible "Uncategorized" strip, surface any cached
-  // suggestion (handles the case where the suggestions listener fired before DOM existed)
-  // or fetch from Firebase if not yet checked.
-  el.querySelectorAll('.sug-strip[id^="sug-"]').forEach(strip => {
-    setTimeout(() => loadFirebaseSuggestion(strip.id.slice(4)), 0);
-  });
 
   // Wire chip clear buttons
   el.querySelectorAll('.txn-chip-clear').forEach(btn => {

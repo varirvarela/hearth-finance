@@ -1,5 +1,12 @@
 export const CHANGELOG = [
   {
+    version: '1.9.5',
+    date:    '2026-08-26',
+    changes: [
+      'Transactions: stored Firebase recommendations now reliably appear on uncategorized rows — suggestions are preloaded before the first render so they surface synchronously, eliminating all listener/render race conditions.',
+    ],
+  },
+  {
     version: '1.9.4',
     date:    '2026-08-25',
     changes: [
