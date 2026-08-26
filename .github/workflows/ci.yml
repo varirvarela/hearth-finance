@@ -51,7 +51,7 @@ jobs:
   e2e:
     name: E2E Tests (Playwright)
     runs-on: ubuntu-latest
-    needs: build
+    needs: unit-tests
     steps:
       - uses: actions/checkout@v4
 
@@ -62,13 +62,9 @@ jobs:
 
       - run: npm ci
 
-      - name: Install Playwright browsers
-        run: npx playwright install --with-deps chromium
-
-      - name: Run Playwright tests
-        run: npm run test:e2e
+      - name: Vite build (preview server needs dist/)
+        run: npm run build
         env:
-          CI: true
           VITE_FIREBASE_API_KEY:              ${{ secrets.VITE_FIREBASE_API_KEY }}
           VITE_FIREBASE_AUTH_DOMAIN:          ${{ secrets.VITE_FIREBASE_AUTH_DOMAIN }}
           VITE_FIREBASE_DATABASE_URL:         ${{ secrets.VITE_FIREBASE_DATABASE_URL }}
@@ -76,6 +72,14 @@ jobs:
           VITE_FIREBASE_STORAGE_BUCKET:       ${{ secrets.VITE_FIREBASE_STORAGE_BUCKET }}
           VITE_FIREBASE_MESSAGING_SENDER_ID:  ${{ secrets.VITE_FIREBASE_MESSAGING_SENDER_ID }}
           VITE_FIREBASE_APP_ID:               ${{ secrets.VITE_FIREBASE_APP_ID }}
+
+      - name: Install Playwright browsers
+        run: npx playwright install --with-deps chromium
+
+      - name: Run Playwright tests
+        run: npm run test:e2e
+        env:
+          CI: true
 
       - name: Upload Playwright report
         if: failure()
