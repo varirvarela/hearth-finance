@@ -219,7 +219,7 @@ function renderBudgetNav(listEl, rootCats, rootMap, budgets, spentByCat, txns, p
 
 function renderGroupTiles(el, rootCats, rootMap, budgets, spentByCat, pacePct, listEl, allRoots, txns, year, month, prefix) {
   const tiles = rootCats.map(root => {
-    const leaves = (rootMap.get(root.id) ?? []).filter(l => (budgets[l.id]?.monthly ?? 0) > 0 || (spentByCat[l.id] ?? 0) > 0);
+    const leaves = (rootMap.get(root.id) ?? []).filter(l => !l.hide);
     if (!leaves.length) return '';
 
     const groupSpent  = leaves.reduce((s, l) => s + (spentByCat[l.id] ?? 0), 0);
@@ -268,7 +268,7 @@ function renderGroupTiles(el, rootCats, rootMap, budgets, spentByCat, pacePct, l
 
 function renderCategoryTiles(el, groupId, rootMap, budgets, spentByCat, pacePct, listEl, allRoots, txns, year, month, prefix) {
   const root   = CATEGORIES.find(c => c.id === groupId);
-  const leaves = (rootMap.get(groupId) ?? []).filter(l => (budgets[l.id]?.monthly ?? 0) > 0 || (spentByCat[l.id] ?? 0) > 0);
+  const leaves = (rootMap.get(groupId) ?? []).filter(l => !l.hide);
 
   const tiles = leaves.map(leaf => {
     const spent  = spentByCat[leaf.id] ?? 0;

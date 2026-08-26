@@ -31,6 +31,7 @@ let partnerInitial   = 'P';
 let accountMap       = {};
 let allRulesSnapshot = {};
 let _merchantRules   = {}; // normalizedName → { catId, confirmedAt }
+let _catDescriptions = {};
 const _aiSugCache    = new Map(); // txnId → { catId, source }
 
 function getSourceBadge(source) {
@@ -168,6 +169,8 @@ export function renderTransactions(container) {
 
   // Load learned merchant rules — written each time the user confirms a suggestion
   dbListen(`merchantRules/${uid}`, rules => { _merchantRules = rules ?? {}; });
+
+  dbGet(`categoryDescriptions/${uid}`).then(d => { _catDescriptions = d ?? {}; }).catch(() => {});
 
   // Preload ALL stored suggestions into cache before the first render so that
   // suggestCategory() can surface them synchronously — no async strip-patching needed.
@@ -616,7 +619,7 @@ async function fetchAiSuggestion(txnId, txn, uid) {
     const res = await fetch(`${WORKER_URL}/categorize`, {
       method:  'POST',
       headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${idToken}` },
-      body:    JSON.stringify({ txn, merchantRules: _merchantRules }),
+      body:    JSON.stringify({ txn, merchantRules: _merchantRules, categoryDescriptions: _catDescriptions }),
     });
 
     if (!res.ok) { _aiSugCache.set(txnId, false); resetSugStrip(txnId); return; }

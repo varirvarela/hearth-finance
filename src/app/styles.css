@@ -641,6 +641,24 @@ input:focus, select:focus, textarea:focus { outline: none; }
   margin-top: 0;
 }
 
+/* ── Category management ─────────────────────────────────────────── */
+.cat-group-details { border: 1px solid var(--border); border-radius: 10px; margin-bottom: 8px; overflow: hidden; }
+.cat-group-summary { display: flex; justify-content: space-between; align-items: center; padding: 10px 14px; cursor: pointer; font-weight: 600; font-size: 0.88rem; list-style: none; }
+.cat-group-summary::-webkit-details-marker { display: none; }
+.cat-group-count   { font-size: 0.75rem; color: var(--muted); font-weight: 400; }
+.cat-group-leaves  { padding: 4px 10px 10px; border-top: 1px solid var(--border); display: flex; flex-direction: column; gap: 8px; }
+.cat-leaf-row      { display: flex; flex-direction: column; gap: 4px; }
+.cat-leaf-hdr      { display: flex; align-items: center; gap: 8px; }
+.cat-leaf-icon     { width: 28px; height: 28px; border-radius: 8px; display: flex; align-items: center; justify-content: center; font-size: 1rem; flex-shrink: 0; }
+.cat-leaf-meta     { display: flex; align-items: center; gap: 5px; flex-wrap: wrap; }
+.cat-leaf-name     { font-size: 0.82rem; font-weight: 600; }
+.cat-leaf-badge    { font-size: 0.65rem; padding: 1px 6px; border-radius: 20px; font-weight: 700; }
+.fixed-badge       { background: #dbeafe; color: #1d4ed8; }
+.annual-badge      { background: #dcfce7; color: #15803d; }
+.hidden-badge      { background: #f3f4f6; color: #6b7280; }
+.cat-desc-input    { width: 100%; border: 1px solid var(--border); border-radius: 8px; padding: 6px 10px; font-size: 0.78rem; font-family: inherit; background: var(--bg); color: var(--text); resize: vertical; line-height: 1.4; }
+.cat-desc-input:focus { border-color: var(--brand); outline: none; }
+
 .rule-row {
   display: flex;
   align-items: center;
@@ -2872,6 +2890,16 @@ button:active  { opacity: 0.7; transform: scale(0.97); }
   font-size: 0.65rem;
   color: var(--muted);
 }
+
+.acct-row-sync {
+  font-size: 0.7rem;
+  margin-top: 1px;
+}
+.acct-row-sync.dot-ok     { color: #16a34a; }
+.acct-row-sync.dot-stale  { color: #d97706; }
+.acct-row-sync.dot-error  { color: #ef4444; }
+.acct-row-sync.dot-manual { color: var(--muted); }
+.acct-row-sync.dot-unknown{ color: var(--muted); }
 
 .acct-row-bal {
   font-size: 0.82rem;

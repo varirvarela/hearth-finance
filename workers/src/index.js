@@ -51,7 +51,7 @@ export default {
         const body = await request.json();
         // Body may be { txn, merchantRules, examples } (new) or a bare txn object (legacy)
         const txn     = body.txn ?? body;
-        const context = { merchantRules: body.merchantRules ?? {}, examples: body.examples ?? [] };
+        const context = { merchantRules: body.merchantRules ?? {}, examples: body.examples ?? [], categoryDescriptions: body.categoryDescriptions ?? {} };
         const result  = await categorizeTransaction(txn, env, context);
         return json(result);
       }

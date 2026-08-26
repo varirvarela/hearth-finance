@@ -1,5 +1,5 @@
 import { dbGet, dbSet, dbPush, auth } from '../shared/firebase.js';
-import { getCategoryById } from '../shared/categories.js';
+import { getCategoryById, CATEGORIES, getRootCategories, getChildCategories } from '../shared/categories.js';
 import { signOut } from 'firebase/auth';
 import { CHANGELOG } from '../shared/changelog.js';
 import { openChangelogSheet } from './accounts.js';
@@ -10,6 +10,11 @@ export function renderSettings(container) {
       <section class="section">
         <h3>Partner Sharing</h3>
         <div id="partner-section"></div>
+      </section>
+      <section class="section">
+        <h3>Categories</h3>
+        <p style="color:var(--muted);font-size:0.82rem;margin-bottom:0.75rem">Add descriptions to help AI categorize ambiguous transactions. These are stored per-account and passed to the AI when no match is found.</p>
+        <div id="cat-mgmt-list"></div>
       </section>
       <section class="section">
         <h3>About</h3>
@@ -26,6 +31,7 @@ export function renderSettings(container) {
   if (!uid) return;
 
   renderPartnerSection(uid);
+  renderCategoryMgmt(uid);
 
   document.getElementById('sign-out').addEventListener('click', () => signOut(auth));
   container.querySelector('#show-changelog').addEventListener('click', () => openChangelogSheet());
@@ -71,5 +77,59 @@ async function acceptInvite(uid) {
   await dbSet(`users/${uid}/partnerUid`, invite.fromUid);
   await dbSet(`users/${invite.fromUid}/partnerUid`, uid);
   renderPartnerSection(uid);
+}
+
+function renderCategoryMgmt(uid) {
+  const el = document.getElementById('cat-mgmt-list');
+  if (!el) return;
+  el.innerHTML = '<p style="color:var(--muted);font-size:0.82rem">Loading…</p>';
+
+  dbGet(`categoryDescriptions/${uid}`).then(descs => {
+    descs = descs ?? {};
+    const groups = getRootCategories().filter(g => g.id !== 'transfer');
+    el.innerHTML = groups.map(group => {
+      const leaves = getChildCategories(group.id).filter(l => !l.isIncome);
+      if (!leaves.length) return '';
+      return `
+        <details class="cat-group-details">
+          <summary class="cat-group-summary">
+            <span>${group.icon} ${group.name}</span>
+            <span class="cat-group-count">${leaves.length} categories</span>
+          </summary>
+          <div class="cat-group-leaves">
+            ${leaves.map(leaf => `
+              <div class="cat-leaf-row" data-id="${leaf.id}">
+                <div class="cat-leaf-hdr">
+                  <span class="cat-leaf-icon" style="background:${leaf.color ? leaf.color + '28' : 'var(--faint)'}">${leaf.icon}</span>
+                  <div class="cat-leaf-meta">
+                    <span class="cat-leaf-name">${leaf.name}</span>
+                    ${leaf.hide ? '<span class="cat-leaf-badge hidden-badge">Hidden</span>' : ''}
+                    ${leaf.isFixed ? '<span class="cat-leaf-badge fixed-badge">Fixed</span>' : ''}
+                    ${leaf.isAnnual ? '<span class="cat-leaf-badge annual-badge">Annual</span>' : ''}
+                  </div>
+                </div>
+                <textarea
+                  class="cat-desc-input"
+                  data-cat="${leaf.id}"
+                  rows="2"
+                  placeholder="Describe what goes here (e.g. 'Restaurants, cafes, fast food, dining out')"
+                >${descs[leaf.id] ?? ''}</textarea>
+              </div>
+            `).join('')}
+          </div>
+        </details>`;
+    }).join('');
+
+    // Auto-save on blur
+    el.querySelectorAll('.cat-desc-input').forEach(ta => {
+      ta.addEventListener('blur', () => {
+        const catId = ta.dataset.cat;
+        const val   = ta.value.trim();
+        if (val) {
+          dbSet(`categoryDescriptions/${uid}/${catId}`, val);
+        }
+      });
+    });
+  });
 }
 

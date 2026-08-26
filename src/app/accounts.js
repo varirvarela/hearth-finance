@@ -372,6 +372,15 @@ function renderAccountList(accounts, uid, partnerUid) {
         </div>
         ${accts.map(([id, a]) => {
           const isDebt    = a.type === 'credit';
+          const lastSyncText = a.isManual ? 'Manual' :
+            a.lastSync ? `Synced ${new Date(a.lastSync + 'T12:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}` :
+            'Never synced';
+          const lastSyncCls = a.isManual ? 'dot-manual' :
+            !a.lastSync ? 'dot-unknown' :
+            a.lastSyncStatus === 'error' ? 'dot-error' :
+            (Date.now() - new Date(a.lastSync + 'T12:00:00').getTime()) > 48 * 3600000 ? 'dot-error' :
+            (Date.now() - new Date(a.lastSync + 'T12:00:00').getTime()) > 4 * 3600000 ? 'dot-stale' :
+            'dot-ok';
           const bal       = a.currentBalance ?? 0;
           const dispName  = a.alias ?? a.name;
           const mergedTag = (a.mergedNames ?? []).length > 0
@@ -382,6 +391,7 @@ function renderAccountList(accounts, uid, partnerUid) {
               <div class="acct-row-info">
                 <span class="acct-row-name">${dispName}</span>
                 <span class="acct-row-sub">${capitalize(a.subtype ?? a.type)}${mergedTag}</span>
+                <span class="acct-row-sync ${lastSyncCls}">${lastSyncText}</span>
               </div>
               <span class="acct-row-bal ${isDebt ? 'debt' : ''}">${isDebt ? '−' : ''}${fmtCurrency(Math.abs(bal))}</span>
               ${!isPartner ? `<button class="acct-rename-btn" data-id="${id}" title="Rename">✎</button>` : ''}

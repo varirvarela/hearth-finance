@@ -1,5 +1,14 @@
 export const CHANGELOG = [
   {
+    version: '1.10.0',
+    date:    '2026-08-26',
+    changes: [
+      'Budgets: all non-hidden categories now show in budget tiles, not just ones with a budget or spend.',
+      'Accounts: each account row now shows last sync date with a color-coded status indicator.',
+      'Settings: new Categories section lets you add AI-guidance descriptions per category, saved to Firebase and sent to the AI when categorizing.',
+    ],
+  },
+  {
     version: '1.9.7',
     date:    '2026-08-26',
     changes: [

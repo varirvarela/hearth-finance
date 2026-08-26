@@ -24,11 +24,12 @@ Response format (JSON only, no explanation, no markdown):
   ]
 }`;
 
-// context = { merchantRules, examples }
+// context = { merchantRules, examples, categoryDescriptions }
 // merchantRules: { [normalizedName]: { catId } }  — confirmed by user in the app
 // examples: [{ merchantName, description, category, date, amount }]  — recent confirmed txns
+// categoryDescriptions: { [catId]: string }  — user-written descriptions for AI guidance
 export async function categorizeTransaction(txn, env, context = {}) {
-  const { merchantRules = {}, examples = [] } = context;
+  const { merchantRules = {}, examples = [], categoryDescriptions = {} } = context;
 
   // Tier 0: learned merchant rule (exact normalized name, written when user confirms)
   const key = normalizeMerchant(txn.merchantName ?? txn.description);
@@ -52,7 +53,8 @@ export async function categorizeTransaction(txn, env, context = {}) {
   // Tier 1: Gemini AI
   const catList = EXPENSE_CATS.map(c => {
     const parent = CATEGORIES.find(p => p.id === c.parent);
-    return `${c.id}: ${c.name} [group: ${parent?.name ?? c.parent}]`;
+    const desc   = categoryDescriptions[c.id] ? ` — ${categoryDescriptions[c.id]}` : '';
+    return `${c.id}: ${c.name}${desc} [group: ${parent?.name ?? c.parent}]`;
   }).join('\n');
 
   const lines = [
