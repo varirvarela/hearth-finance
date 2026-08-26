@@ -1,4 +1,5 @@
-import { auth } from '../shared/firebase.js';
+import { auth, dbGet } from '../shared/firebase.js';
+import { hideCategory, addCustomCategory } from '../shared/categories.js';
 
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
@@ -107,10 +108,20 @@ function bindAuth() {
 
 bindAuth();
 
-onAuthStateChanged(auth, user => {
+onAuthStateChanged(auth, async user => {
   if (user) {
     document.getElementById('auth-screen').hidden = true;
     document.getElementById('app-shell').hidden   = false;
+
+    // Apply per-user category overrides (hide flags + custom categories) before first render.
+    try {
+      const customCats = await dbGet(`customCategories/${user.uid}`);
+      for (const [id, data] of Object.entries(customCats ?? {})) {
+        if (data?.isCustom) addCustomCategory({ id, ...data });
+        else if ('userHide' in data) hideCategory(id, data.userHide);
+      }
+    } catch { /* non-fatal — built-in categories still work */ }
+
     const hash = location.hash.slice(1) || 'dashboard';
     mount(hash);
     const lastSeen = localStorage.getItem('hearth-seen-version-2');

@@ -15,8 +15,44 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  test:
+    name: Unit & E2E Tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - run: npm ci
+
+      - name: Unit tests (vitest)
+        run: npm run test
+
+      - name: Vite build (needed for E2E preview server)
+        run: npm run build
+        env:
+          GITHUB_ACTIONS: true
+          VITE_FIREBASE_API_KEY:             ${{ secrets.VITE_FIREBASE_API_KEY }}
+          VITE_FIREBASE_AUTH_DOMAIN:         ${{ secrets.VITE_FIREBASE_AUTH_DOMAIN }}
+          VITE_FIREBASE_DATABASE_URL:        ${{ secrets.VITE_FIREBASE_DATABASE_URL }}
+          VITE_FIREBASE_PROJECT_ID:          ${{ secrets.VITE_FIREBASE_PROJECT_ID }}
+          VITE_FIREBASE_STORAGE_BUCKET:      ${{ secrets.VITE_FIREBASE_STORAGE_BUCKET }}
+          VITE_FIREBASE_MESSAGING_SENDER_ID: ${{ secrets.VITE_FIREBASE_MESSAGING_SENDER_ID }}
+          VITE_FIREBASE_APP_ID:              ${{ secrets.VITE_FIREBASE_APP_ID }}
+          VITE_WORKER_URL:                   ${{ secrets.VITE_WORKER_URL }}
+
+      - name: Install Playwright (chromium only)
+        run: npx playwright install chromium --with-deps
+
+      - name: E2E tests (Playwright — auth shell, no Firebase)
+        run: npm run test:e2e
+
   deploy:
-    name: Build & Deploy
+    name: Deploy
+    needs: test
     runs-on: ubuntu-latest
     environment:
       name: github-pages

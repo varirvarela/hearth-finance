@@ -648,16 +648,32 @@ input:focus, select:focus, textarea:focus { outline: none; }
 .cat-group-count   { font-size: 0.75rem; color: var(--muted); font-weight: 400; }
 .cat-group-leaves  { padding: 4px 10px 10px; border-top: 1px solid var(--border); display: flex; flex-direction: column; gap: 8px; }
 .cat-leaf-row      { display: flex; flex-direction: column; gap: 4px; }
+.cat-leaf-row.cat-hidden { opacity: 0.5; }
 .cat-leaf-hdr      { display: flex; align-items: center; gap: 8px; }
 .cat-leaf-icon     { width: 28px; height: 28px; border-radius: 8px; display: flex; align-items: center; justify-content: center; font-size: 1rem; flex-shrink: 0; }
-.cat-leaf-meta     { display: flex; align-items: center; gap: 5px; flex-wrap: wrap; }
+.cat-leaf-meta     { display: flex; align-items: center; gap: 5px; flex-wrap: wrap; flex: 1; }
 .cat-leaf-name     { font-size: 0.82rem; font-weight: 600; }
 .cat-leaf-badge    { font-size: 0.65rem; padding: 1px 6px; border-radius: 20px; font-weight: 700; }
 .fixed-badge       { background: #dbeafe; color: #1d4ed8; }
 .annual-badge      { background: #dcfce7; color: #15803d; }
 .hidden-badge      { background: #f3f4f6; color: #6b7280; }
+.custom-badge      { background: #fef3c7; color: #92400e; }
+.cat-leaf-actions  { display: flex; gap: 4px; flex-shrink: 0; }
+.cat-hide-btn, .cat-delete-btn {
+  font-size: 0.68rem; padding: 2px 7px; border-radius: 6px; cursor: pointer;
+  border: 1px solid var(--border); background: var(--surface); color: var(--muted);
+  white-space: nowrap;
+}
+.cat-delete-btn { color: #ef4444; border-color: #fca5a5; }
 .cat-desc-input    { width: 100%; border: 1px solid var(--border); border-radius: 8px; padding: 6px 10px; font-size: 0.78rem; font-family: inherit; background: var(--bg); color: var(--text); resize: vertical; line-height: 1.4; }
 .cat-desc-input:focus { border-color: var(--brand); outline: none; }
+.cat-desc-hint     { font-size: 0.68rem; color: var(--muted); margin: 0; }
+.cat-add-btn {
+  font-size: 0.75rem; color: var(--brand); background: none; border: 1px dashed var(--brand);
+  border-radius: 8px; padding: 6px 12px; cursor: pointer; width: 100%; text-align: center;
+  margin-top: 4px;
+}
+.cat-add-btn:hover { background: var(--faint); }
 
 .rule-row {
   display: flex;
@@ -2805,11 +2821,11 @@ button:active  { opacity: 0.7; transform: scale(0.97); }
   flex-shrink: 0;
 }
 
-.dot-ok      { background: #16a34a; }
-.dot-stale   { background: #f59e0b; }
-.dot-error   { background: #ef4444; }
-.dot-manual  { background: #94a3b8; }
-.dot-unknown { background: #cbd5e1; }
+.sync-dot.dot-ok      { background: #16a34a; }
+.sync-dot.dot-stale   { background: #f59e0b; }
+.sync-dot.dot-error   { background: #ef4444; }
+.sync-dot.dot-manual  { background: #94a3b8; }
+.sync-dot.dot-unknown { background: #cbd5e1; }
 
 .acct-inst-name {
   font-size: 0.72rem;

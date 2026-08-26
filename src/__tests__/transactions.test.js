@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { blankState, needsReview, applyFilters, countActive, normalizeSource } from '../shared/filter-utils.js';
+import { blankState, needsReview, applyFilters, countActive, normalizeSource, findDuplicates } from '../shared/filter-utils.js';
 
 // [id, txnObject] tuple — mirrors the format transactions.js uses
 const tx = (id, overrides = {}) => [id, {
@@ -462,5 +462,201 @@ describe('countActive', () => {
       review:   true,
       pending:  true,
     }))).toBe(8);
+  });
+});
+
+// ── findDuplicates ─────────────────────────────────────────────────────────────
+
+// Helper: build a [id, txn] pair with sensible defaults
+const dup = (id, overrides = {}) => [id, {
+  date:         '2026-08-01',
+  amount:       50,
+  merchantName: 'Starbucks',
+  description:  'STARBUCKS STORE 12345',
+  pending:      false,
+  ignored:      false,
+  isTransfer:   false,
+  group:        'food',
+  ...overrides,
+}];
+
+describe('findDuplicates — basic detection', () => {
+  it('flags two transactions with the same amount and same merchant on the same date', () => {
+    const pairs = findDuplicates([dup('a'), dup('b')]);
+    expect(pairs).toHaveLength(1);
+    expect(pairs[0][0]).toBe('a');
+    expect(pairs[0][2]).toBe('b');
+  });
+
+  it('returns empty array when there is only one transaction', () => {
+    expect(findDuplicates([dup('a')])).toHaveLength(0);
+  });
+
+  it('returns empty array for transactions with different amounts', () => {
+    const txns = [dup('a', { amount: 50 }), dup('b', { amount: 51 })];
+    expect(findDuplicates(txns)).toHaveLength(0);
+  });
+
+  it('treats amounts within ±1¢ as the same (rounding to cents)', () => {
+    // Both round to 5000 cents
+    const txns = [dup('a', { amount: 49.999 }), dup('b', { amount: 50.001 })];
+    expect(findDuplicates(txns)).toHaveLength(1);
+  });
+});
+
+describe('findDuplicates — date window', () => {
+  it('allows 2 days between same-pending-state transactions', () => {
+    const txns = [
+      dup('a', { date: '2026-08-01' }),
+      dup('b', { date: '2026-08-03' }),
+    ];
+    expect(findDuplicates(txns)).toHaveLength(1);
+  });
+
+  it('rejects transactions 3 days apart when neither is pending', () => {
+    const txns = [
+      dup('a', { date: '2026-08-01' }),
+      dup('b', { date: '2026-08-04' }),
+    ];
+    expect(findDuplicates(txns)).toHaveLength(0);
+  });
+
+  it('allows 5 days when one transaction is pending and the other is not', () => {
+    const txns = [
+      dup('a', { date: '2026-08-01', pending: true }),
+      dup('b', { date: '2026-08-06', pending: false }),
+    ];
+    expect(findDuplicates(txns)).toHaveLength(1);
+  });
+
+  it('rejects 6-day gap even between pending and settled', () => {
+    const txns = [
+      dup('a', { date: '2026-08-01', pending: true }),
+      dup('b', { date: '2026-08-07', pending: false }),
+    ];
+    expect(findDuplicates(txns)).toHaveLength(0);
+  });
+});
+
+describe('findDuplicates — name matching', () => {
+  it('is case-insensitive for merchant names', () => {
+    const txns = [
+      dup('a', { merchantName: 'STARBUCKS' }),
+      dup('b', { merchantName: 'starbucks' }),
+    ];
+    expect(findDuplicates(txns)).toHaveLength(1);
+  });
+
+  it('matches when one name is a substring of the other (fuzzy)', () => {
+    const txns = [
+      dup('a', { merchantName: 'Starbucks Coffee' }),
+      dup('b', { merchantName: 'Starbucks' }),
+    ];
+    expect(findDuplicates(txns)).toHaveLength(1);
+  });
+
+  it('rejects transactions with completely different merchant names', () => {
+    const txns = [
+      dup('a', { merchantName: 'Starbucks' }),
+      dup('b', { merchantName: 'McDonalds' }),
+    ];
+    expect(findDuplicates(txns)).toHaveLength(0);
+  });
+
+  it('falls back to description when merchantName is absent', () => {
+    const txns = [
+      dup('a', { merchantName: undefined, description: 'STARBUCKS STORE 001' }),
+      dup('b', { merchantName: undefined, description: 'STARBUCKS STORE 002' }),
+    ];
+    // "starbucks store 001" contains "starbucks store" — no match because 001 ≠ 002
+    // But 001 doesn't include 002 and vice versa; however "starbucks store 001" includes "starbucks"
+    // Actually both include "starbucks" — let's use exact same description for a definitive test
+    const txns2 = [
+      dup('c', { merchantName: null, description: 'NETFLIX.COM' }),
+      dup('d', { merchantName: null, description: 'NETFLIX.COM' }),
+    ];
+    expect(findDuplicates(txns2)).toHaveLength(1);
+  });
+
+  it('skips pairs where both cleaned names are empty', () => {
+    const txns = [
+      dup('a', { merchantName: '---', description: '...' }),
+      dup('b', { merchantName: '---', description: '...' }),
+    ];
+    // After cleaning, both become '' → skipped
+    expect(findDuplicates(txns)).toHaveLength(0);
+  });
+});
+
+describe('findDuplicates — exclusions', () => {
+  it('ignores transactions flagged as ignored', () => {
+    const txns = [dup('a', { ignored: true }), dup('b')];
+    expect(findDuplicates(txns)).toHaveLength(0);
+  });
+
+  it('ignores transactions that are transfers (isTransfer)', () => {
+    const txns = [dup('a', { isTransfer: true }), dup('b', { isTransfer: true })];
+    expect(findDuplicates(txns)).toHaveLength(0);
+  });
+
+  it('ignores transactions in the transfer group', () => {
+    const txns = [dup('a', { group: 'transfer' }), dup('b', { group: 'transfer' })];
+    expect(findDuplicates(txns)).toHaveLength(0);
+  });
+
+  it('ignores transactions with legacy dupReviewed flag', () => {
+    const txns = [dup('a', { dupReviewed: true }), dup('b', { dupReviewed: true })];
+    expect(findDuplicates(txns)).toHaveLength(0);
+  });
+});
+
+describe('findDuplicates — dupOk suppression', () => {
+  it('suppresses a pair when A has dupOk referencing B (object form)', () => {
+    const txns = [
+      dup('a', { dupOk: { b: true } }),
+      dup('b'),
+    ];
+    expect(findDuplicates(txns)).toHaveLength(0);
+  });
+
+  it('suppresses a pair when B has dupOk referencing A (object form)', () => {
+    const txns = [
+      dup('a'),
+      dup('b', { dupOk: { a: true } }),
+    ];
+    expect(findDuplicates(txns)).toHaveLength(0);
+  });
+
+  it('suppresses a pair when dupOk is stored as an array', () => {
+    const txns = [
+      dup('a', { dupOk: ['b'] }),
+      dup('b'),
+    ];
+    expect(findDuplicates(txns)).toHaveLength(0);
+  });
+
+  it('does not suppress unrelated pairs when dupOk targets a different txn', () => {
+    const txns = [
+      dup('a', { dupOk: { c: true } }),
+      dup('b'),
+    ];
+    expect(findDuplicates(txns)).toHaveLength(1);
+  });
+});
+
+describe('findDuplicates — pairwise completeness', () => {
+  it('returns all 3 pairs for 3 matching transactions (no used-Set pruning)', () => {
+    const txns = [dup('a'), dup('b'), dup('c')];
+    const pairs = findDuplicates(txns);
+    expect(pairs).toHaveLength(3);
+    const ids = pairs.map(([idA, , idB]) => `${idA}-${idB}`).sort();
+    expect(ids).toEqual(['a-b', 'a-c', 'b-c']);
+  });
+
+  it('caps output at 100 pairs', () => {
+    // Create 15 identical transactions → 15×14/2 = 105 pairs → should return exactly 100
+    const txns = Array.from({ length: 15 }, (_, i) => dup(`t${i}`));
+    const pairs = findDuplicates(txns);
+    expect(pairs).toHaveLength(100);
   });
 });

@@ -5,6 +5,7 @@ import {
   getCategoryById,
   getRootCategories,
   getChildCategories,
+  CATEGORY_MAP,
 } from '../shared/categories.js';
 import { blankState, needsReview, applyFilters, countActive, normalizeSource, findDuplicates } from '../shared/filter-utils.js';
 import { buildRule, evaluateRules } from '../shared/rules.js';
@@ -619,7 +620,17 @@ async function fetchAiSuggestion(txnId, txn, uid) {
     const res = await fetch(`${WORKER_URL}/categorize`, {
       method:  'POST',
       headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${idToken}` },
-      body:    JSON.stringify({ txn, merchantRules: _merchantRules, categoryDescriptions: _catDescriptions }),
+      body:    JSON.stringify({
+        txn,
+        merchantRules: _merchantRules,
+        // Merge user overrides with built-in descriptions so the AI has full context
+        // even for categories the user hasn't customized yet.
+        categoryDescriptions: Object.fromEntries(
+          Object.entries(CATEGORY_MAP)
+            .filter(([, c]) => c.parent)
+            .map(([id, c]) => [id, _catDescriptions[id] || c.description || ''])
+        ),
+      }),
     });
 
     if (!res.ok) { _aiSugCache.set(txnId, false); resetSugStrip(txnId); return; }

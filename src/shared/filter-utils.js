@@ -95,7 +95,7 @@ export function findDuplicates(txnEntries) {
   }
 
   const pairs = [];
-  const normOk = v => Array.isArray(v) ? v : Object.values(v ?? {});
+  const normOk = v => Array.isArray(v) ? v : Object.keys(v ?? {});
 
   for (const group of byAmountCents.values()) {
     if (group.length < 2) continue;

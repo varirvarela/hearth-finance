@@ -1,5 +1,17 @@
 export const CHANGELOG = [
   {
+    version: '1.11.0',
+    date:    '2026-08-26',
+    changes: [
+      'Categories: full management screen — hide/show any category, add custom leaf categories under any group, delete custom ones.',
+      'Categories: all 44 built-in categories now have default AI descriptions; your customizations override the defaults.',
+      'AI categorization: built-in descriptions now sent automatically to the AI for all categories, even ones you haven\'t customized yet.',
+      'Accounts: fixed red box appearing behind the sync-date label (CSS scoping bug).',
+      'CI: unit tests (vitest) and E2E shell tests (Playwright) now run on every push before deploying.',
+      'Bug fix: duplicate suppression (dupOk) was silently failing for the object storage format; now correctly uses Object.keys instead of Object.values.',
+    ],
+  },
+  {
     version: '1.10.0',
     date:    '2026-08-26',
     changes: [

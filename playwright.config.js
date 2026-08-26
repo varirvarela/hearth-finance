@@ -1,26 +1,33 @@
 import { defineConfig, devices } from '@playwright/test';
 
+const isCI = !!process.env.CI;
+
+// CI uses the preview server (built dist/); local dev uses Vite HMR server.
+const serverCommand = isCI ? 'npm run preview' : 'npm run dev';
+const serverPort    = isCI ? 4173 : 5173;
+const baseURL       = `http://localhost:${serverPort}`;
+
 export default defineConfig({
   testDir: './e2e',
   timeout: 30_000,
-  retries: process.env.CI ? 2 : 0,
-  reporter: process.env.CI ? 'github' : 'list',
+  retries: isCI ? 2 : 0,
+  reporter: isCI ? 'github' : 'list',
 
   use: {
-    baseURL: 'http://localhost:5173',
+    baseURL,
     trace: 'on-first-retry',
   },
 
   projects: [
     { name: 'chromium', use: { ...devices['Desktop Chrome'] } },
-    { name: 'mobile-chrome', use: { ...devices['Pixel 5'] } },
+    // Mobile Chrome runs locally only — CI uses chromium for speed
+    ...(isCI ? [] : [{ name: 'mobile-chrome', use: { ...devices['Pixel 5'] } }]),
   ],
 
-  // Start the Vite dev server before E2E tests.
   webServer: {
-    command: 'npm run dev',
-    url: 'http://localhost:5173',
-    reuseExistingServer: !process.env.CI,
+    command: serverCommand,
+    url: baseURL,
+    reuseExistingServer: !isCI,
     timeout: 60_000,
   },
 });
