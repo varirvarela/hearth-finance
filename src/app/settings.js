@@ -1,4 +1,4 @@
-import { dbGet, dbSet, dbPush, dbRemove, auth } from '../shared/firebase.js';
+import { dbGet, dbSet, dbPush, dbRemove, dbUpdate, auth, getHouseholdId, setHouseholdId } from '../shared/firebase.js';
 import {
   getCategoryById, CATEGORIES, CATEGORY_MAP,
   getRootCategories, getChildCategories,
@@ -12,8 +12,8 @@ export function renderSettings(container) {
   container.innerHTML = `
     <div class="page settings">
       <section class="section">
-        <h3>Partner Sharing</h3>
-        <div id="partner-section"></div>
+        <h3>Household</h3>
+        <div id="household-section"></div>
       </section>
       <section class="section">
         <h3>Categories</h3>
@@ -33,54 +33,83 @@ export function renderSettings(container) {
 
   const uid = auth.currentUser?.uid;
   if (!uid) return;
+  const hid = getHouseholdId();
 
-  renderPartnerSection(uid);
-  renderCategoryMgmt(uid);
+  renderHouseholdSection(uid, hid);
+  renderCategoryMgmt(hid);
 
   document.getElementById('sign-out').addEventListener('click', () => signOut(auth));
   container.querySelector('#show-changelog').addEventListener('click', () => openChangelogSheet());
 }
 
-function renderPartnerSection(uid) {
-  const el = document.getElementById('partner-section');
-  dbGet(`users/${uid}`).then(user => {
-    if (user?.partnerUid) {
-      dbGet(`users/${user.partnerUid}`).then(partner => {
-        el.innerHTML = `<p>Sharing with <strong>${partner?.name ?? partner?.email ?? 'your partner'}</strong>.</p>`;
-      });
-    } else {
+function renderHouseholdSection(uid, hid) {
+  const el = document.getElementById('household-section');
+  if (!el) return;
+  const isOwner = hid === uid;
+
+  if (!isOwner) {
+    dbGet(`users/${hid}`).then(owner => {
       el.innerHTML = `
-        <p style="color:var(--color-muted);font-size:0.9rem;margin-bottom:0.75rem">
-          Invite your partner to share budgets and see all accounts together.
+        <p style="color:var(--muted);font-size:0.9rem;margin-bottom:0.75rem">
+          You're in <strong>${owner?.email ?? 'a shared household'}</strong>.
         </p>
-        <button class="btn-secondary" id="send-invite" style="width:auto;padding:0.5rem 1rem">Send Invite</button>
-        <div style="margin-top:0.75rem">
-          <input id="invite-code-input" placeholder="Enter invite code" style="border:1px solid var(--color-border);border-radius:8px;padding:0.5rem 0.75rem;width:100%;margin-bottom:0.5rem" />
-          <button class="btn-primary" id="accept-invite">Join Partner</button>
-        </div>
+        <button class="btn-danger" id="leave-household" style="width:auto;padding:0.5rem 1rem">Leave Household</button>
       `;
-      el.querySelector('#send-invite').addEventListener('click', () => generateInvite(uid));
-      el.querySelector('#accept-invite').addEventListener('click', () => acceptInvite(uid));
-    }
+      el.querySelector('#leave-household').addEventListener('click', async () => {
+        if (!confirm('Leave this household? You\'ll return to your own personal data.')) return;
+        await dbUpdate(`users/${uid}`, { householdId: null });
+        await dbRemove(`households/${hid}/members/${uid}`);
+        setHouseholdId(uid);
+        location.reload();
+      });
+    });
+    return;
+  }
+
+  dbGet(`households/${uid}/members`).then(members => {
+    const memberHtml = Object.entries(members ?? {}).map(([memberUid, data]) => `
+      <div style="display:flex;align-items:center;justify-content:space-between;padding:0.5rem 0;border-bottom:1px solid var(--border)">
+        <span style="font-size:0.9rem">${data.email ?? memberUid}</span>
+        <button class="btn-danger remove-member-btn" data-uid="${memberUid}" style="width:auto;padding:0.3rem 0.75rem;font-size:0.78rem">Remove</button>
+      </div>`).join('') || '<p style="color:var(--muted);font-size:0.82rem;margin-bottom:0.75rem">No members yet.</p>';
+
+    el.innerHTML = `
+      ${memberHtml}
+      <div style="margin-top:1rem">
+        <p style="color:var(--muted);font-size:0.82rem;margin-bottom:0.5rem">Invite by email — they'll see this household when they sign in.</p>
+        <input id="invite-email" type="email" placeholder="their@email.com"
+          style="border:1px solid var(--border);border-radius:8px;padding:0.5rem 0.75rem;width:100%;margin-bottom:0.5rem" />
+        <button class="btn-primary" id="send-invite" style="width:auto;padding:0.5rem 1rem">Send Invite</button>
+        <p id="invite-status" style="font-size:0.82rem;margin-top:0.5rem;min-height:1rem"></p>
+      </div>
+    `;
+
+    el.querySelectorAll('.remove-member-btn').forEach(btn => {
+      btn.addEventListener('click', async () => {
+        const memberUid = btn.dataset.uid;
+        if (!confirm('Remove this member from your household?')) return;
+        await dbRemove(`households/${uid}/members/${memberUid}`);
+        await dbUpdate(`users/${memberUid}`, { householdId: null });
+        renderHouseholdSection(uid, hid);
+      });
+    });
+
+    el.querySelector('#send-invite').addEventListener('click', async () => {
+      const rawEmail = el.querySelector('#invite-email').value.trim().toLowerCase();
+      const status   = el.querySelector('#invite-status');
+      if (!rawEmail || !rawEmail.includes('@')) { alert('Please enter a valid email.'); return; }
+      const emailKey = rawEmail.replace(/\./g, ',');
+      await dbSet(`pendingInvites/${emailKey}`, {
+        ownerUid:   uid,
+        ownerEmail: auth.currentUser?.email ?? '',
+        invitedAt:  Date.now(),
+      });
+      await dbSet(`households/${uid}/pendingInvites/${emailKey}`, { email: rawEmail, invitedAt: Date.now() });
+      el.querySelector('#invite-email').value = '';
+      status.textContent = `Invite saved for ${rawEmail}. Ask them to sign in to Hearth Finance.`;
+      status.style.color = 'var(--brand, #4f46e5)';
+    });
   });
-}
-
-async function generateInvite(uid) {
-  const code = Math.random().toString(36).slice(2, 8).toUpperCase();
-  await dbSet(`invites/${code}`, { fromUid: uid, email: auth.currentUser.email, createdAt: Date.now(), accepted: false });
-  await dbSet(`users/${uid}/inviteCode`, code);
-  alert(`Your invite code: ${code}\n\nShare this with your partner.`);
-}
-
-async function acceptInvite(uid) {
-  const code = document.getElementById('invite-code-input').value.trim().toUpperCase();
-  const invite = await dbGet(`invites/${code}`);
-  if (!invite || invite.accepted) { alert('Invalid or already-used invite code.'); return; }
-  await dbSet(`invites/${code}/accepted`, true);
-  await dbSet(`invites/${code}/acceptedBy`, uid);
-  await dbSet(`users/${uid}/partnerUid`, invite.fromUid);
-  await dbSet(`users/${invite.fromUid}/partnerUid`, uid);
-  renderPartnerSection(uid);
 }
 
 function renderCategoryMgmt(uid) {

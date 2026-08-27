@@ -1,4 +1,4 @@
-import { dbListen, dbGet, dbSet, dbUpdate, dbRemove, auth, getPartnerUid } from '../shared/firebase.js';
+import { dbListen, dbGet, dbSet, dbUpdate, dbRemove, auth, getPartnerUid, getHouseholdId } from '../shared/firebase.js';
 import { fmtCurrency, fmtDate }     from '../shared/format.js';
 import { openImportModal } from './import.js';
 import {
@@ -162,6 +162,7 @@ export function renderTransactions(container) {
 
   const uid = auth.currentUser?.uid;
   if (!uid) return;
+  const hid = getHouseholdId();
 
   partnerAllTxns = [];
   partnerInitial = 'P';
@@ -195,28 +196,28 @@ export function renderTransactions(container) {
       badge.textContent = active > 0 ? String(active) : '';
       badge.classList.toggle('hidden', active === 0);
     }
-    renderPage(filtered, state, uid, refresh, accountMap);
+    renderPage(filtered, state, hid, refresh, accountMap);
   };
 
-  dbListen(`accounts/${uid}`, accounts => {
+  dbListen(`accounts/${hid}`, accounts => {
     accountMap = accounts ?? {};
     if (allTxns.length) refresh(); // skip until transactions are loaded
   });
 
-  dbListen(`rules/${uid}`, rules => {
+  dbListen(`rules/${hid}`, rules => {
     allRulesSnapshot = rules ?? {};
   });
 
   // Load learned merchant rules — written each time the user confirms a suggestion
-  dbListen(`merchantRules/${uid}`, rules => { _merchantRules = rules ?? {}; });
+  dbListen(`merchantRules/${hid}`, rules => { _merchantRules = rules ?? {}; });
 
-  dbGet(`categoryDescriptions/${uid}`).then(d => { _catDescriptions = d ?? {}; }).catch(() => {});
+  dbGet(`categoryDescriptions/${hid}`).then(d => { _catDescriptions = d ?? {}; }).catch(() => {});
 
   // Preload ALL stored suggestions into cache before the first render so that
   // suggestCategory() can surface them synchronously — no async strip-patching needed.
   ;(async () => {
     try {
-      const sugs = await dbGet(`suggestions/${uid}`);
+      const sugs = await dbGet(`suggestions/${hid}`);
       const count = Object.keys(sugs ?? {}).length;
       console.log(`[Hearth] suggestions preload: ${count} entries loaded`);
       for (const [txnId, sug] of Object.entries(sugs ?? {})) {
@@ -226,14 +227,14 @@ export function renderTransactions(container) {
       console.error('[Hearth] suggestions preload failed:', e);
     }
 
-    dbListen(`transactions/${uid}`, txns => {
+    dbListen(`transactions/${hid}`, txns => {
       allTxns = Object.entries(txns ?? {}).sort((a, b) => b[1].date.localeCompare(a[1].date));
       refresh();
-      updateDupBanner(allTxns, uid);
+      updateDupBanner(allTxns, hid);
     });
 
     // Keep listening so suggestions written after load (e.g. new batch run) still appear.
-    dbListen(`suggestions/${uid}`, saved => {
+    dbListen(`suggestions/${hid}`, saved => {
       for (const [txnId, sug] of Object.entries(saved ?? {})) {
         if (_aiSugCache.has(txnId)) continue;
         if (sug?.catId && sug.catId !== 'uncategorized') {
@@ -244,7 +245,7 @@ export function renderTransactions(container) {
     });
   })();
 
-  getPartnerUid(uid).then(p => {
+  if (hid === uid) getPartnerUid(uid).then(p => {
     if (p) {
       dbGet(`users/${p}`).then(partnerUser => {
         if (partnerUser?.displayName) {
@@ -283,7 +284,7 @@ export function renderTransactions(container) {
   });
 
   document.getElementById('txn-import-btn').addEventListener('click', () => openImportModal());
-  document.getElementById('txn-export-btn').addEventListener('click', () => exportTxnCsv(uid));
+  document.getElementById('txn-export-btn').addEventListener('click', () => exportTxnCsv(hid));
 }
 
 function renderFilterPanel(state, accountMap, refresh) {
@@ -771,6 +772,7 @@ function updateSugStrip(txnId, sug) {
     <button class="btn-quick-confirm" data-id="${txnId}" data-cat="${sug.catId}">✓ Confirm</button>
     <button class="btn-quick-change"  data-id="${txnId}" data-cat="${sug.catId}">Change</button>`;
   const uid = auth.currentUser?.uid;
+  const hid = getHouseholdId();
   strip.querySelector('.btn-quick-confirm')?.addEventListener('click', e => {
     e.stopPropagation();
     if (!uid) return;
@@ -778,8 +780,8 @@ function updateSugStrip(txnId, sug) {
     row.classList.remove('needs-review', 'is-uncategorized');
     const catBtn = row.querySelector('.cat-btn');
     if (catBtn) { catBtn.textContent = cat.icon; catBtn.style.setProperty('--cat-bg', cat.color ? cat.color + '28' : 'var(--faint)'); }
-    learnMerchant(uid, txnId, sug.catId);
-    dbUpdate(`transactions/${uid}/${txnId}`, { category: sug.catId, categorySource: 'manual', needsReview: false });
+    learnMerchant(hid, txnId, sug.catId);
+    dbUpdate(`transactions/${hid}/${txnId}`, { category: sug.catId, categorySource: 'manual', needsReview: false });
   });
   strip.querySelector('.btn-quick-change')?.addEventListener('click', e => {
     e.stopPropagation();

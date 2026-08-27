@@ -1,4 +1,4 @@
-import { dbListen, auth, getPartnerUid } from '../shared/firebase.js';
+import { dbListen, auth, getPartnerUid, getHouseholdId } from '../shared/firebase.js';
 import { fmtCurrency, fmtMonth, fmtRelativeDate } from '../shared/format.js';
 import { getCategoryById, CATEGORIES } from '../shared/categories.js';
 import { needsReview } from '../shared/filter-utils.js';
@@ -138,22 +138,25 @@ export function renderDashboard(container) {
 
   const uid = auth.currentUser?.uid;
   if (!uid) return;
+  const hid = getHouseholdId();
 
-  dbListen(`transactions/${uid}`, txns => {
+  dbListen(`transactions/${hid}`, txns => {
     latestOwnerTxns = txns;
     latestTxns = { ...(latestOwnerTxns ?? {}), ...(latestPartnerTxns ?? {}) };
     render();
   });
-  getPartnerUid(uid).then(p => {
-    if (p) {
-      dbListen(`transactions/${p}`, pt => {
-        latestPartnerTxns = pt;
-        latestTxns = { ...(latestOwnerTxns ?? {}), ...(latestPartnerTxns ?? {}) };
-        render();
-      });
-    }
-  });
-  dbListen(`accounts/${uid}`, accounts => {
+  if (hid === uid) {
+    getPartnerUid(uid).then(p => {
+      if (p) {
+        dbListen(`transactions/${p}`, pt => {
+          latestPartnerTxns = pt;
+          latestTxns = { ...(latestOwnerTxns ?? {}), ...(latestPartnerTxns ?? {}) };
+          render();
+        });
+      }
+    });
+  }
+  dbListen(`accounts/${hid}`, accounts => {
     latestAccounts = accounts;
     const netWorthEl = container.querySelector('#net-worth');
     if (!netWorthEl) return;
@@ -163,7 +166,7 @@ export function renderDashboard(container) {
     netWorthEl.textContent = fmtCurrency(net);
     container.querySelector('#net-worth-sub').textContent = `${fmtCurrency(assets)} assets · ${fmtCurrency(debt)} debt`;
   });
-  dbListen(`budgets/${uid}`, budgets => {
+  dbListen(`budgets/${hid}`, budgets => {
     latestBudgets = budgets;
     render();
   });

@@ -1,5 +1,15 @@
 export const CHANGELOG = [
   {
+    version: '1.12.0',
+    date:    '2026-08-27',
+    changes: [
+      'Household: invite family members by email to share all transactions, accounts, budgets, and rules in real time.',
+      'Household: accept an invite on sign-in and immediately see all shared data from day one.',
+      'Settings: household owners can invite members, view current members, and remove them at any time.',
+      'Household members can leave at any time and return to their personal data.',
+    ],
+  },
+  {
     version: '1.11.5',
     date:    '2026-08-26',
     changes: [

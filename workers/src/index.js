@@ -39,7 +39,11 @@ export default {
         if (!uid) return json({ error: 'Unauthorized' }, 401);
         const body = await request.json().catch(() => ({}));
         const { startDate, endDate } = body;
-        const result = await handleUserSync(env, uid, { startDate, endDate });
+        // Resolve household: members sync under the owner's namespace
+        const { fbGet } = await import('./firebase.js');
+        const userProfile = await fbGet(env, `users/${uid}`).catch(() => null);
+        const syncUid = (typeof userProfile === 'object' && userProfile?.householdId) ? userProfile.householdId : uid;
+        const result = await handleUserSync(env, syncUid, { startDate, endDate });
         return json(result);
       }
 

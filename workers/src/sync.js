@@ -32,7 +32,9 @@ function buildExamples(txn, confirmedTxns, max = 10) {
 export async function handleSync(env) {
   const users = await fbGet(env, 'users');
   if (!users) return;
-  for (const [uid] of Object.entries(users)) {
+  for (const [uid, userData] of Object.entries(users)) {
+    // Skip household members — sync only runs for the household owner
+    if (typeof userData === 'object' && userData?.householdId && userData.householdId !== uid) continue;
     try {
       await handleUserSync(env, uid);
     } catch (err) {

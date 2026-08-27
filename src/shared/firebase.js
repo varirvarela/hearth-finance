@@ -34,3 +34,7 @@ export async function getPartnerUid(uid) {
   const user = await dbGet(`users/${uid}`);
   return user?.partnerUid ?? null;
 }
+
+let _hid = null;
+export function setHouseholdId(id) { _hid = id; }
+export function getHouseholdId()   { return _hid ?? auth.currentUser?.uid ?? null; }

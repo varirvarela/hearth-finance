@@ -38,6 +38,12 @@ async function chooseSlot(env, uid) {
   return slot1Count < ITEMS_PER_SLOT ? 1 : 2;
 }
 
+async function resolveHouseholdId(env, uid) {
+  const { fbGet } = await import('./firebase.js');
+  const profile = await fbGet(env, `users/${uid}`).catch(() => null);
+  return (typeof profile === 'object' && profile?.householdId) ? profile.householdId : uid;
+}
+
 export async function createLinkToken(env, uid, slot) {
   const isSandbox = env.PLAID_ENV === 'sandbox';
   const res = await fetch(plaidUrl(env, '/link/token/create'), {
@@ -127,9 +133,10 @@ async function getUidFromRequest(request, env) {
 export async function handlePlaid(request, env, path) {
   const uid = await getUidFromRequest(request, env);
   if (!uid) return new Response(JSON.stringify({ error: 'Unauthorized' }), { status: 401, headers: CORS });
+  const hid = await resolveHouseholdId(env, uid);
 
   if (path === '/plaid/link-token' && request.method === 'POST') {
-    const slot = await chooseSlot(env, uid);
+    const slot = await chooseSlot(env, hid);
     const data = await createLinkToken(env, uid, slot);
     // Return the slot so the frontend can pass it back during exchange
     return new Response(JSON.stringify({ ...data, slot }), { headers: CORS });
@@ -137,7 +144,7 @@ export async function handlePlaid(request, env, path) {
 
   if (path === '/plaid/reconnect-token' && request.method === 'POST') {
     const { itemId, slot = 1 } = await request.json();
-    const token = await env.PLAID_TOKENS.get(`s${slot}:${uid}:${itemId}`);
+    const token = await env.PLAID_TOKENS.get(`s${slot}:${hid}:${itemId}`);
     if (!token) return new Response(JSON.stringify({ error: 'Not found' }), { status: 404, headers: CORS });
     const data = await createReconnectToken(env, uid, token, slot);
     return new Response(JSON.stringify({ ...data, slot }), { headers: CORS });
@@ -148,13 +155,13 @@ export async function handlePlaid(request, env, path) {
     const { access_token, item_id } = await exchangePublicToken(env, public_token, slot);
 
     // KV key includes slot prefix so tokens from different accounts never collide
-    await env.PLAID_TOKENS.put(`s${slot}:${uid}:${item_id}`, access_token);
+    await env.PLAID_TOKENS.put(`s${slot}:${hid}:${item_id}`, access_token);
 
     const { accounts } = await getAccounts(env, access_token, slot);
     const { fbPatch } = await import('./firebase.js');
     const updates = {};
     for (const a of accounts) {
-      updates[`accounts/${uid}/${a.account_id}`] = {
+      updates[`accounts/${hid}/${a.account_id}`] = {
         name:             a.name,
         type:             a.type,
         subtype:          a.subtype,
@@ -181,28 +188,28 @@ export async function handlePlaid(request, env, path) {
     const { itemId, slot = 1, deleteTransactions = false } = await request.json();
 
     // 1. Get the access token before deleting it from KV
-    const accessToken = await env.PLAID_TOKENS.get(`s${slot}:${uid}:${itemId}`);
+    const accessToken = await env.PLAID_TOKENS.get(`s${slot}:${hid}:${itemId}`);
 
     // 2. Remove KV token
-    await env.PLAID_TOKENS.delete(`s${slot}:${uid}:${itemId}`);
+    await env.PLAID_TOKENS.delete(`s${slot}:${hid}:${itemId}`);
 
     // 3. Find and null-out all accounts for this item in Firebase
     const { fbGet, fbPatch } = await import('./firebase.js');
-    const accounts = await fbGet(env, `accounts/${uid}`).catch(() => ({})) ?? {};
+    const accounts = await fbGet(env, `accounts/${hid}`).catch(() => ({})) ?? {};
     const patch = {};
     let removed = 0;
     for (const [key, acct] of Object.entries(accounts)) {
       if (acct.plaidItemId === itemId) {
-        patch[`accounts/${uid}/${key}`] = null;
+        patch[`accounts/${hid}/${key}`] = null;
         removed++;
       }
     }
 
     // 4. Optionally delete transactions for this item
     if (deleteTransactions) {
-      const txns = await fbGet(env, `transactions/${uid}`).catch(() => ({})) ?? {};
+      const txns = await fbGet(env, `transactions/${hid}`).catch(() => ({})) ?? {};
       for (const [key, txn] of Object.entries(txns)) {
-        if (txn.plaidItemId === itemId) patch[`transactions/${uid}/${key}`] = null;
+        if (txn.plaidItemId === itemId) patch[`transactions/${hid}/${key}`] = null;
       }
     }
 

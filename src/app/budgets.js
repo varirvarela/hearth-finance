@@ -1,4 +1,4 @@
-import { dbListen, dbSet, auth, getPartnerUid } from '../shared/firebase.js';
+import { dbListen, dbSet, auth, getPartnerUid, getHouseholdId } from '../shared/firebase.js';
 import { fmtCurrency, fmtMonth } from '../shared/format.js';
 import { CATEGORIES } from '../shared/categories.js';
 
@@ -42,6 +42,7 @@ export function renderBudgets(container) {
 
   const uid = auth.currentUser?.uid;
   if (!uid) return;
+  const hid = getHouseholdId();
 
   let latestBudgets     = {};
   let latestOwnerTxns   = {};
@@ -50,9 +51,9 @@ export function renderBudgets(container) {
 
   const refresh = () => {
     if (viewMode === 'monthly') {
-      renderBudgetList(uid, latestBudgets, latestTxns, year, month);
+      renderBudgetList(hid, latestBudgets, latestTxns, year, month);
     } else {
-      renderBudgetAnnual(uid, latestBudgets, latestTxns, year);
+      renderBudgetAnnual(hid, latestBudgets, latestTxns, year);
     }
   };
 
@@ -89,22 +90,24 @@ export function renderBudgets(container) {
     });
   });
 
-  dbListen(`budgets/${uid}`, snap => { latestBudgets = snap ?? {}; refresh(); });
-  dbListen(`transactions/${uid}`, snap => {
+  dbListen(`budgets/${hid}`, snap => { latestBudgets = snap ?? {}; refresh(); });
+  dbListen(`transactions/${hid}`, snap => {
     latestOwnerTxns = snap ?? {};
     latestTxns = { ...latestOwnerTxns, ...latestPartnerTxns };
     refresh();
   });
 
-  getPartnerUid(uid).then(p => {
-    if (p) {
-      dbListen(`transactions/${p}`, snap => {
-        latestPartnerTxns = snap ?? {};
-        latestTxns = { ...latestOwnerTxns, ...latestPartnerTxns };
-        refresh();
-      });
-    }
-  });
+  if (hid === uid) {
+    getPartnerUid(uid).then(p => {
+      if (p) {
+        dbListen(`transactions/${p}`, snap => {
+          latestPartnerTxns = snap ?? {};
+          latestTxns = { ...latestOwnerTxns, ...latestPartnerTxns };
+          refresh();
+        });
+      }
+    });
+  }
 
   document.getElementById('budget-prev').addEventListener('click', () => {
     if (viewMode === 'monthly') {
@@ -260,7 +263,7 @@ function renderGroupTiles(el, rootCats, rootMap, budgets, spentByCat, pacePct, l
   el.querySelectorAll('.bud-tile-edit-btn').forEach(btn => {
     btn.addEventListener('click', e => {
       e.stopPropagation();
-      const uid2 = auth.currentUser?.uid;
+      const uid2 = getHouseholdId();
       openGroupBudgetEdit(btn.dataset.group, rootMap, budgets, uid2, listEl, allRoots, txns, pacePct, year, month, prefix);
     });
   });
@@ -313,14 +316,14 @@ function renderCategoryTiles(el, groupId, rootMap, budgets, spentByCat, pacePct,
   el.querySelectorAll('.bud-set-link').forEach(el2 => {
     el2.addEventListener('click', e => {
       e.stopPropagation();
-      openInlineEdit(el2, auth.currentUser?.uid, el2.dataset.cat, budgets[el2.dataset.cat]?.monthly ?? 0);
+      openInlineEdit(el2, getHouseholdId(), el2.dataset.cat, budgets[el2.dataset.cat]?.monthly ?? 0);
     });
   });
 
   el.querySelectorAll('.bud-cat-tile .bud-tile-edit-btn').forEach(btn => {
     btn.addEventListener('click', e => {
       e.stopPropagation();
-      const uid2 = auth.currentUser?.uid;
+      const uid2 = getHouseholdId();
       openInlineEdit(btn, uid2, btn.dataset.cat, budgets[btn.dataset.cat]?.monthly ?? 0);
     });
   });
@@ -403,7 +406,7 @@ function renderCategoryDetail(el, catId, budgets, spentByCat, txns, pacePct, yea
   `;
 
   el.querySelector('.bud-edit-budget-btn')?.addEventListener('click', e => {
-    openInlineEdit(e.currentTarget, auth.currentUser?.uid, catId, budgets[catId]?.monthly ?? 0);
+    openInlineEdit(e.currentTarget, getHouseholdId(), catId, budgets[catId]?.monthly ?? 0);
   });
 }
 
@@ -530,7 +533,7 @@ function renderAnnualGroupTiles(el, rootCats, rootMap, budgets, spentByCat, list
   el.querySelectorAll('.bud-tile-edit-btn').forEach(btn => {
     btn.addEventListener('click', e => {
       e.stopPropagation();
-      const uid2 = auth.currentUser?.uid;
+      const uid2 = getHouseholdId();
       openAnnualGroupBudgetEdit(btn.dataset.group, rootMap, budgets, uid2, listEl, allRoots, txns, pacePct, year);
     });
   });
@@ -584,7 +587,7 @@ function renderAnnualCategoryTiles(el, groupId, rootMap, budgets, spentByCat, li
   el.querySelectorAll('.bud-cat-tile .bud-tile-edit-btn').forEach(btn => {
     btn.addEventListener('click', e => {
       e.stopPropagation();
-      const uid2 = auth.currentUser?.uid;
+      const uid2 = getHouseholdId();
       openAnnualCatBudgetEdit(btn, uid2, btn.dataset.cat, budgets[btn.dataset.cat]?.monthly ?? 0);
     });
   });
@@ -592,7 +595,7 @@ function renderAnnualCategoryTiles(el, groupId, rootMap, budgets, spentByCat, li
   el.querySelectorAll('.bud-set-link').forEach(link => {
     link.addEventListener('click', e => {
       e.stopPropagation();
-      const uid2 = auth.currentUser?.uid;
+      const uid2 = getHouseholdId();
       openAnnualCatBudgetEdit(link, uid2, link.dataset.cat, 0);
     });
   });
@@ -687,7 +690,7 @@ function renderAnnualCategoryDetail(el, catId, budgets, spentByCat, txns, year) 
   `;
 
   el.querySelector('.bud-edit-budget-btn')?.addEventListener('click', e => {
-    openAnnualCatBudgetEdit(e.currentTarget, auth.currentUser?.uid, catId, monthlyLimit);
+    openAnnualCatBudgetEdit(e.currentTarget, getHouseholdId(), catId, monthlyLimit);
   });
 }
 

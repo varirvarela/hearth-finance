@@ -1,4 +1,4 @@
-import { dbListen, auth, getPartnerUid } from '../shared/firebase.js';
+import { dbListen, auth, getPartnerUid, getHouseholdId } from '../shared/firebase.js';
 import { fmtCurrency } from '../shared/format.js';
 import { getCategoryById, CATEGORIES } from '../shared/categories.js';
 
@@ -29,6 +29,7 @@ export function renderInsights(container) {
 
   const uid = auth.currentUser?.uid;
   if (!uid) return;
+  const hid = getHouseholdId();
 
   let latestOwnerTxns   = null;
   let latestPartnerTxns = null;
@@ -40,13 +41,15 @@ export function renderInsights(container) {
     renderInsightCards(container, allTxns, latestBudgets, nowYear, nowMonth, nowDay);
   };
 
-  dbListen(`transactions/${uid}`, txns => { latestOwnerTxns = txns ?? {}; refresh(); });
-  dbListen(`budgets/${uid}`, b => { latestBudgets = b ?? {}; refresh(); });
-  getPartnerUid(uid).then(p => {
-    if (p) {
-      dbListen(`transactions/${p}`, pt => { latestPartnerTxns = pt ?? {}; refresh(); });
-    }
-  });
+  dbListen(`transactions/${hid}`, txns => { latestOwnerTxns = txns ?? {}; refresh(); });
+  dbListen(`budgets/${hid}`, b => { latestBudgets = b ?? {}; refresh(); });
+  if (hid === uid) {
+    getPartnerUid(uid).then(p => {
+      if (p) {
+        dbListen(`transactions/${p}`, pt => { latestPartnerTxns = pt ?? {}; refresh(); });
+      }
+    });
+  }
 }
 
 function renderInsightCards(container, allTxnsObj, budgets, year, month, day) {

@@ -1,10 +1,11 @@
-import { dbListen, dbSet, dbPush, dbRemove, dbUpdate, dbGet, auth } from '../shared/firebase.js';
+import { dbListen, dbSet, dbPush, dbRemove, dbUpdate, dbGet, auth, getHouseholdId } from '../shared/firebase.js';
 import { CATEGORIES, getCategoryById, getCategoryBudgetFields } from '../shared/categories.js';
 import { buildRule, evaluateRules } from '../shared/rules.js';
 import { fmtCurrency } from '../shared/format.js';
 
 export function renderAutomation(container) {
   const uid = auth.currentUser?.uid;
+  const hid = getHouseholdId();
 
   container.innerHTML = `
     <div class="page automation">
@@ -55,28 +56,28 @@ export function renderAutomation(container) {
     location.hash = 'settings';
   });
 
-  container.querySelector('#auto-add-rule').addEventListener('click', () => openRuleEditor(uid));
+  container.querySelector('#auto-add-rule').addEventListener('click', () => openRuleEditor(hid));
 
   container.querySelector('#auto-search').addEventListener('input', e => {
     searchQuery = e.target.value.toLowerCase().trim();
-    renderRulesList(uid, allRules, searchQuery, selectedCatId);
+    renderRulesList(hid, allRules, searchQuery, selectedCatId);
   });
 
-  container.querySelector('#auto-apply-rules').addEventListener('click', () => applyAllRules(uid, allRules));
+  container.querySelector('#auto-apply-rules').addEventListener('click', () => applyAllRules(hid, allRules));
 
-  dbListen(`rules/${uid}`, rules => {
+  dbListen(`rules/${hid}`, rules => {
     allRules = rules ?? {};
     renderStats(container, allRules);
-    renderRulesList(uid, allRules, searchQuery, selectedCatId);
+    renderRulesList(hid, allRules, searchQuery, selectedCatId);
   });
 
-  dbListen(`recurring/${uid}`, items => renderRecurring(items ?? {}, uid));
+  dbListen(`recurring/${hid}`, items => renderRecurring(items ?? {}, hid));
   populateMonthSelect();
 
-  container.querySelector('#auto-add-recurring').addEventListener('click', () => openRecurringEditor(uid));
+  container.querySelector('#auto-add-recurring').addEventListener('click', () => openRecurringEditor(hid));
   container.querySelector('#auto-generate-recurring').addEventListener('click', () => {
     const yearMonth = document.getElementById('auto-recurring-month').value;
-    generateForMonth(uid, yearMonth);
+    generateForMonth(hid, yearMonth);
   });
 }
 
@@ -203,7 +204,7 @@ function renderRulesList(uid, rules, query, selectedCatId) {
       toggle.addEventListener('click', () => {
         const current = toggle.classList.contains('is-on');
         toggle.classList.toggle('is-on', !current);
-        dbSet(`rules/${auth.currentUser?.uid}/${toggle.dataset.id}/enabled`, !current);
+        dbSet(`rules/${uid}/${toggle.dataset.id}/enabled`, !current);
       });
     });
     listEl.querySelectorAll('.auto-rule-edit').forEach(btn => {

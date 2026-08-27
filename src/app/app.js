@@ -1,4 +1,4 @@
-import { auth, dbGet } from '../shared/firebase.js';
+import { auth, dbGet, dbUpdate, dbRemove, setHouseholdId } from '../shared/firebase.js';
 import { hideCategory, addCustomCategory } from '../shared/categories.js';
 
 if ('serviceWorker' in navigator) {
@@ -106,6 +106,41 @@ function bindAuth() {
   });
 }
 
+async function handlePendingInvite(user, invite, emailKey) {
+  return new Promise(resolve => {
+    const overlay = document.createElement('div');
+    overlay.className = 'sheet-overlay';
+    overlay.innerHTML = `
+      <div class="sheet">
+        <div class="sheet-handle"></div>
+        <div class="sheet-hdr">
+          <span class="sheet-title">Household Invite</span>
+        </div>
+        <div style="padding:1.2rem 1.2rem 0">
+          <p style="margin-bottom:1rem"><strong>${invite.ownerEmail ?? 'Someone'}</strong> has invited you to their household.</p>
+          <p style="color:var(--muted);font-size:0.85rem;margin-bottom:1.5rem">Join to share transactions, accounts, and budgets with all household members.</p>
+        </div>
+        <div style="display:flex;gap:0.75rem;padding:0 1.2rem 1.5rem">
+          <button class="btn-secondary" id="invite-decline" style="flex:1">Decline</button>
+          <button class="btn-primary"   id="invite-accept"  style="flex:1">Join Household</button>
+        </div>
+      </div>`;
+    document.body.appendChild(overlay);
+    requestAnimationFrame(() => overlay.classList.add('open'));
+    const close = () => { overlay.classList.remove('open'); setTimeout(() => overlay.remove(), 260); resolve(); };
+    overlay.querySelector('#invite-decline').addEventListener('click', close);
+    overlay.querySelector('#invite-accept').addEventListener('click', async () => {
+      try {
+        await dbUpdate(`users/${user.uid}`, { householdId: invite.ownerUid });
+        await dbUpdate(`households/${invite.ownerUid}/members/${user.uid}`, { email: user.email, addedAt: Date.now() });
+        await dbRemove(`pendingInvites/${emailKey}`);
+        setHouseholdId(invite.ownerUid);
+      } catch (e) { console.error('Failed to join household:', e); }
+      close();
+    });
+  });
+}
+
 bindAuth();
 
 onAuthStateChanged(auth, async user => {
@@ -113,9 +148,24 @@ onAuthStateChanged(auth, async user => {
     document.getElementById('auth-screen').hidden = true;
     document.getElementById('app-shell').hidden   = false;
 
-    // Apply per-user category overrides (hide flags + custom categories) before first render.
+    // Write user presence so the cron sync can find this user.
+    dbUpdate(`users/${user.uid}`, { email: user.email, lastLoginAt: Date.now() }).catch(() => {});
+
+    // Resolve household — members share the owner's data namespace.
+    const profile     = (await dbGet(`users/${user.uid}`).catch(() => null)) ?? {};
+    const householdId = profile.householdId ?? user.uid;
+    setHouseholdId(householdId);
+
+    // If not yet in a household, check for a pending invite.
+    if (!profile.householdId && user.email) {
+      const emailKey = user.email.replace(/\./g, ',');
+      const invite   = await dbGet(`pendingInvites/${emailKey}`).catch(() => null);
+      if (invite) await handlePendingInvite(user, invite, emailKey);
+    }
+
+    // Apply household-wide category overrides before first render.
     try {
-      const customCats = await dbGet(`customCategories/${user.uid}`);
+      const customCats = await dbGet(`customCategories/${householdId}`);
       for (const [id, data] of Object.entries(customCats ?? {})) {
         if (data?.isCustom) addCustomCategory({ id, ...data });
         else if ('userHide' in data) hideCategory(id, data.userHide);

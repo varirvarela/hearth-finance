@@ -1,4 +1,4 @@
-import { dbGet, dbSet, dbListen, auth, getPartnerUid } from '../shared/firebase.js';
+import { dbGet, dbSet, dbListen, auth, getPartnerUid, getHouseholdId } from '../shared/firebase.js';
 import { fmtCurrency, fmtDate } from '../shared/format.js';
 import { CHANGELOG } from '../shared/changelog.js';
 
@@ -59,6 +59,7 @@ export function renderAccounts(container) {
 
   const uid = auth.currentUser?.uid;
   if (!uid) return;
+  const hid = getHouseholdId();
 
   let latestOwnerAccounts  = null;
   let latestPartnerAccounts = null;
@@ -76,29 +77,31 @@ export function renderAccounts(container) {
   const refreshAccounts = () => {
     const merged = { ...(latestOwnerAccounts ?? {}), ...(latestPartnerAccounts ?? {}) };
     refreshHero(merged);
-    renderAccountList(merged, uid, resolvedPartnerUid);
+    renderAccountList(merged, hid, resolvedPartnerUid);
   };
 
-  dbListen(`accounts/${uid}`, accounts => {
+  dbListen(`accounts/${hid}`, accounts => {
     latestOwnerAccounts = accounts ?? {};
     refreshAccounts();
   });
 
-  getPartnerUid(uid).then(p => {
-    resolvedPartnerUid = p;
-    if (p) {
-      dbListen(`accounts/${p}`, partnerAccounts => {
-        latestPartnerAccounts = {};
-        for (const [id, a] of Object.entries(partnerAccounts ?? {})) {
-          latestPartnerAccounts[id] = { ...a, _isPartner: true };
-        }
-        refreshAccounts();
-      });
-    }
-  });
+  if (hid === uid) {
+    getPartnerUid(uid).then(p => {
+      resolvedPartnerUid = p;
+      if (p) {
+        dbListen(`accounts/${p}`, partnerAccounts => {
+          latestPartnerAccounts = {};
+          for (const [id, a] of Object.entries(partnerAccounts ?? {})) {
+            latestPartnerAccounts[id] = { ...a, _isPartner: true };
+          }
+          refreshAccounts();
+        });
+      }
+    });
+  }
 
   container.querySelector('#link-account').addEventListener('click', () => openPlaidLink(uid));
-  container.querySelector('#add-manual').addEventListener('click', () => openManualAccountForm(uid));
+  container.querySelector('#add-manual').addEventListener('click', () => openManualAccountForm(hid));
   container.querySelector('#sync-now').addEventListener('click', () => syncTransactions(uid));
   container.querySelector('#sync-range').addEventListener('change', e => {
     const custom = document.getElementById('sync-custom-dates');
@@ -113,7 +116,7 @@ export function renderAccounts(container) {
       if (toEl   && !toEl.value)   toEl.value   = today;
     }
   });
-  container.querySelector('#rationalize-accounts').addEventListener('click', () => openRationalizeSheet(uid));
+  container.querySelector('#rationalize-accounts').addEventListener('click', () => openRationalizeSheet(hid));
 }
 
 export function openChangelogSheet() {
