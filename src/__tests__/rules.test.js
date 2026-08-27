@@ -49,14 +49,49 @@ describe('matchesRule', () => {
     expect(matchesRule({ amount: 5 }, r)).toBe(false);
   });
 
-  it('unknown matchOp returns false', () => {
-    const r = { ...rule(), matchOp: 'regex' };
+  it('unknown op returns false', () => {
+    const r = { conditions: [{ field: 'description', op: 'regex', value: 'starbucks' }], enabled: true, actionValue: 'food_coffee', priority: 50 };
     expect(matchesRule({ description: 'starbucks' }, r)).toBe(false);
   });
 
-  it('unknown matchField returns false', () => {
-    const r = { ...rule(), matchField: 'notes' };
+  it('unknown field returns false', () => {
+    const r = { conditions: [{ field: 'notes', op: 'contains', value: 'starbucks' }], enabled: true, actionValue: 'food_coffee', priority: 50 };
     expect(matchesRule({ description: 'starbucks' }, r)).toBe(false);
+  });
+
+  it('multiple conditions — all must match (AND logic)', () => {
+    const r = {
+      conditions: [
+        { field: 'description', op: 'contains', value: 'starbucks' },
+        { field: 'amount', op: 'gt', value: 5 },
+      ],
+      enabled: true, actionValue: 'food_coffee', priority: 50,
+    };
+    expect(matchesRule({ description: 'STARBUCKS', amount: 10 }, r)).toBe(true);
+    expect(matchesRule({ description: 'STARBUCKS', amount: 3 }, r)).toBe(false);
+    expect(matchesRule({ description: 'Target',    amount: 10 }, r)).toBe(false);
+  });
+
+  it('notContains operator', () => {
+    const r = { conditions: [{ field: 'description', op: 'notContains', value: 'amazon' }], enabled: true, actionValue: 'x', priority: 50 };
+    expect(matchesRule({ description: 'Walmart' }, r)).toBe(true);
+    expect(matchesRule({ description: 'Amazon Prime' }, r)).toBe(false);
+  });
+
+  it('gte / lte operators on amount', () => {
+    const gte = { conditions: [{ field: 'amount', op: 'gte', value: 100 }], enabled: true, actionValue: 'x', priority: 50 };
+    expect(matchesRule({ amount: 100 }, gte)).toBe(true);
+    expect(matchesRule({ amount: 99 },  gte)).toBe(false);
+    const lte = { conditions: [{ field: 'amount', op: 'lte', value: 5 }],   enabled: true, actionValue: 'x', priority: 50 };
+    expect(matchesRule({ amount: 5 }, lte)).toBe(true);
+    expect(matchesRule({ amount: 6 }, lte)).toBe(false);
+  });
+
+  it('in operator matches any value in array', () => {
+    const r = { conditions: [{ field: 'source', op: 'in', value: ['plaid', 'manual'] }], enabled: true, actionValue: 'x', priority: 50 };
+    expect(matchesRule({ source: 'plaid' },  r)).toBe(true);
+    expect(matchesRule({ source: 'manual' }, r)).toBe(true);
+    expect(matchesRule({ source: 'ai' },     r)).toBe(false);
   });
 });
 
@@ -95,15 +130,21 @@ describe('evaluateRules', () => {
 
 describe('buildRule', () => {
   it('sets sensible defaults', () => {
-    const r = buildRule({ matchField: 'description', matchOp: 'contains', matchValue: 'test', categoryId: 'food', name: 'Test' });
+    const r = buildRule({ conditions: [{ field: 'description', op: 'contains', value: 'test' }], categoryId: 'food', name: 'Test' });
     expect(r.enabled).toBe(true);
     expect(r.priority).toBe(50);
     expect(r.action).toBe('setCategory');
     expect(r.actionValue).toBe('food');
+    expect(r.conditions).toHaveLength(1);
   });
 
   it('accepts custom priority', () => {
-    const r = buildRule({ matchField: 'description', matchOp: 'contains', matchValue: 'x', categoryId: 'y', name: 'x', priority: 1 });
+    const r = buildRule({ conditions: [{ field: 'description', op: 'contains', value: 'x' }], categoryId: 'y', name: 'x', priority: 1 });
     expect(r.priority).toBe(1);
+  });
+
+  it('legacy matchField/matchOp/matchValue are converted to conditions', () => {
+    const r = buildRule({ matchField: 'merchant', matchOp: 'startsWith', matchValue: 'amazon', categoryId: 'shopping', name: 'Amazon' });
+    expect(r.conditions).toEqual([{ field: 'merchant', op: 'startsWith', value: 'amazon' }]);
   });
 });

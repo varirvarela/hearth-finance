@@ -3,12 +3,14 @@
  * Rules run in ascending priority order (lower number = higher priority).
  * Returns the first matching category id, or null if no rule matches.
  *
- * Rule shape:
+ * Rule shape (new — multi-condition):
+ *   { conditions: [{ field, op, value }], action, actionValue, priority, enabled }
+ * Rule shape (legacy — single condition):
  *   { matchField, matchOp, matchValue, action, actionValue, priority, enabled }
  *
- * matchField: 'description' | 'merchant' | 'amount'
- * matchOp:    'contains' | 'startsWith' | 'equals' | 'gt' | 'lt'
- * action:     'setCategory'
+ * field:  'description' | 'merchant' | 'accountName' | 'amount' | 'category' | 'source'
+ * op:     'contains' | 'notContains' | 'startsWith' | 'equals' | 'gt' | 'gte' | 'lt' | 'lte' | 'in'
+ * action: 'setCategory'
  * actionValue: category id string
  */
 
@@ -23,39 +25,64 @@ export function evaluateRules(transaction, rules) {
   return null;
 }
 
-export function matchesRule(txn, rule) {
-  const { matchField, matchOp, matchValue } = rule;
-  let fieldVal;
-
-  if      (matchField === 'description') fieldVal = (txn.description  ?? '').toLowerCase();
-  else if (matchField === 'merchant')    fieldVal = (txn.merchantName ?? '').toLowerCase();
-  else if (matchField === 'accountName') fieldVal = (txn.accountName  ?? '').toLowerCase();
-  else if (matchField === 'source')      fieldVal = (txn.source ?? txn.categorySource ?? '').toLowerCase();
-  else if (matchField === 'amount')      fieldVal = txn.amount;
-  else return false;
-
-  const val = typeof matchValue === 'string' ? matchValue.toLowerCase() : matchValue;
-
-  switch (matchOp) {
-    case 'contains':   return typeof fieldVal === 'string' && fieldVal.includes(val);
-    case 'startsWith': return typeof fieldVal === 'string' && fieldVal.startsWith(val);
-    case 'equals':     return fieldVal === val;
-    case 'gt':         return typeof fieldVal === 'number' && fieldVal > matchValue;
-    case 'lt':         return typeof fieldVal === 'number' && fieldVal < matchValue;
-    default:           return false;
+function getFieldValue(txn, field) {
+  switch (field) {
+    case 'description':  return (txn.description  ?? '').toLowerCase();
+    case 'merchant':     return (txn.merchantName  ?? '').toLowerCase();
+    case 'accountName':  return (txn.accountName   ?? '').toLowerCase();
+    case 'category':     return (txn.category      ?? '').toLowerCase();
+    case 'source':       return (txn.source ?? txn.categorySource ?? '').toLowerCase();
+    case 'amount':       return txn.amount;
+    default:             return null;
   }
 }
 
-export function buildRule({ matchField, matchOp, matchValue, categoryId, name, priority = 50 }) {
+function matchesCondition(txn, { field, op, value }) {
+  const fieldVal = getFieldValue(txn, field);
+  if (fieldVal === null) return false;
+
+  const isStr = typeof fieldVal === 'string';
+  const isNum = typeof fieldVal === 'number';
+  const norm  = v => (typeof v === 'string' ? v.toLowerCase() : v);
+
+  switch (op) {
+    case 'contains':    return isStr && fieldVal.includes(norm(value));
+    case 'notContains': return isStr && !fieldVal.includes(norm(value));
+    case 'startsWith':  return isStr && fieldVal.startsWith(norm(value));
+    case 'equals':      return isStr ? fieldVal === norm(value) : fieldVal === value;
+    case 'gt':          return isNum && fieldVal > Number(value);
+    case 'gte':         return isNum && fieldVal >= Number(value);
+    case 'lt':          return isNum && fieldVal < Number(value);
+    case 'lte':         return isNum && fieldVal <= Number(value);
+    case 'in': {
+      const arr = Array.isArray(value) ? value : [value];
+      return arr.some(v => isStr ? fieldVal === norm(v) : fieldVal === v);
+    }
+    default: return false;
+  }
+}
+
+export function matchesRule(txn, rule) {
+  // New format: conditions array (AND logic — all must match)
+  if (Array.isArray(rule.conditions) && rule.conditions.length) {
+    return rule.conditions.every(c => matchesCondition(txn, c));
+  }
+  // Legacy format: single matchField/matchOp/matchValue
+  if (rule.matchField) {
+    return matchesCondition(txn, { field: rule.matchField, op: rule.matchOp ?? 'contains', value: rule.matchValue });
+  }
+  return false;
+}
+
+export function buildRule({ conditions, matchField, matchOp, matchValue, categoryId, name, priority = 50 }) {
+  const conds = conditions ?? [{ field: matchField ?? 'description', op: matchOp ?? 'contains', value: matchValue }];
   return {
     name,
-    matchField,
-    matchOp,
-    matchValue,
-    action: 'setCategory',
+    conditions:  conds,
+    action:      'setCategory',
     actionValue: categoryId,
     priority,
-    enabled: true,
-    createdAt: Date.now(),
+    enabled:     true,
+    createdAt:   Date.now(),
   };
 }

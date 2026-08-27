@@ -1,5 +1,14 @@
 export const CHANGELOG = [
   {
+    version: '1.13.0',
+    date:    '2026-08-27',
+    changes: [
+      'Automation: rules now support multiple AND conditions — combine description, merchant, amount, category, and source filters on a single rule.',
+      'Automation: new operators — "not contains", "at least" / "at most" for amounts, and "is one of" for multi-select fields.',
+      'Automation: category and source condition values are now selected from a dropdown or checkbox picker instead of free text.',
+    ],
+  },
+  {
     version: '1.12.0',
     date:    '2026-08-27',
     changes: [

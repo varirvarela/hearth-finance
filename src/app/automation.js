@@ -100,11 +100,14 @@ function renderRulesList(uid, rules, query, selectedCatId) {
   // Apply search filter across all rules
   const allEntries = Object.entries(rules);
   const filtered = query
-    ? allEntries.filter(([, r]) =>
-        r.matchValue?.toLowerCase().includes(query) ||
-        r.name?.toLowerCase().includes(query) ||
-        getCategoryById(r.actionValue)?.name?.toLowerCase().includes(query)
-      )
+    ? allEntries.filter(([, r]) => {
+        if (r.name?.toLowerCase().includes(query)) return true;
+        if (getCategoryById(r.actionValue)?.name?.toLowerCase().includes(query)) return true;
+        if (Array.isArray(r.conditions)) {
+          return r.conditions.some(c => String(c.value ?? '').toLowerCase().includes(query));
+        }
+        return r.matchValue?.toLowerCase().includes(query);
+      })
     : allEntries;
 
   if (!allEntries.length) {
@@ -170,8 +173,7 @@ function renderRulesList(uid, rules, query, selectedCatId) {
             ${fieldRules.sort((a, b) => (a[1].priority ?? 50) - (b[1].priority ?? 50)).map(([id, r]) => `
               <div class="auto-rule-card ${r.enabled !== false ? '' : 'is-paused'}">
                 <div class="auto-rule-when">
-                  <span class="auto-rule-op">${r.matchOp ?? 'contains'}</span>
-                  <span class="auto-rule-pattern">"${escHtml(r.matchValue ?? '')}"</span>
+                  ${ruleCondSummaryHtml(r)}
                 </div>
                 <div class="auto-rule-meta">
                   <span class="auto-rule-priority">p${r.priority ?? 50}</span>
@@ -230,8 +232,8 @@ function renderRulesList(uid, rules, query, selectedCatId) {
     const total  = catRules.length;
     const active = catRules.filter(([, r]) => r.enabled !== false).length;
     const paused = total - active;
-    const fields = [...new Set(catRules.map(([, r]) => r.matchField ?? 'description'))];
-    const fieldLabels = { description: 'desc', merchant: 'merchant', accountName: 'account', amount: 'amount', source: 'source' };
+    const fieldLabels = { description: 'desc', merchant: 'merchant', accountName: 'account', amount: 'amount', category: 'category', source: 'source' };
+    const fields = [...new Set(catRules.flatMap(([, r]) => ruleFields(r)))];
     const fieldBadges = fields.map(f => `<span class="auto-field-badge">${fieldLabels[f] ?? f}</span>`).join('');
 
     return `
@@ -261,6 +263,36 @@ function renderRulesList(uid, rules, query, selectedCatId) {
 let allRulesRef = {};
 let selectedCatId = null;
 
+function ruleFields(rule) {
+  if (Array.isArray(rule.conditions) && rule.conditions.length) {
+    return [...new Set(rule.conditions.map(c => c.field))];
+  }
+  return [rule.matchField ?? 'description'];
+}
+
+const OP_LABELS = {
+  contains:    'contains',
+  notContains: 'not contains',
+  startsWith:  'starts with',
+  equals:      'equals',
+  gt:          '> ',
+  gte:         '≥ ',
+  lt:          '< ',
+  lte:         '≤ ',
+  in:          'is one of',
+};
+
+function ruleCondSummaryHtml(rule) {
+  if (Array.isArray(rule.conditions) && rule.conditions.length) {
+    return rule.conditions.map((c, i) => {
+      const valStr = Array.isArray(c.value) ? c.value.join(', ') : escHtml(String(c.value ?? ''));
+      const opLabel = OP_LABELS[c.op] ?? c.op;
+      return `${i > 0 ? '<span class="auto-rule-and">AND</span> ' : ''}<span class="auto-rule-op">${opLabel}</span><span class="auto-rule-pattern">"${valStr}"</span>`;
+    }).join(' ');
+  }
+  return `<span class="auto-rule-op">${rule.matchOp ?? 'contains'}</span> <span class="auto-rule-pattern">"${escHtml(rule.matchValue ?? '')}"</span>`;
+}
+
 function renderRuleCard(id, rule, cat) {
   const enabled   = rule.enabled !== false;
   const matchCnt  = rule.matchCount ?? null;
@@ -270,9 +302,7 @@ function renderRuleCard(id, rule, cat) {
   return `
     <div class="auto-rule-card ${enabled ? '' : 'is-paused'}">
       <div class="auto-rule-when">
-        <span class="auto-rule-field">${rule.matchField ?? 'description'}</span>
-        <span class="auto-rule-op">${rule.matchOp ?? 'contains'}</span>
-        <span class="auto-rule-pattern">"${escHtml(rule.matchValue ?? '')}"</span>
+        ${ruleCondSummaryHtml(rule)}
       </div>
       <div class="auto-rule-then">
         <span class="auto-rule-arrow">→</span>
@@ -294,45 +324,61 @@ function escHtml(str) {
   return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 }
 
+const RULE_FIELD_DEFS = {
+  description: { label: 'description',   type: 'text',   ops: ['contains','notContains','startsWith','equals'] },
+  merchant:    { label: 'merchant name', type: 'text',   ops: ['contains','notContains','startsWith','equals'] },
+  accountName: { label: 'account name',  type: 'text',   ops: ['contains','notContains','startsWith','equals'] },
+  amount:      { label: 'amount ($)',    type: 'number', ops: ['gt','gte','lt','lte','equals'] },
+  category:    { label: 'category',     type: 'select', ops: ['equals','in'] },
+  source:      { label: 'source',       type: 'select', ops: ['equals','in'], options: ['plaid','manual','import','ai','rule'] },
+};
+
+const OP_EDITOR_LABELS = {
+  contains:    'contains',
+  notContains: 'not contains',
+  startsWith:  'starts with',
+  equals:      'equals',
+  gt:          'greater than',
+  gte:         'at least',
+  lt:          'less than',
+  lte:         'at most',
+  in:          'is one of',
+};
+
 function openRuleEditor(uid, ruleId = null, prefill = null, prefillCatId = null) {
-  const isEdit   = ruleId != null;
-  const expCats  = CATEGORIES.filter(c => !c.isIncome && c.id !== 'transfer' && c.parent);
+  const isEdit  = ruleId != null;
+  const expCats = CATEGORIES.filter(c => !c.isIncome && c.id !== 'transfer' && c.parent);
+
+  // Normalise existing rule to conditions array
+  let conditions;
+  if (prefill) {
+    if (Array.isArray(prefill.conditions) && prefill.conditions.length) {
+      conditions = prefill.conditions.map(c => ({ ...c }));
+    } else {
+      conditions = [{ field: prefill.matchField ?? 'description', op: prefill.matchOp ?? 'contains', value: prefill.matchValue ?? '' }];
+    }
+  } else {
+    conditions = [{ field: 'description', op: 'contains', value: '' }];
+  }
+
+  const initCatId = prefill?.actionValue ?? prefillCatId ?? (expCats[0]?.id ?? '');
+  const selPri    = prefill?.priority ?? 50;
+
+  const catOptions = expCats.map(c =>
+    `<option value="${c.id}" ${initCatId === c.id ? 'selected' : ''}>${c.icon} ${c.name}</option>`
+  ).join('');
 
   const modal = document.createElement('div');
   modal.className = 'modal-overlay';
-
-  const catOptions = expCats.map(c =>
-    `<option value="${c.id}" ${(prefill?.actionValue ?? prefillCatId) === c.id ? 'selected' : ''}>${c.icon} ${c.name}</option>`
-  ).join('');
-
-  const selField = prefill?.matchField ?? 'description';
-  const selOp    = prefill?.matchOp    ?? 'contains';
-  const selPri   = prefill?.priority   ?? 50;
-
   modal.innerHTML = `
     <div class="modal">
       <h3>${isEdit ? 'Edit Rule' : 'New Rule'}</h3>
 
-      <label class="modal-label">When</label>
-      <div class="rule-editor-row">
-        <select id="re-field" class="rule-editor-sel">
-          <option value="description"  ${selField === 'description'  ? 'selected' : ''}>description</option>
-          <option value="merchant"     ${selField === 'merchant'     ? 'selected' : ''}>merchant name</option>
-          <option value="accountName"  ${selField === 'accountName'  ? 'selected' : ''}>account name</option>
-          <option value="amount"       ${selField === 'amount'       ? 'selected' : ''}>amount ($)</option>
-          <option value="source"       ${selField === 'source'       ? 'selected' : ''}>source</option>
-        </select>
-        <select id="re-op" class="rule-editor-sel">
-          <option value="contains"   ${selOp === 'contains'   ? 'selected' : ''}>contains</option>
-          <option value="startsWith" ${selOp === 'startsWith' ? 'selected' : ''}>starts with</option>
-          <option value="equals"     ${selOp === 'equals'     ? 'selected' : ''}>equals</option>
-          <option value="gt"         ${selOp === 'gt'         ? 'selected' : ''}>greater than</option>
-          <option value="lt"         ${selOp === 'lt'         ? 'selected' : ''}>less than</option>
-        </select>
-      </div>
-      <input id="re-value" class="rule-editor-input" type="text" placeholder="Merchant name or pattern…" value="${escHtml(prefill?.matchValue ?? '')}" />
+      <label class="modal-label">When ALL conditions match</label>
+      <div id="re-conds"></div>
+      <button class="btn-ghost re-add-cond" type="button" style="font-size:0.8rem;margin-bottom:1rem;padding:6px 12px">+ AND condition</button>
 
-      <label class="modal-label" style="margin-top:1rem">Then categorize as</label>
+      <label class="modal-label" style="margin-top:0.25rem">Then categorize as</label>
       <select id="re-cat" class="rule-editor-sel" style="width:100%">${catOptions}</select>
 
       <label class="modal-label" style="margin-top:1rem">Priority</label>
@@ -357,31 +403,169 @@ function openRuleEditor(uid, ruleId = null, prefill = null, prefillCatId = null)
       </div>
     </div>
   `;
-
   document.body.appendChild(modal);
 
-  const fieldEl = modal.querySelector('#re-field');
-  const opEl    = modal.querySelector('#re-op');
-  const valEl   = modal.querySelector('#re-value');
-  const catEl   = modal.querySelector('#re-cat');
+  const condsEl     = modal.querySelector('#re-conds');
+  const catEl       = modal.querySelector('#re-cat');
+  const addCondBtn  = modal.querySelector('.re-add-cond');
   const priAutoEl   = modal.querySelector('#re-pri-auto');
   const priCustomEl = modal.querySelector('#re-pri-custom');
   const priValEl    = modal.querySelector('#re-pri-val');
   const previewEl   = modal.querySelector('#re-preview');
 
-  const updatePreview = () => {
+  function renderValueInput(idx, field, op, value) {
+    const fd = RULE_FIELD_DEFS[field];
+    if (!fd) return '';
+
+    if (fd.type === 'number') {
+      return `<input class="rule-editor-input re-cond-val" data-ci="${idx}" type="number" step="0.01" min="0" placeholder="Amount…" value="${value ?? ''}">`;
+    }
+
+    if (fd.type === 'select') {
+      const opts = field === 'category'
+        ? expCats.map(c => ({ id: c.id, label: `${c.icon} ${c.name}` }))
+        : (fd.options ?? []).map(o => ({ id: o, label: o }));
+
+      if (op === 'in') {
+        const selected = Array.isArray(value) ? value : [];
+        return `<div class="rule-multicheck re-cond-multicheck" data-ci="${idx}">
+          ${opts.map(o => `
+            <label class="rule-multicheck-item">
+              <input type="checkbox" value="${o.id}" ${selected.includes(o.id) ? 'checked' : ''}>
+              <span>${escHtml(o.label)}</span>
+            </label>`).join('')}
+        </div>`;
+      } else {
+        const sel = typeof value === 'string' ? value : (Array.isArray(value) ? value[0] : opts[0]?.id ?? '');
+        return `<select class="rule-editor-sel re-cond-val" data-ci="${idx}" style="width:100%">
+          ${opts.map(o => `<option value="${o.id}" ${sel === o.id ? 'selected' : ''}>${escHtml(o.label)}</option>`).join('')}
+        </select>`;
+      }
+    }
+
+    return `<input class="rule-editor-input re-cond-val" data-ci="${idx}" type="text" placeholder="Value…" value="${escHtml(String(value ?? ''))}">`;
+  }
+
+  function renderConditions() {
+    condsEl.innerHTML = conditions.map((cond, idx) => {
+      const fd   = RULE_FIELD_DEFS[cond.field] ?? RULE_FIELD_DEFS.description;
+      const fieldOpts = Object.entries(RULE_FIELD_DEFS).map(([k, v]) =>
+        `<option value="${k}" ${cond.field === k ? 'selected' : ''}>${v.label}</option>`).join('');
+      const opOpts = fd.ops.map(op =>
+        `<option value="${op}" ${cond.op === op ? 'selected' : ''}>${OP_EDITOR_LABELS[op] ?? op}</option>`).join('');
+
+      return `
+        <div class="re-cond-card" data-ci="${idx}">
+          <div class="re-cond-selects">
+            <select class="rule-editor-sel re-cond-field" data-ci="${idx}" style="flex:1;min-width:0">${fieldOpts}</select>
+            <select class="rule-editor-sel re-cond-op" data-ci="${idx}" style="flex:1;min-width:0">${opOpts}</select>
+            ${conditions.length > 1
+              ? `<button class="re-cond-remove" data-ci="${idx}" type="button" title="Remove">×</button>`
+              : ''}
+          </div>
+          <div class="re-cond-value-wrap">
+            ${renderValueInput(idx, cond.field, cond.op, cond.value)}
+          </div>
+        </div>`;
+    }).join('');
+
+    wireCondEvents();
+    updatePreview();
+  }
+
+  function syncFromDom() {
+    conditions.forEach((cond, idx) => {
+      const fieldEl2 = condsEl.querySelector(`.re-cond-field[data-ci="${idx}"]`);
+      const opEl2    = condsEl.querySelector(`.re-cond-op[data-ci="${idx}"]`);
+      if (fieldEl2) cond.field = fieldEl2.value;
+      if (opEl2)    cond.op    = opEl2.value;
+      const fd = RULE_FIELD_DEFS[cond.field];
+      if (fd?.type === 'select' && cond.op === 'in') {
+        const checks = condsEl.querySelectorAll(`.re-cond-multicheck[data-ci="${idx}"] input:checked`);
+        cond.value = [...checks].map(c => c.value);
+      } else {
+        const valEl2 = condsEl.querySelector(`.re-cond-val[data-ci="${idx}"]`);
+        if (valEl2) cond.value = valEl2.value;
+      }
+    });
+  }
+
+  function wireCondEvents() {
+    condsEl.querySelectorAll('.re-cond-field').forEach(el => {
+      el.addEventListener('change', () => {
+        syncFromDom();
+        const idx = +el.dataset.ci;
+        const fd  = RULE_FIELD_DEFS[el.value] ?? RULE_FIELD_DEFS.description;
+        conditions[idx] = { field: el.value, op: fd.ops[0], value: '' };
+        renderConditions();
+      });
+    });
+
+    condsEl.querySelectorAll('.re-cond-op').forEach(el => {
+      el.addEventListener('change', () => {
+        syncFromDom();
+        const idx    = +el.dataset.ci;
+        const newOp  = el.value;
+        const fd     = RULE_FIELD_DEFS[conditions[idx].field];
+        const wasIn  = conditions[idx].op === 'in';
+        const isNowIn = newOp === 'in';
+        conditions[idx].op = newOp;
+        if (fd?.type === 'select' && wasIn !== isNowIn) {
+          conditions[idx].value = isNowIn ? [] : '';
+        }
+        renderConditions();
+      });
+    });
+
+    condsEl.querySelectorAll('.re-cond-val').forEach(el => {
+      el.addEventListener('input',  () => { conditions[+el.dataset.ci].value = el.value; updatePreview(); });
+      el.addEventListener('change', () => { conditions[+el.dataset.ci].value = el.value; updatePreview(); });
+    });
+
+    condsEl.querySelectorAll('.re-cond-multicheck').forEach(wrap => {
+      wrap.addEventListener('change', () => {
+        const idx = +wrap.dataset.ci;
+        conditions[idx].value = [...wrap.querySelectorAll('input:checked')].map(c => c.value);
+        updatePreview();
+      });
+    });
+
+    condsEl.querySelectorAll('.re-cond-remove').forEach(btn => {
+      btn.addEventListener('click', () => {
+        syncFromDom();
+        conditions.splice(+btn.dataset.ci, 1);
+        renderConditions();
+      });
+    });
+  }
+
+  function updatePreview() {
     const cat = getCategoryById(catEl.value);
+    const parts = conditions.map(c => {
+      const fd     = RULE_FIELD_DEFS[c.field];
+      const valStr = Array.isArray(c.value)
+        ? (c.value.length ? c.value.map(v => {
+            if (c.field === 'category') return getCategoryById(v)?.name ?? v;
+            return v;
+          }).join(', ') : '…')
+        : (String(c.value || '…'));
+      return `<strong>${fd?.label ?? c.field}</strong> ${OP_EDITOR_LABELS[c.op] ?? c.op} <strong>"${escHtml(valStr)}"</strong>`;
+    });
     previewEl.innerHTML = `
       <span class="rule-preview-label">Preview</span>
-      When <strong>${fieldEl.value}</strong> ${opEl.value} <strong>"${escHtml(valEl.value || '…')}"</strong><br>
-      → Set category to <strong>${cat.icon} ${cat.name}</strong>
+      ${parts.join('<br><span style="color:var(--muted);font-size:0.7rem">AND </span>')}
+      <br>→ Set category to <strong>${cat.icon} ${cat.name}</strong>
     `;
-  };
+  }
 
-  [fieldEl, opEl, valEl, catEl].forEach(el => el.addEventListener('input', updatePreview));
-  updatePreview();
+  addCondBtn.addEventListener('click', () => {
+    syncFromDom();
+    conditions.push({ field: 'description', op: 'contains', value: '' });
+    renderConditions();
+  });
 
-  // Priority radio toggle styling
+  catEl.addEventListener('change', updatePreview);
+
   [priAutoEl, priCustomEl].forEach(radio => {
     radio.addEventListener('change', () => {
       modal.querySelector('#re-pri-auto-lbl').classList.toggle('is-selected', priAutoEl.checked);
@@ -391,21 +575,24 @@ function openRuleEditor(uid, ruleId = null, prefill = null, prefillCatId = null)
   });
 
   modal.querySelector('.modal-save').addEventListener('click', async () => {
-    const matchValue = valEl.value.trim();
-    if (!matchValue) { valEl.focus(); return; }
+    syncFromDom();
+    const invalid = conditions.some(c =>
+      Array.isArray(c.value) ? c.value.length === 0 : !String(c.value ?? '').trim()
+    );
+    if (invalid) {
+      alert('Please fill in all condition values.');
+      return;
+    }
 
     const priority = priAutoEl.checked ? 30 : Math.max(1, Math.min(100, parseInt(priValEl.value, 10) || 30));
     const catId    = catEl.value;
     const cat      = getCategoryById(catId);
+    const firstVal = Array.isArray(conditions[0].value) ? conditions[0].value.join('/') : conditions[0].value;
+    const name     = conditions.length > 1
+      ? `${firstVal} +${conditions.length - 1} → ${cat.name}`
+      : `${firstVal} → ${cat.name}`;
 
-    const rule = buildRule({
-      name:       `${matchValue} → ${cat.name}`,
-      matchField: fieldEl.value,
-      matchOp:    opEl.value,
-      matchValue,
-      categoryId: catId,
-      priority,
-    });
+    const rule = buildRule({ conditions, categoryId: catId, name, priority });
 
     if (isEdit) {
       await dbSet(`rules/${uid}/${ruleId}`, { ...rule, createdAt: prefill.createdAt ?? Date.now() });
@@ -417,7 +604,9 @@ function openRuleEditor(uid, ruleId = null, prefill = null, prefillCatId = null)
 
   modal.querySelector('.modal-cancel').addEventListener('click', () => modal.remove());
   modal.addEventListener('click', e => { if (e.target === modal) modal.remove(); });
-  valEl.focus();
+
+  renderConditions();
+  condsEl.querySelector('.re-cond-val')?.focus();
 }
 
 async function applyAllRules(uid, rules) {
