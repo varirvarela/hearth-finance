@@ -1,5 +1,13 @@
 export const CHANGELOG = [
   {
+    version: '1.11.4',
+    date:    '2026-08-26',
+    changes: [
+      'Transactions: detail panel now shows the full category lineage with a Change button — works for any transaction regardless of how it was categorized.',
+      'Transactions: tap the category name in a suggestion strip to expand the full parent › child path.',
+    ],
+  },
+  {
     version: '1.11.3',
     date:    '2026-08-26',
     changes: [

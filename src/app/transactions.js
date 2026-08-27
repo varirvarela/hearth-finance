@@ -953,6 +953,14 @@ function renderPage(filtered, state, uid, refresh, accountMap) {
     });
   });
 
+  // ── Tap category name to expand full lineage ──
+  el.querySelectorAll('.sug-cat').forEach(catEl => {
+    catEl.addEventListener('click', e => {
+      e.stopPropagation();
+      catEl.classList.toggle('sug-cat-expanded');
+    });
+  });
+
   // ── Pagination ──
   el.querySelectorAll('.page-btn').forEach(btn => {
     btn.addEventListener('click', () => {
@@ -986,6 +994,11 @@ function renderPage(filtered, state, uid, refresh, accountMap) {
       const isPartner   = !!t._owner;
       const accountName = t.accountName || accountMap[t.accountId]?.name || '—';
       const srcBadge    = getSourceBadge(t.categorySource);
+      const detailCat   = getCategoryById(t.category);
+      const detailParent = detailCat.parent ? getCategoryById(detailCat.parent) : null;
+      const catDisplay  = detailParent
+        ? `${detailParent.icon} ${detailParent.name} › ${detailCat.icon} ${detailCat.name}`
+        : `${detailCat.icon} ${detailCat.name}`;
 
       const detail = document.createElement('div');
       detail.className = 'txn-detail';
@@ -998,6 +1011,13 @@ function renderPage(filtered, state, uid, refresh, accountMap) {
           <div class="txn-detail-row"><span class="txn-dl">Source</span><span class="txn-dv">${srcBadge}</span></div>
           ${t.aiConfidence != null ? `<div class="txn-detail-row"><span class="txn-dl">AI confidence</span><span class="txn-dv">${Math.round(t.aiConfidence * 100)}%</span></div>` : ''}
           ${t.plaidCategory ? `<div class="txn-detail-row"><span class="txn-dl">Plaid category</span><span class="txn-dv">${t.plaidCategory}</span></div>` : ''}
+          <div class="txn-detail-row">
+            <span class="txn-dl">Category</span>
+            <span class="txn-dv" style="display:flex;align-items:center;gap:0.5rem;flex-wrap:wrap">
+              <span>${catDisplay}</span>
+              ${!isPartner ? `<button class="detail-change-cat btn-ghost" style="font-size:0.78rem;padding:2px 8px">Change</button>` : ''}
+            </span>
+          </div>
           <div class="txn-detail-row"><span class="txn-dl">Notes</span><span class="txn-dv"><textarea class="txn-notes-input" data-id="${id}" rows="2" placeholder="Add a note…"${isPartner ? ' disabled' : ''}>${t.notes ?? ''}</textarea></span></div>
           <div class="txn-detail-row"><span class="txn-dl">Transfer</span><span class="txn-dv"><label style="display:flex;align-items:center;gap:0.4rem;cursor:pointer"><input type="checkbox" class="txn-transfer-chk" data-id="${id}" ${t.isTransfer ? 'checked' : ''}${isPartner ? ' disabled' : ''}> Mark as inter-account transfer</label></span></div>
         </div>
@@ -1023,6 +1043,11 @@ function renderPage(filtered, state, uid, refresh, accountMap) {
         });
         detail.querySelector('.txn-transfer-chk').addEventListener('change', e2 => {
           dbUpdate(`transactions/${uid}/${id}`, { isTransfer: e2.target.checked });
+        });
+
+        detail.querySelector('.detail-change-cat')?.addEventListener('click', e2 => {
+          e2.stopPropagation();
+          openCategoryPicker(id, t.category, uid, item.querySelector('.txn-row'));
         });
 
         const deleteBtn  = detail.querySelector('.btn-delete-txn');
