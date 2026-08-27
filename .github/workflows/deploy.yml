@@ -48,7 +48,7 @@ jobs:
         run: npx playwright install chromium --with-deps
 
       - name: E2E tests (Playwright — auth shell, no Firebase)
-        run: npm run test:e2e
+        run: npx playwright test e2e/shell.spec.js
 
   deploy:
     name: Deploy
