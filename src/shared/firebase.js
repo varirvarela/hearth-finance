@@ -1,6 +1,6 @@
 import { initializeApp } from 'firebase/app';
-import { getDatabase, ref, set, get, push, update, remove, onValue } from 'firebase/database';
-import { getAuth } from 'firebase/auth';
+import { getDatabase, ref, set, get, push, update, remove, onValue, connectDatabaseEmulator } from 'firebase/database';
+import { getAuth, connectAuthEmulator } from 'firebase/auth';
 
 const firebaseConfig = {
   apiKey:            import.meta.env.VITE_FIREBASE_API_KEY,
@@ -18,6 +18,11 @@ export const DEV_ROOT = import.meta.env.DEV ? '_dev/' : '';
 const app  = initializeApp(firebaseConfig);
 export const db   = getDatabase(app);
 export const auth = getAuth(app);
+
+if (import.meta.env.VITE_USE_EMULATOR === 'true') {
+  connectAuthEmulator(auth, 'http://127.0.0.1:9099', { disableWarnings: true });
+  connectDatabaseEmulator(db, '127.0.0.1', 9000);
+}
 
 export function dbRef(path) {
   return ref(db, DEV_ROOT + path);

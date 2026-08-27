@@ -19,6 +19,7 @@
   "devDependencies": {
     "@playwright/test": "^1.49.1",
     "firebase-admin": "^14.2.0",
+    "firebase-tools": "^15.28.2",
     "vite": "^5.4.11",
     "vitest": "^2.1.8",
     "wrangler": "^3.93.0"

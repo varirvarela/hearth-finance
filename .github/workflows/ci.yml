@@ -49,7 +49,7 @@ jobs:
           VITE_FIREBASE_APP_ID:               ${{ secrets.VITE_FIREBASE_APP_ID }}
 
   e2e:
-    name: E2E Tests (Playwright)
+    name: E2E Tests (Playwright + Firebase Emulator)
     runs-on: ubuntu-latest
     needs: unit-tests
     steps:
@@ -62,22 +62,34 @@ jobs:
 
       - run: npm ci
 
-      - name: Vite build (preview server needs dist/)
+      # Cache emulator binaries so they don't re-download on every run (~200 MB).
+      - name: Cache Firebase emulator binaries
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/firebase/emulators
+          key: firebase-emulators-${{ hashFiles('firebase.json') }}
+
+      # Build against the emulator — uses a demo project with fake config values.
+      # VITE_USE_EMULATOR=true makes firebase.js call connectAuthEmulator / connectDatabaseEmulator.
+      - name: Vite build (emulator mode)
         run: npm run build
         env:
-          VITE_FIREBASE_API_KEY:              ${{ secrets.VITE_FIREBASE_API_KEY }}
-          VITE_FIREBASE_AUTH_DOMAIN:          ${{ secrets.VITE_FIREBASE_AUTH_DOMAIN }}
-          VITE_FIREBASE_DATABASE_URL:         ${{ secrets.VITE_FIREBASE_DATABASE_URL }}
-          VITE_FIREBASE_PROJECT_ID:           ${{ secrets.VITE_FIREBASE_PROJECT_ID }}
-          VITE_FIREBASE_STORAGE_BUCKET:       ${{ secrets.VITE_FIREBASE_STORAGE_BUCKET }}
-          VITE_FIREBASE_MESSAGING_SENDER_ID:  ${{ secrets.VITE_FIREBASE_MESSAGING_SENDER_ID }}
-          VITE_FIREBASE_APP_ID:               ${{ secrets.VITE_FIREBASE_APP_ID }}
+          VITE_USE_EMULATOR:                  'true'
+          VITE_FIREBASE_API_KEY:              'demo-key'
+          VITE_FIREBASE_AUTH_DOMAIN:          'demo-hearth.firebaseapp.com'
+          VITE_FIREBASE_DATABASE_URL:         'https://demo-hearth-default-rtdb.firebaseio.com'
+          VITE_FIREBASE_PROJECT_ID:           'demo-hearth'
+          VITE_FIREBASE_STORAGE_BUCKET:       'demo-hearth.appspot.com'
+          VITE_FIREBASE_MESSAGING_SENDER_ID:  '000000000000'
+          VITE_FIREBASE_APP_ID:               '1:000000000000:web:0000000000000000'
 
       - name: Install Playwright browsers
         run: npx playwright install --with-deps chromium
 
-      - name: Run Playwright tests
-        run: npm run test:e2e
+      # firebase emulators:exec starts Auth + RTDB emulators, waits for them to be
+      # ready, runs the inner command, then shuts them down cleanly.
+      - name: Run Playwright tests (with emulators)
+        run: npx firebase emulators:exec --project demo-hearth --only auth,database "npx playwright test"
         env:
           CI: true
 
