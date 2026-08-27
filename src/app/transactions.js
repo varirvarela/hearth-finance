@@ -117,6 +117,25 @@ export function renderTransactions(container) {
         font-size: 0.8rem; background: none; border: 1.5px solid var(--border);
         border-radius: 8px; padding: 4px 10px; cursor: pointer; color: var(--text);
       }
+      .btn-ai-suggest {
+        font-size: 0.8rem; background: none; border: 1.5px solid var(--brand);
+        color: var(--brand); border-radius: 8px; padding: 4px 12px;
+        cursor: pointer; opacity: 0.8; transition: opacity 0.15s; margin-left: auto;
+      }
+      .btn-ai-suggest:hover { opacity: 1; }
+      .btn-ai-suggest:disabled { opacity: 0.45; cursor: default; }
+      .detail-ai-result {
+        flex-basis: 100%; display: flex; align-items: center; gap: 0.6rem;
+        flex-wrap: wrap; font-size: 0.82rem; padding-top: 4px;
+      }
+      .btn-ai-accept {
+        font-size: 0.8rem; background: var(--brand); color: #fff; border: none;
+        border-radius: 8px; padding: 4px 12px; cursor: pointer;
+      }
+      .btn-ai-keep {
+        font-size: 0.8rem; background: none; border: 1.5px solid var(--border);
+        border-radius: 8px; padding: 4px 10px; cursor: pointer; color: var(--text);
+      }
     `;
     document.head.appendChild(style);
   }
@@ -1029,6 +1048,8 @@ function renderPage(filtered, state, uid, refresh, accountMap) {
             <button class="btn-delete-confirm">Delete</button>
             <button class="btn-delete-cancel">Cancel</button>
           </div>
+          <button class="btn-ai-suggest">✦ Ask AI</button>
+          <div class="detail-ai-result" hidden></div>
         </div>` : ''}
       `;
 
@@ -1064,6 +1085,98 @@ function renderPage(filtered, state, uid, refresh, accountMap) {
           item.remove();
           detail.remove();
           await dbRemove(`transactions/${uid}/${id}`);
+        });
+
+        // ── On-demand AI suggestion ──
+        const aiBtn    = detail.querySelector('.btn-ai-suggest');
+        const aiResult = detail.querySelector('.detail-ai-result');
+
+        aiBtn.addEventListener('click', async () => {
+          aiBtn.disabled = true;
+          aiBtn.textContent = 'Thinking…';
+          aiResult.hidden = true;
+
+          try {
+            const idToken = await auth.currentUser?.getIdToken();
+            const confirmedTxns = [...allTxns, ...partnerAllTxns]
+              .filter(([, tx]) => tx.category && tx.category !== 'uncategorized' && tx.categorySource !== 'ai')
+              .map(([, tx]) => tx);
+
+            const res = await fetch(`${WORKER_URL}/categorize`, {
+              method:  'POST',
+              headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${idToken}` },
+              body:    JSON.stringify({
+                txn: t,
+                merchantRules: _merchantRules,
+                categoryDescriptions: Object.fromEntries(
+                  Object.entries(CATEGORY_MAP)
+                    .filter(([, c]) => c.parent)
+                    .map(([cid, c]) => [cid, _catDescriptions[cid] || c.description || ''])
+                ),
+                examples: buildExamples(t, confirmedTxns),
+              }),
+            });
+
+            const result = res.ok ? await res.json() : null;
+            const sugCatId = result?.category;
+            const sugCat   = sugCatId && sugCatId !== 'uncategorized' ? getCategoryById(sugCatId) : null;
+
+            if (!sugCat || sugCat.id === 'uncategorized') {
+              aiResult.hidden = false;
+              aiResult.innerHTML = `<span>AI couldn't determine a category for this transaction.</span>
+                <button class="btn-ai-keep">OK</button>`;
+              aiResult.querySelector('.btn-ai-keep').addEventListener('click', () => {
+                aiResult.hidden = true;
+                aiBtn.disabled = false;
+                aiBtn.textContent = '✦ Ask AI';
+              });
+            } else {
+              const sugParent  = sugCat.parent ? getCategoryById(sugCat.parent) : null;
+              const sugDisplay = sugParent
+                ? `${sugParent.icon} ${sugParent.name} › ${sugCat.icon} ${sugCat.name}`
+                : `${sugCat.icon} ${sugCat.name}`;
+              const conf = result.confidence ? ` · ${Math.round(result.confidence * 100)}%` : '';
+
+              aiResult.hidden = false;
+              aiResult.innerHTML = `
+                <span>AI suggests: <strong>${sugDisplay}</strong>${conf}</span>
+                <button class="btn-ai-accept">Accept</button>
+                <button class="btn-ai-keep">Keep current</button>`;
+
+              aiResult.querySelector('.btn-ai-accept').addEventListener('click', async () => {
+                learnMerchant(uid, id, sugCat.id);
+                await dbUpdate(`transactions/${uid}/${id}`, {
+                  category:       sugCat.id,
+                  group:          sugCat.parent ?? sugCat.id,
+                  isFixed:        sugCat.isFixed  ?? false,
+                  isAnnual:       sugCat.isAnnual ?? false,
+                  categorySource: 'manual',
+                  needsReview:    false,
+                });
+                // Firebase listener will re-render; detail closes naturally
+              });
+
+              aiResult.querySelector('.btn-ai-keep').addEventListener('click', () => {
+                aiResult.hidden = true;
+                aiBtn.disabled = false;
+                aiBtn.textContent = '✦ Ask AI';
+              });
+            }
+          } catch {
+            aiResult.hidden = false;
+            aiResult.innerHTML = `<span>Error calling AI.</span>
+              <button class="btn-ai-keep">OK</button>`;
+            aiResult.querySelector('.btn-ai-keep').addEventListener('click', () => {
+              aiResult.hidden = true;
+              aiBtn.disabled = false;
+              aiBtn.textContent = '✦ Ask AI';
+            });
+          }
+
+          if (aiBtn.textContent === 'Thinking…') {
+            aiBtn.disabled = false;
+            aiBtn.textContent = '✦ Ask AI';
+          }
         });
       }
     });

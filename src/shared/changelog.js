@@ -1,5 +1,12 @@
 export const CHANGELOG = [
   {
+    version: '1.11.5',
+    date:    '2026-08-26',
+    changes: [
+      'Transactions: "✦ Ask AI" button in the detail panel lets you request an AI suggestion for any transaction, even already-categorized ones — accept it or keep the current category.',
+    ],
+  },
+  {
     version: '1.11.4',
     date:    '2026-08-26',
     changes: [
