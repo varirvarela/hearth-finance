@@ -75,14 +75,14 @@ test('member accepts invite and sees shared transactions', async ({ page }) => {
   const { localId: ownerUid } = await createUser(ownerEmail, 'password123');
   await createUser(guestEmail, 'password123');
 
-  // Seed a transaction under the owner's namespace
+  // Seed a transaction under the owner's namespace.
+  // No merchantName so the UI falls back to description (txn-desc renders merchantName ?? description).
   await dbWrite(`transactions/${ownerUid}/txn_seed_1`, {
     description:    'Shared Grocery Store',
     amount:         42.50,
     date:           '2026-08-01',
     category:       'food_groceries',
     categorySource: 'rule',
-    merchantName:   'Whole Foods',
     needsReview:    false,
   });
 
@@ -133,7 +133,9 @@ test('member leaves household from Settings', async ({ page }) => {
   const { localId: ownerUid } = await createUser(ownerEmail, 'password123');
   const { localId: guestUid } = await createUser(guestEmail, 'password123');
 
-  // Pre-seed the member as already joined
+  // Pre-seed owner profile so settings can display their email (renderHouseholdSection reads users/${hid}/email).
+  await dbWrite(`users/${ownerUid}`, { email: ownerEmail, lastLoginAt: Date.now() });
+  // Pre-seed the member as already joined.
   await dbWrite(`users/${guestUid}`, { email: guestEmail, householdId: ownerUid, lastLoginAt: Date.now() });
   await dbWrite(`households/${ownerUid}/members/${guestUid}`, { email: guestEmail, addedAt: Date.now() });
 
