@@ -162,7 +162,8 @@ function renderRulesList(uid, rules, query, selectedCatId) {
           <span class="auto-group-count">${catRules.length}</span>
         </div>
         <button class="btn-primary auto-add-btn" id="auto-add-cat-rule" style="font-size:0.75rem;padding:4px 12px" data-cat="${selectedCatId}">+ Add rule</button>
-      </div>`;
+      </div>
+      <button class="btn-ghost auto-apply-cat-btn" id="auto-apply-cat-rules" data-cat="${selectedCatId}" style="width:100%;font-size:0.8rem;padding:6px 12px;margin-bottom:0.5rem">Apply ${cat.name} rules to past transactions →</button>`;
 
     for (const [field, fieldRules] of byField) {
       const label = FIELD_LABELS[field] ?? field;
@@ -178,6 +179,7 @@ function renderRulesList(uid, rules, query, selectedCatId) {
                 <div class="auto-rule-meta">
                   <span class="auto-rule-priority">p${r.priority ?? 50} <span class="auto-rule-id">#${ruleShortId(id)}</span></span>
                   <div class="auto-rule-actions">
+                    <button class="auto-rule-apply auto-link-btn" data-id="${id}">Apply</button>
                     <button class="auto-rule-edit auto-link-btn" data-id="${id}">Edit</button>
                     <button class="auto-rule-delete auto-link-btn" data-id="${id}" style="color:var(--danger,#dc2626)">✕</button>
                     <div class="auto-rule-toggle ${r.enabled !== false ? 'is-on' : ''}" data-id="${id}"></div>
@@ -201,7 +203,12 @@ function renderRulesList(uid, rules, query, selectedCatId) {
       openRuleEditor(uid, null, null, e.currentTarget.dataset.cat);
     });
 
-    // Wire toggles, edits, deletes
+    // Wire apply-category button
+    listEl.querySelector('#auto-apply-cat-rules')?.addEventListener('click', e => {
+      openApplySheet(uid, allRulesRef, { filterCatId: e.currentTarget.dataset.cat });
+    });
+
+    // Wire toggles, edits, deletes, per-rule apply
     listEl.querySelectorAll('.auto-rule-toggle').forEach(toggle => {
       toggle.addEventListener('click', () => {
         const current = toggle.classList.contains('is-on');
@@ -218,6 +225,13 @@ function renderRulesList(uid, rules, query, selectedCatId) {
     listEl.querySelectorAll('.auto-rule-delete').forEach(btn => {
       btn.addEventListener('click', () => {
         if (confirm('Delete this rule?')) dbRemove(`rules/${uid}/${btn.dataset.id}`);
+      });
+    });
+    listEl.querySelectorAll('.auto-rule-apply').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const ruleId = btn.dataset.id;
+        const rule   = allRulesRef[ruleId];
+        if (rule) openApplySheet(uid, allRulesRef, { singleRule: { id: ruleId, rule } });
       });
     });
     allRulesRef = rules;
@@ -312,6 +326,7 @@ function renderRuleCard(id, rule, cat) {
       <div class="auto-rule-meta">
         <span class="auto-rule-priority">p${pri} ${countHtml} <span class="auto-rule-id">#${ruleShortId(id)}</span></span>
         <div class="auto-rule-actions">
+          <button class="auto-rule-apply auto-link-btn" data-id="${id}">Apply</button>
           <button class="auto-rule-edit auto-link-btn" data-id="${id}">Edit</button>
           <button class="auto-rule-delete auto-link-btn" data-id="${id}" style="color:var(--danger,#dc2626)">✕</button>
           <div class="auto-rule-toggle ${enabled ? 'is-on' : ''}" data-id="${id}" title="${enabled ? 'Pause rule' : 'Enable rule'}"></div>
@@ -657,14 +672,23 @@ function openRuleEditor(uid, ruleId = null, prefill = null, prefillCatId = null)
   condsEl.querySelector('.re-cond-val')?.focus();
 }
 
-function openApplySheet(uid, rules) {
+function openApplySheet(uid, rules, { singleRule = null, filterCatId = null } = {}) {
+  let sheetTitle = 'Apply Rules';
+  if (singleRule) {
+    const name = singleRule.rule.name ?? '#' + ruleShortId(singleRule.id);
+    sheetTitle = `Apply: ${escHtml(name)}`;
+  } else if (filterCatId) {
+    const cat = getCategoryById(filterCatId);
+    sheetTitle = `Apply: ${cat?.icon ?? ''} ${cat?.name ?? filterCatId}`;
+  }
+
   const sheet = document.createElement('div');
   sheet.className = 'sheet-overlay';
   sheet.innerHTML = `
     <div class="sheet">
       <div class="sheet-handle"></div>
       <div class="sheet-hdr">
-        <span class="sheet-title">Apply Rules</span>
+        <span class="sheet-title">${sheetTitle}</span>
         <button class="sheet-close" id="ars-x">✕</button>
       </div>
       <div class="ars-body">
@@ -842,7 +866,15 @@ function openApplySheet(uid, rules) {
 
     currentProposed = candidates
       .map(([id, t]) => {
-        const match = evaluateRulesWithMatch(t, rules);
+        if (singleRule) {
+          if (!matchesRule(t, singleRule.rule)) return null;
+          if (singleRule.rule.actionValue === t.category) return null;
+          return { id, txn: t, newCat: singleRule.rule.actionValue, ruleId: singleRule.id, ruleName: singleRule.rule.name ?? ruleShortId(singleRule.id) };
+        }
+        const effectiveRules = filterCatId
+          ? Object.fromEntries(Object.entries(rules).filter(([, r]) => r.actionValue === filterCatId))
+          : rules;
+        const match = evaluateRulesWithMatch(t, effectiveRules);
         if (!match || match.categoryId === t.category) return null;
         return { id, txn: t, newCat: match.categoryId, ruleId: match.ruleId, ruleName: match.ruleName };
       })

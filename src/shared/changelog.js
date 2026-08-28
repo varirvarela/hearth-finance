@@ -1,5 +1,14 @@
 export const CHANGELOG = [
   {
+    version: '1.15.0',
+    date:    '2026-08-28',
+    changes: [
+      'Automation: each rule card now has an "Apply" button to re-apply just that one rule to past transactions.',
+      'Automation: category detail screen now has an "Apply [category] rules" button to re-apply all rules for that category.',
+      'Both use the same date-range, scope, and hand-pick options as the global apply sheet.',
+    ],
+  },
+  {
     version: '1.14.4',
     date:    '2026-08-28',
     changes: [
