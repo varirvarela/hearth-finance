@@ -5,25 +5,25 @@
 
     "accounts": {
       "$uid": {
-        ".read":  "auth != null && (auth.uid === $uid || root.child('users').child(auth.uid).child('partnerUid').val() === $uid)",
+        ".read":  "auth != null && (auth.uid === $uid || root.child('users').child(auth.uid).child('partnerUid').val() === $uid || root.child('users').child(auth.uid).child('householdId').val() === $uid)",
         ".write": "auth != null && auth.uid === $uid"
       }
     },
     "transactions": {
       "$uid": {
-        ".read":  "auth != null && (auth.uid === $uid || root.child('users').child(auth.uid).child('partnerUid').val() === $uid)",
-        ".write": "auth != null && auth.uid === $uid"
+        ".read":  "auth != null && (auth.uid === $uid || root.child('users').child(auth.uid).child('partnerUid').val() === $uid || root.child('users').child(auth.uid).child('householdId').val() === $uid)",
+        ".write": "auth != null && (auth.uid === $uid || root.child('users').child(auth.uid).child('householdId').val() === $uid)"
       }
     },
     "budgets": {
       "$uid": {
-        ".read":  "auth != null && (auth.uid === $uid || root.child('users').child(auth.uid).child('partnerUid').val() === $uid)",
+        ".read":  "auth != null && (auth.uid === $uid || root.child('users').child(auth.uid).child('partnerUid').val() === $uid || root.child('users').child(auth.uid).child('householdId').val() === $uid)",
         ".write": "auth != null && auth.uid === $uid"
       }
     },
     "rules": {
       "$uid": {
-        ".read":  "auth != null && auth.uid === $uid",
+        ".read":  "auth != null && (auth.uid === $uid || root.child('users').child(auth.uid).child('householdId').val() === $uid)",
         ".write": "auth != null && auth.uid === $uid"
       }
     },
@@ -42,16 +42,30 @@
     "users": {
       "$uid": {
         ".read":  "auth != null && (auth.uid === $uid || root.child('users').child(auth.uid).child('partnerUid').val() === $uid)",
-        ".write": "auth != null && auth.uid === $uid",
-        "partnerUid": {
-          ".write": "auth != null"
-        }
+        ".write": "auth != null && auth.uid === $uid"
       }
     },
     "invites": {
       "$code": {
         ".read":  "auth != null",
         ".write": "auth != null"
+      }
+    },
+    "pendingInvites": {
+      "$emailKey": {
+        ".read":  "auth != null && auth.uid === data.child('ownerUid').val()",
+        ".write": "auth != null && (auth.uid === data.child('ownerUid').val() || !data.exists())"
+      }
+    },
+    "households": {
+      "$ownerUid": {
+        ".read":  "auth != null && (auth.uid === $ownerUid || root.child('users').child(auth.uid).child('householdId').val() === $ownerUid)",
+        ".write": "auth != null && auth.uid === $ownerUid",
+        "members": {
+          "$memberUid": {
+            ".write": "auth != null && (auth.uid === $ownerUid || auth.uid === $memberUid)"
+          }
+        }
       }
     },
     "categoryDescriptions": {
