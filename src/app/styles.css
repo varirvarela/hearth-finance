@@ -2562,7 +2562,7 @@ button:active  { opacity: 0.7; transform: scale(0.97); }
   font-weight: 500;
 }
 .ars-pick-meta { font-size: 0.75rem; color: var(--muted); }
-.ars-pick-rule { font-size: 0.72rem; color: var(--faint); margin-top: 1px; }
+.ars-pick-rule { font-size: 0.72rem; color: var(--muted); margin-top: 1px; }
 .ars-pick-arrow {
   font-size: 0.78rem;
   color: var(--muted);

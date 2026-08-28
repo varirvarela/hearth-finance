@@ -772,14 +772,14 @@ function openApplySheet(uid, rules) {
       const patch = {};
       for (const { id, newCat } of currentProposed.filter(p => ids.has(p.id))) {
         const bf = getCategoryBudgetFields(newCat);
-        patch[`transactions/${uid}/${id}/category`]       = newCat;
-        patch[`transactions/${uid}/${id}/group`]          = bf?.group   ?? null;
-        patch[`transactions/${uid}/${id}/isFixed`]        = bf?.isFixed ?? false;
-        patch[`transactions/${uid}/${id}/isAnnual`]       = bf?.isAnnual ?? false;
-        patch[`transactions/${uid}/${id}/categorySource`] = 'rule';
-        patch[`transactions/${uid}/${id}/needsReview`]    = false;
+        patch[`${id}/category`]       = newCat;
+        patch[`${id}/group`]          = bf?.group    ?? null;
+        patch[`${id}/isFixed`]        = bf?.isFixed  ?? false;
+        patch[`${id}/isAnnual`]       = bf?.isAnnual ?? false;
+        patch[`${id}/categorySource`] = 'rule';
+        patch[`${id}/needsReview`]    = false;
       }
-      if (Object.keys(patch).length) await dbUpdate('', patch);
+      if (Object.keys(patch).length) await dbUpdate(`transactions/${uid}`, patch);
       doneEl.textContent   = `✓ Updated ${ids.size} transaction${ids.size !== 1 ? 's' : ''}`;
       doneEl.style.display = 'block';
       applyBtn.style.display = 'none';

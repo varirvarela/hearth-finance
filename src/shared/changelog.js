@@ -1,7 +1,7 @@
 export const CHANGELOG = [
   {
-    version: '1.14.1',
-    date:    '2026-08-27',
+    version: '1.14.2',
+    date:    '2026-08-28',
     changes: [
       'Automation: each rule now shows a short ID (e.g. #a1b2c3d4) for easy reference.',
       'Automation: the apply-rules handpick list now shows which rule triggered each proposed change.',
