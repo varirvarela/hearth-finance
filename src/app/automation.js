@@ -811,10 +811,25 @@ function openApplySheet(uid, rules) {
     previewBtn.disabled    = true;
     previewBtn.textContent = 'Loading…';
 
-    let txns;
-    try { txns = await dbGet(`transactions/${uid}`); } catch { txns = null; }
+    let txns, accounts;
+    try {
+      [txns, accounts] = await Promise.all([
+        dbGet(`transactions/${uid}`),
+        dbGet(`accounts/${uid}`),
+      ]);
+    } catch { txns = null; accounts = null; }
     previewBtn.disabled    = false;
     previewBtn.textContent = 'Preview →';
+
+    // Enrich accountName for transactions synced before it was stamped at import time.
+    // accounts is keyed by Plaid account_id (same as t.accountId).
+    if (accounts && txns) {
+      for (const t of Object.values(txns)) {
+        if (!t.accountName && t.accountId && accounts[t.accountId]) {
+          t.accountName = accounts[t.accountId].alias ?? accounts[t.accountId].name ?? '';
+        }
+      }
+    }
 
     const candidates = Object.entries(txns ?? {}).filter(([, t]) => {
       if (fromDate && (t.date ?? '') < fromDate) return false;
