@@ -25,6 +25,20 @@ export function evaluateRules(transaction, rules) {
   return null;
 }
 
+/** Like evaluateRules but also returns the matching rule's id and name. */
+export function evaluateRulesWithMatch(transaction, rules) {
+  const sorted = Object.entries(rules ?? {})
+    .filter(([, r]) => r.enabled)
+    .sort((a, b) => a[1].priority - b[1].priority);
+
+  for (const [ruleId, rule] of sorted) {
+    if (matchesRule(transaction, rule)) {
+      return { categoryId: rule.actionValue, ruleId, ruleName: rule.name ?? ruleId };
+    }
+  }
+  return null;
+}
+
 function getFieldValue(txn, field) {
   switch (field) {
     case 'description':  return (txn.description  ?? '').toLowerCase();

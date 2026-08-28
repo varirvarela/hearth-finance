@@ -1,6 +1,6 @@
 import { dbListen, dbSet, dbPush, dbRemove, dbUpdate, dbGet, auth, getHouseholdId } from '../shared/firebase.js';
 import { CATEGORIES, getCategoryById, getCategoryBudgetFields } from '../shared/categories.js';
-import { buildRule, evaluateRules, matchesRule } from '../shared/rules.js';
+import { buildRule, evaluateRules, evaluateRulesWithMatch, matchesRule } from '../shared/rules.js';
 import { fmtCurrency } from '../shared/format.js';
 
 export function renderAutomation(container) {
@@ -176,7 +176,7 @@ function renderRulesList(uid, rules, query, selectedCatId) {
                   ${ruleCondSummaryHtml(r)}
                 </div>
                 <div class="auto-rule-meta">
-                  <span class="auto-rule-priority">p${r.priority ?? 50}</span>
+                  <span class="auto-rule-priority">p${r.priority ?? 50} <span class="auto-rule-id">#${ruleShortId(id)}</span></span>
                   <div class="auto-rule-actions">
                     <button class="auto-rule-edit auto-link-btn" data-id="${id}">Edit</button>
                     <button class="auto-rule-delete auto-link-btn" data-id="${id}" style="color:var(--danger,#dc2626)">✕</button>
@@ -310,7 +310,7 @@ function renderRuleCard(id, rule, cat) {
         <span class="auto-cat-name">${cat.name}</span>
       </div>
       <div class="auto-rule-meta">
-        <span class="auto-rule-priority">Priority ${pri} ${countHtml}</span>
+        <span class="auto-rule-priority">p${pri} ${countHtml} <span class="auto-rule-id">#${ruleShortId(id)}</span></span>
         <div class="auto-rule-actions">
           <button class="auto-rule-edit auto-link-btn" data-id="${id}">Edit</button>
           <button class="auto-rule-delete auto-link-btn" data-id="${id}" style="color:var(--danger,#dc2626)">✕</button>
@@ -322,6 +322,10 @@ function renderRuleCard(id, rule, cat) {
 
 function escHtml(str) {
   return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+
+function ruleShortId(id) {
+  return id ? id.slice(-8) : '?';
 }
 
 const RULE_FIELD_DEFS = {
@@ -703,6 +707,7 @@ function openApplySheet(uid, rules) {
             <button class="btn-ghost" id="ars-back" style="flex:1">← Back</button>
             <button class="btn-primary" id="ars-apply-btn" style="flex:1" disabled>Apply</button>
           </div>
+          <div id="ars-err" style="display:none;color:var(--danger,#dc2626);font-size:0.82rem;text-align:center;margin-top:0.5rem"></div>
           <div id="ars-done" style="display:none;text-align:center;padding:1rem;color:var(--brand);font-weight:600"></div>
         </div>
 
@@ -724,14 +729,78 @@ function openApplySheet(uid, rules) {
     });
   });
 
+  const listEl    = sheet.querySelector('#ars-pick-list');
+  const hdrEl     = sheet.querySelector('#ars-pick-hdr');
+  const selAllRow = sheet.querySelector('#ars-sel-all-row');
+  const applyBtn  = sheet.querySelector('#ars-apply-btn');
+  const errEl     = sheet.querySelector('#ars-err');
+  const doneEl    = sheet.querySelector('#ars-done');
+  const step1     = sheet.querySelector('#ars-step1');
+  const step2     = sheet.querySelector('#ars-step2');
+
+  // currentProposed is set by the Preview handler and read by the Apply handler.
+  // Both listeners are registered once; no stacking on Back → Preview cycles.
+  let currentProposed = [];
+
+  const updateApplyBtn = () => {
+    const n = listEl.querySelectorAll('.ars-pick-chk:checked').length;
+    applyBtn.textContent = `Apply to ${n} transaction${n !== 1 ? 's' : ''}`;
+    applyBtn.disabled    = n === 0;
+  };
+
+  listEl.addEventListener('change', updateApplyBtn);
+
+  sheet.querySelector('#ars-sel-all').addEventListener('change', e => {
+    listEl.querySelectorAll('.ars-pick-chk').forEach(cb => { cb.checked = e.target.checked; });
+    updateApplyBtn();
+  });
+
+  sheet.querySelector('#ars-back').addEventListener('click', () => {
+    step2.style.display  = 'none';
+    step1.style.display  = 'block';
+    applyBtn.style.display = '';
+    errEl.style.display  = 'none';
+  });
+
+  applyBtn.addEventListener('click', async () => {
+    const ids = new Set([...listEl.querySelectorAll('.ars-pick-chk:checked')].map(cb => cb.dataset.id));
+    if (!ids.size) return;
+    applyBtn.disabled    = true;
+    applyBtn.textContent = 'Applying…';
+    errEl.style.display  = 'none';
+    try {
+      const patch = {};
+      for (const { id, newCat } of currentProposed.filter(p => ids.has(p.id))) {
+        const bf = getCategoryBudgetFields(newCat);
+        patch[`transactions/${uid}/${id}/category`]       = newCat;
+        patch[`transactions/${uid}/${id}/group`]          = bf?.group   ?? null;
+        patch[`transactions/${uid}/${id}/isFixed`]        = bf?.isFixed ?? false;
+        patch[`transactions/${uid}/${id}/isAnnual`]       = bf?.isAnnual ?? false;
+        patch[`transactions/${uid}/${id}/categorySource`] = 'rule';
+        patch[`transactions/${uid}/${id}/needsReview`]    = false;
+      }
+      if (Object.keys(patch).length) await dbUpdate('', patch);
+      doneEl.textContent   = `✓ Updated ${ids.size} transaction${ids.size !== 1 ? 's' : ''}`;
+      doneEl.style.display = 'block';
+      applyBtn.style.display = 'none';
+      sheet.querySelector('#ars-back').style.display = 'none';
+      setTimeout(close, 2000);
+    } catch (err) {
+      errEl.textContent   = 'Something went wrong — please try again.';
+      errEl.style.display = 'block';
+      applyBtn.disabled    = false;
+      updateApplyBtn();
+    }
+  });
+
   sheet.querySelector('#ars-preview-btn').addEventListener('click', async () => {
     const dateVal  = sheet.querySelector('input[name="ars-d"]:checked')?.value ?? 'all';
     const scopeVal = sheet.querySelector('input[name="ars-s"]:checked')?.value ?? 'nonManual';
 
     let fromDate = null, toDate = null;
     if (dateVal === 'custom') {
-      fromDate = sheet.querySelector('#ars-from').value  || null;
-      toDate   = sheet.querySelector('#ars-to').value    || null;
+      fromDate = sheet.querySelector('#ars-from').value || null;
+      toDate   = sheet.querySelector('#ars-to').value   || null;
     } else if (dateVal !== 'all') {
       const d = new Date();
       d.setDate(d.getDate() - Number(dateVal));
@@ -750,37 +819,40 @@ function openApplySheet(uid, rules) {
     const candidates = Object.entries(txns ?? {}).filter(([, t]) => {
       if (fromDate && (t.date ?? '') < fromDate) return false;
       if (toDate   && (t.date ?? '') > toDate)   return false;
-      if (scopeVal === 'nonManual'     && t.categorySource === 'manual')                  return false;
-      if (scopeVal === 'uncategorized' && t.category && t.category !== 'uncategorized')   return false;
-      if (scopeVal === 'review'        && !t.needsReview)                                 return false;
+      if (scopeVal === 'nonManual'     && t.categorySource === 'manual')                return false;
+      if (scopeVal === 'uncategorized' && t.category && t.category !== 'uncategorized') return false;
+      if (scopeVal === 'review'        && !t.needsReview)                               return false;
       return true;
     });
 
-    const proposed = candidates
-      .map(([id, t]) => ({ id, txn: t, newCat: evaluateRules(t, rules) }))
-      .filter(p => p.newCat && p.newCat !== p.txn.category)
+    currentProposed = candidates
+      .map(([id, t]) => {
+        const match = evaluateRulesWithMatch(t, rules);
+        if (!match || match.categoryId === t.category) return null;
+        return { id, txn: t, newCat: match.categoryId, ruleId: match.ruleId, ruleName: match.ruleName };
+      })
+      .filter(Boolean)
       .sort((a, b) => (b.txn.date ?? '').localeCompare(a.txn.date ?? ''));
 
-    sheet.querySelector('#ars-step1').style.display = 'none';
-    const step2 = sheet.querySelector('#ars-step2');
-    step2.style.display = 'block';
+    step1.style.display  = 'none';
+    step2.style.display  = 'block';
+    doneEl.style.display = 'none';
+    errEl.style.display  = 'none';
+    applyBtn.style.display = '';
+    sheet.querySelector('#ars-back').style.display = '';
 
-    const hdrEl      = sheet.querySelector('#ars-pick-hdr');
-    const listEl     = sheet.querySelector('#ars-pick-list');
-    const selAllRow  = sheet.querySelector('#ars-sel-all-row');
-    const applyBtn   = sheet.querySelector('#ars-apply-btn');
-
-    if (!proposed.length) {
+    if (!currentProposed.length) {
       hdrEl.textContent      = 'No changes needed';
       listEl.innerHTML       = `<div class="ars-empty">All matching transactions are already correctly categorized.</div>`;
+      selAllRow.style.display = 'none';
       applyBtn.style.display = 'none';
       return;
     }
 
-    hdrEl.textContent        = `${proposed.length} transaction${proposed.length !== 1 ? 's' : ''} would be updated`;
-    selAllRow.style.display  = 'flex';
+    hdrEl.textContent       = `${currentProposed.length} transaction${currentProposed.length !== 1 ? 's' : ''} would be updated`;
+    selAllRow.style.display = 'flex';
 
-    listEl.innerHTML = proposed.map(({ id, txn, newCat }) => {
+    listEl.innerHTML = currentProposed.map(({ id, txn, newCat, ruleId, ruleName }) => {
       const cat    = getCategoryById(newCat);
       const oldCat = getCategoryById(txn.category);
       const label  = txn.merchantName ?? txn.description ?? 'Transaction';
@@ -790,52 +862,13 @@ function openApplySheet(uid, rules) {
           <div class="ars-pick-info">
             <div class="ars-pick-desc">${escHtml(label)}</div>
             <div class="ars-pick-meta">${txn.date ?? ''} · $${Math.abs(txn.amount ?? 0).toFixed(2)}</div>
+            <div class="ars-pick-rule">Rule: ${escHtml(ruleName)} <span class="auto-rule-id">#${ruleShortId(ruleId)}</span></div>
           </div>
-          <div class="ars-pick-arrow">${oldCat?.icon ?? '?'} → ${cat.icon} ${cat.name}</div>
+          <div class="ars-pick-arrow">${oldCat?.icon ?? '?'} → ${cat?.icon ?? ''} ${cat?.name ?? newCat}</div>
         </label>`;
     }).join('');
 
-    const updateApply = () => {
-      const n = listEl.querySelectorAll('.ars-pick-chk:checked').length;
-      applyBtn.textContent = `Apply to ${n} transaction${n !== 1 ? 's' : ''}`;
-      applyBtn.disabled    = n === 0;
-    };
-    listEl.addEventListener('change', updateApply);
-
-    sheet.querySelector('#ars-sel-all').addEventListener('change', e => {
-      listEl.querySelectorAll('.ars-pick-chk').forEach(cb => { cb.checked = e.target.checked; });
-      updateApply();
-    });
-    updateApply();
-
-    applyBtn.addEventListener('click', async () => {
-      const ids   = new Set([...listEl.querySelectorAll('.ars-pick-chk:checked')].map(cb => cb.dataset.id));
-      applyBtn.disabled    = true;
-      applyBtn.textContent = 'Applying…';
-      const patch = {};
-      for (const { id, newCat } of proposed.filter(p => ids.has(p.id))) {
-        const bf = getCategoryBudgetFields(newCat);
-        patch[`transactions/${uid}/${id}/category`]       = newCat;
-        patch[`transactions/${uid}/${id}/group`]          = bf.group;
-        patch[`transactions/${uid}/${id}/isFixed`]        = bf.isFixed;
-        patch[`transactions/${uid}/${id}/isAnnual`]       = bf.isAnnual;
-        patch[`transactions/${uid}/${id}/categorySource`] = 'rule';
-        patch[`transactions/${uid}/${id}/needsReview`]    = false;
-      }
-      if (Object.keys(patch).length) await dbUpdate('', patch);
-      const doneEl = sheet.querySelector('#ars-done');
-      doneEl.textContent   = `✓ Updated ${ids.size} transaction${ids.size !== 1 ? 's' : ''}`;
-      doneEl.style.display = 'block';
-      applyBtn.style.display = 'none';
-      sheet.querySelector('#ars-back').style.display = 'none';
-      setTimeout(close, 2000);
-    });
-
-    sheet.querySelector('#ars-back').addEventListener('click', () => {
-      step2.style.display = 'none';
-      sheet.querySelector('#ars-step1').style.display = 'block';
-      applyBtn.style.display = '';
-    });
+    updateApplyBtn();
   });
 }
 

@@ -1,5 +1,14 @@
 export const CHANGELOG = [
   {
+    version: '1.14.1',
+    date:    '2026-08-27',
+    changes: [
+      'Automation: each rule now shows a short ID (e.g. #a1b2c3d4) for easy reference.',
+      'Automation: the apply-rules handpick list now shows which rule triggered each proposed change.',
+      'Automation: fixed "stuck on Applying" — errors are now surfaced and the button recovers gracefully.',
+    ],
+  },
+  {
     version: '1.14.0',
     date:    '2026-08-27',
     changes: [
