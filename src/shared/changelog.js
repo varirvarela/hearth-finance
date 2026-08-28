@@ -1,5 +1,13 @@
 export const CHANGELOG = [
   {
+    version: '1.14.3',
+    date:    '2026-08-28',
+    changes: [
+      'Rules: merchant field now falls back to description when Plaid has no merchant name (fixes rules not firing for hotels, travel, and some retailers).',
+      'Rules: account name condition now works — account name is stamped on each synced transaction at import time.',
+    ],
+  },
+  {
     version: '1.14.2',
     date:    '2026-08-28',
     changes: [

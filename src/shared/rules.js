@@ -42,7 +42,7 @@ export function evaluateRulesWithMatch(transaction, rules) {
 function getFieldValue(txn, field) {
   switch (field) {
     case 'description':  return (txn.description  ?? '').toLowerCase();
-    case 'merchant':     return (txn.merchantName  ?? '').toLowerCase();
+    case 'merchant':     return (txn.merchantName ?? txn.description ?? '').toLowerCase();
     case 'accountName':  return (txn.accountName   ?? '').toLowerCase();
     case 'category':     return (txn.category      ?? '').toLowerCase();
     case 'notes':        return (txn.notes         ?? '').toLowerCase();

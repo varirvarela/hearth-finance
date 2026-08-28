@@ -70,6 +70,12 @@ export async function handleUserSync(env, uid, { startDate, endDate } = {}) {
     itemsSeen.get(account.plaidItemId).accountKeys.push(key);
   }
 
+  // Map Plaid account_id → display name for denormalizing onto each transaction.
+  const accountNameMap = {};
+  for (const [accountId, account] of Object.entries(accounts)) {
+    accountNameMap[accountId] = account.alias ?? account.name ?? '';
+  }
+
   const existing        = await fbGet(env, `transactions/${uid}`).catch(() => ({})) ?? {};
   const rules           = await fbGet(env, `rules/${uid}`).catch(() => ({})) ?? {};
   const merchantRules   = await fbGet(env, `merchantRules/${uid}`).catch(() => ({})) ?? {};
@@ -120,6 +126,7 @@ export async function handleUserSync(env, uid, { startDate, endDate } = {}) {
       if (existingPlaidIds.has(plaidTxn.transaction_id)) continue;
 
       const txn = normalizePlaidTransaction(plaidTxn, itemId);
+      txn.accountName = accountNameMap[plaidTxn.account_id] ?? '';
 
       const ruleCategory = evaluateRules(txn, rules);
       if (ruleCategory) {
