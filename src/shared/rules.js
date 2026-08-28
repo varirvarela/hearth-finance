@@ -31,6 +31,7 @@ function getFieldValue(txn, field) {
     case 'merchant':     return (txn.merchantName  ?? '').toLowerCase();
     case 'accountName':  return (txn.accountName   ?? '').toLowerCase();
     case 'category':     return (txn.category      ?? '').toLowerCase();
+    case 'notes':        return (txn.notes         ?? '').toLowerCase();
     case 'source':       return (txn.source ?? txn.categorySource ?? '').toLowerCase();
     case 'amount':       return txn.amount;
     default:             return null;

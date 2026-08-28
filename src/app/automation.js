@@ -1,6 +1,6 @@
 import { dbListen, dbSet, dbPush, dbRemove, dbUpdate, dbGet, auth, getHouseholdId } from '../shared/firebase.js';
 import { CATEGORIES, getCategoryById, getCategoryBudgetFields } from '../shared/categories.js';
-import { buildRule, evaluateRules } from '../shared/rules.js';
+import { buildRule, evaluateRules, matchesRule } from '../shared/rules.js';
 import { fmtCurrency } from '../shared/format.js';
 
 export function renderAutomation(container) {
@@ -63,7 +63,7 @@ export function renderAutomation(container) {
     renderRulesList(hid, allRules, searchQuery, selectedCatId);
   });
 
-  container.querySelector('#auto-apply-rules').addEventListener('click', () => applyAllRules(hid, allRules));
+  container.querySelector('#auto-apply-rules').addEventListener('click', () => openApplySheet(hid, allRules));
 
   dbListen(`rules/${hid}`, rules => {
     allRules = rules ?? {};
@@ -328,9 +328,10 @@ const RULE_FIELD_DEFS = {
   description: { label: 'description',   type: 'text',   ops: ['contains','notContains','startsWith','equals'] },
   merchant:    { label: 'merchant name', type: 'text',   ops: ['contains','notContains','startsWith','equals'] },
   accountName: { label: 'account name',  type: 'text',   ops: ['contains','notContains','startsWith','equals'] },
+  notes:       { label: 'notes',         type: 'text',   ops: ['contains','notContains','startsWith','equals'] },
   amount:      { label: 'amount ($)',    type: 'number', ops: ['gt','gte','lt','lte','equals'] },
-  category:    { label: 'category',     type: 'select', ops: ['equals','in'] },
-  source:      { label: 'source',       type: 'select', ops: ['equals','in'], options: ['plaid','manual','import','ai','rule'] },
+  category:    { label: 'category',     type: 'select', ops: ['in','equals'] },
+  source:      { label: 'source',       type: 'select', ops: ['in','equals'], options: ['plaid','manual','import','ai','rule'] },
 };
 
 const OP_EDITOR_LABELS = {
@@ -396,6 +397,11 @@ function openRuleEditor(uid, ruleId = null, prefill = null, prefillCatId = null)
       </div>
 
       <div class="rule-preview" id="re-preview"></div>
+
+      <button class="btn-secondary re-test-btn" type="button" style="width:100%;margin-top:0.5rem;font-size:0.82rem;padding:8px">
+        Preview matching transactions
+      </button>
+      <div class="re-test-results" id="re-test-results" style="display:none"></div>
 
       <div style="display:flex;gap:0.5rem;margin-top:1rem">
         <button class="btn-ghost modal-cancel" style="flex:1">Cancel</button>
@@ -471,6 +477,9 @@ function openRuleEditor(uid, ruleId = null, prefill = null, prefillCatId = null)
 
     wireCondEvents();
     updatePreview();
+    // Reset test results whenever conditions are re-rendered (field/op changed)
+    const testEl2 = modal.querySelector('#re-test-results');
+    if (testEl2) { testEl2.style.display = 'none'; testEl2.innerHTML = ''; }
   }
 
   function syncFromDom() {
@@ -605,50 +614,229 @@ function openRuleEditor(uid, ruleId = null, prefill = null, prefillCatId = null)
   modal.querySelector('.modal-cancel').addEventListener('click', () => modal.remove());
   modal.addEventListener('click', e => { if (e.target === modal) modal.remove(); });
 
+  // Preview matching transactions
+  modal.querySelector('.re-test-btn').addEventListener('click', async () => {
+    syncFromDom();
+    const btn    = modal.querySelector('.re-test-btn');
+    const testEl = modal.querySelector('#re-test-results');
+    btn.disabled    = true;
+    btn.textContent = 'Loading…';
+    testEl.style.display = 'block';
+    testEl.innerHTML     = '<div class="re-test-empty">Loading…</div>';
+    try {
+      const txns    = await dbGet(`transactions/${uid}`);
+      const all     = Object.entries(txns ?? {});
+      const fakeRule = { conditions, enabled: true, actionValue: '' };
+      const matches  = all
+        .filter(([, t]) => matchesRule(t, fakeRule))
+        .sort((a, b) => (b[1].date ?? '').localeCompare(a[1].date ?? ''));
+      if (!matches.length) {
+        testEl.innerHTML = '<div class="re-test-empty">No transactions match these conditions.</div>';
+      } else {
+        const shown = matches.slice(0, 8);
+        testEl.innerHTML = `
+          <div class="re-test-header">${matches.length} transaction${matches.length !== 1 ? 's' : ''} match</div>
+          ${shown.map(([, t]) => `
+            <div class="re-test-row">
+              <span class="re-test-desc">${escHtml(t.merchantName ?? t.description ?? '—')}</span>
+              <span class="re-test-meta">${t.date ?? ''} · $${Math.abs(t.amount ?? 0).toFixed(2)}</span>
+            </div>`).join('')}
+          ${matches.length > 8 ? `<div class="re-test-more">+ ${matches.length - 8} more</div>` : ''}
+        `;
+      }
+    } catch { testEl.innerHTML = '<div class="re-test-empty">Could not load transactions.</div>'; }
+    btn.disabled    = false;
+    btn.textContent = 'Preview matching transactions';
+  });
+
   renderConditions();
   condsEl.querySelector('.re-cond-val')?.focus();
 }
 
-async function applyAllRules(uid, rules) {
-  const btn = document.getElementById('auto-apply-rules');
-  if (!btn) return;
-  btn.disabled = true;
-  btn.textContent = 'Applying…';
+function openApplySheet(uid, rules) {
+  const sheet = document.createElement('div');
+  sheet.className = 'sheet-overlay';
+  sheet.innerHTML = `
+    <div class="sheet">
+      <div class="sheet-handle"></div>
+      <div class="sheet-hdr">
+        <span class="sheet-title">Apply Rules</span>
+        <button class="sheet-close" id="ars-x">✕</button>
+      </div>
+      <div class="ars-body">
 
-  const txns = await dbGet(`transactions/${uid}`);
-  if (!txns) {
-    btn.disabled = false;
-    btn.textContent = 'Re-apply all rules to transactions';
-    return;
-  }
+        <div id="ars-step1">
+          <div class="modal-label">Date range</div>
+          <div class="ars-radio-group">
+            <label class="ars-radio-opt"><input type="radio" name="ars-d" value="all" checked> All time</label>
+            <label class="ars-radio-opt"><input type="radio" name="ars-d" value="30"> Last 30 days</label>
+            <label class="ars-radio-opt"><input type="radio" name="ars-d" value="90"> Last 90 days</label>
+            <label class="ars-radio-opt"><input type="radio" name="ars-d" value="custom"> Custom range</label>
+          </div>
+          <div id="ars-custom" class="ars-custom-range" style="display:none">
+            <input type="date" id="ars-from" class="rule-editor-input" style="flex:1">
+            <span style="align-self:center;color:var(--muted)">to</span>
+            <input type="date" id="ars-to" class="rule-editor-input" style="flex:1">
+          </div>
 
-  const patch = {};
-  let count = 0;
+          <div class="modal-label" style="margin-top:1rem">Transactions to include</div>
+          <div class="ars-radio-group">
+            <label class="ars-radio-opt"><input type="radio" name="ars-s" value="nonManual" checked> All (skip manual)</label>
+            <label class="ars-radio-opt"><input type="radio" name="ars-s" value="uncategorized"> Uncategorized only</label>
+            <label class="ars-radio-opt"><input type="radio" name="ars-s" value="review"> Has AI suggestion (needs review)</label>
+          </div>
 
-  for (const [txnId, t] of Object.entries(txns)) {
-    if (t.categorySource === 'manual') continue;
-    const newCat = evaluateRules(t, rules);
-    if (!newCat || newCat === t.category) continue;
-    const bf = getCategoryBudgetFields(newCat);
-    patch[`transactions/${uid}/${txnId}/category`]       = newCat;
-    patch[`transactions/${uid}/${txnId}/group`]          = bf.group;
-    patch[`transactions/${uid}/${txnId}/isFixed`]        = bf.isFixed;
-    patch[`transactions/${uid}/${txnId}/isAnnual`]       = bf.isAnnual;
-    patch[`transactions/${uid}/${txnId}/categorySource`] = 'rule';
-    patch[`transactions/${uid}/${txnId}/needsReview`]    = false;
-    count++;
-  }
+          <div style="display:flex;gap:0.5rem;margin-top:1.5rem">
+            <button class="btn-ghost" id="ars-cancel" style="flex:1">Cancel</button>
+            <button class="btn-primary" id="ars-preview-btn" style="flex:1">Preview →</button>
+          </div>
+        </div>
 
-  if (count > 0) await dbUpdate('', patch);
+        <div id="ars-step2" style="display:none">
+          <div id="ars-pick-hdr" class="modal-label" style="margin-bottom:0.5rem"></div>
+          <div id="ars-pick-list" class="ars-pick-list"></div>
+          <label class="ars-select-all-row" id="ars-sel-all-row" style="display:none">
+            <input type="checkbox" id="ars-sel-all" checked>
+            <span>Select / deselect all</span>
+          </label>
+          <div style="display:flex;gap:0.5rem;margin-top:1rem">
+            <button class="btn-ghost" id="ars-back" style="flex:1">← Back</button>
+            <button class="btn-primary" id="ars-apply-btn" style="flex:1" disabled>Apply</button>
+          </div>
+          <div id="ars-done" style="display:none;text-align:center;padding:1rem;color:var(--brand);font-weight:600"></div>
+        </div>
 
-  btn.disabled = false;
-  btn.textContent = count > 0
-    ? `Updated ${count} transaction${count !== 1 ? 's' : ''} ✓`
-    : 'No changes needed';
-  setTimeout(() => {
-    const b = document.getElementById('auto-apply-rules');
-    if (b) b.textContent = 'Re-apply all rules to transactions';
-  }, 4000);
+      </div>
+    </div>
+  `;
+  document.body.appendChild(sheet);
+  requestAnimationFrame(() => sheet.classList.add('open'));
+
+  const close = () => { sheet.classList.remove('open'); setTimeout(() => sheet.remove(), 260); };
+  sheet.querySelector('#ars-x').addEventListener('click', close);
+  sheet.querySelector('#ars-cancel').addEventListener('click', close);
+  sheet.addEventListener('click', e => { if (e.target === sheet) close(); });
+
+  sheet.querySelectorAll('input[name="ars-d"]').forEach(r => {
+    r.addEventListener('change', () => {
+      sheet.querySelector('#ars-custom').style.display =
+        sheet.querySelector('input[name="ars-d"]:checked')?.value === 'custom' ? 'flex' : 'none';
+    });
+  });
+
+  sheet.querySelector('#ars-preview-btn').addEventListener('click', async () => {
+    const dateVal  = sheet.querySelector('input[name="ars-d"]:checked')?.value ?? 'all';
+    const scopeVal = sheet.querySelector('input[name="ars-s"]:checked')?.value ?? 'nonManual';
+
+    let fromDate = null, toDate = null;
+    if (dateVal === 'custom') {
+      fromDate = sheet.querySelector('#ars-from').value  || null;
+      toDate   = sheet.querySelector('#ars-to').value    || null;
+    } else if (dateVal !== 'all') {
+      const d = new Date();
+      d.setDate(d.getDate() - Number(dateVal));
+      fromDate = d.toISOString().slice(0, 10);
+    }
+
+    const previewBtn = sheet.querySelector('#ars-preview-btn');
+    previewBtn.disabled    = true;
+    previewBtn.textContent = 'Loading…';
+
+    let txns;
+    try { txns = await dbGet(`transactions/${uid}`); } catch { txns = null; }
+    previewBtn.disabled    = false;
+    previewBtn.textContent = 'Preview →';
+
+    const candidates = Object.entries(txns ?? {}).filter(([, t]) => {
+      if (fromDate && (t.date ?? '') < fromDate) return false;
+      if (toDate   && (t.date ?? '') > toDate)   return false;
+      if (scopeVal === 'nonManual'     && t.categorySource === 'manual')                  return false;
+      if (scopeVal === 'uncategorized' && t.category && t.category !== 'uncategorized')   return false;
+      if (scopeVal === 'review'        && !t.needsReview)                                 return false;
+      return true;
+    });
+
+    const proposed = candidates
+      .map(([id, t]) => ({ id, txn: t, newCat: evaluateRules(t, rules) }))
+      .filter(p => p.newCat && p.newCat !== p.txn.category)
+      .sort((a, b) => (b.txn.date ?? '').localeCompare(a.txn.date ?? ''));
+
+    sheet.querySelector('#ars-step1').style.display = 'none';
+    const step2 = sheet.querySelector('#ars-step2');
+    step2.style.display = 'block';
+
+    const hdrEl      = sheet.querySelector('#ars-pick-hdr');
+    const listEl     = sheet.querySelector('#ars-pick-list');
+    const selAllRow  = sheet.querySelector('#ars-sel-all-row');
+    const applyBtn   = sheet.querySelector('#ars-apply-btn');
+
+    if (!proposed.length) {
+      hdrEl.textContent      = 'No changes needed';
+      listEl.innerHTML       = `<div class="ars-empty">All matching transactions are already correctly categorized.</div>`;
+      applyBtn.style.display = 'none';
+      return;
+    }
+
+    hdrEl.textContent        = `${proposed.length} transaction${proposed.length !== 1 ? 's' : ''} would be updated`;
+    selAllRow.style.display  = 'flex';
+
+    listEl.innerHTML = proposed.map(({ id, txn, newCat }) => {
+      const cat    = getCategoryById(newCat);
+      const oldCat = getCategoryById(txn.category);
+      const label  = txn.merchantName ?? txn.description ?? 'Transaction';
+      return `
+        <label class="ars-pick-row">
+          <input type="checkbox" class="ars-pick-chk" data-id="${id}" checked>
+          <div class="ars-pick-info">
+            <div class="ars-pick-desc">${escHtml(label)}</div>
+            <div class="ars-pick-meta">${txn.date ?? ''} · $${Math.abs(txn.amount ?? 0).toFixed(2)}</div>
+          </div>
+          <div class="ars-pick-arrow">${oldCat?.icon ?? '?'} → ${cat.icon} ${cat.name}</div>
+        </label>`;
+    }).join('');
+
+    const updateApply = () => {
+      const n = listEl.querySelectorAll('.ars-pick-chk:checked').length;
+      applyBtn.textContent = `Apply to ${n} transaction${n !== 1 ? 's' : ''}`;
+      applyBtn.disabled    = n === 0;
+    };
+    listEl.addEventListener('change', updateApply);
+
+    sheet.querySelector('#ars-sel-all').addEventListener('change', e => {
+      listEl.querySelectorAll('.ars-pick-chk').forEach(cb => { cb.checked = e.target.checked; });
+      updateApply();
+    });
+    updateApply();
+
+    applyBtn.addEventListener('click', async () => {
+      const ids   = new Set([...listEl.querySelectorAll('.ars-pick-chk:checked')].map(cb => cb.dataset.id));
+      applyBtn.disabled    = true;
+      applyBtn.textContent = 'Applying…';
+      const patch = {};
+      for (const { id, newCat } of proposed.filter(p => ids.has(p.id))) {
+        const bf = getCategoryBudgetFields(newCat);
+        patch[`transactions/${uid}/${id}/category`]       = newCat;
+        patch[`transactions/${uid}/${id}/group`]          = bf.group;
+        patch[`transactions/${uid}/${id}/isFixed`]        = bf.isFixed;
+        patch[`transactions/${uid}/${id}/isAnnual`]       = bf.isAnnual;
+        patch[`transactions/${uid}/${id}/categorySource`] = 'rule';
+        patch[`transactions/${uid}/${id}/needsReview`]    = false;
+      }
+      if (Object.keys(patch).length) await dbUpdate('', patch);
+      const doneEl = sheet.querySelector('#ars-done');
+      doneEl.textContent   = `✓ Updated ${ids.size} transaction${ids.size !== 1 ? 's' : ''}`;
+      doneEl.style.display = 'block';
+      applyBtn.style.display = 'none';
+      sheet.querySelector('#ars-back').style.display = 'none';
+      setTimeout(close, 2000);
+    });
+
+    sheet.querySelector('#ars-back').addEventListener('click', () => {
+      step2.style.display = 'none';
+      sheet.querySelector('#ars-step1').style.display = 'block';
+      applyBtn.style.display = '';
+    });
+  });
 }
 
 function populateMonthSelect() {

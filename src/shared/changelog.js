@@ -1,5 +1,14 @@
 export const CHANGELOG = [
   {
+    version: '1.14.0',
+    date:    '2026-08-27',
+    changes: [
+      'Automation: "Preview matching transactions" button in the rule editor shows which transactions would be affected before saving.',
+      'Automation: "Apply Rules" now opens a guided sheet — choose a date range (all time, last 30/90 days, or custom), scope (all, uncategorized only, or needs-review), then hand-pick exactly which transactions to update.',
+      'Automation: notes field is now available as a rule condition.',
+    ],
+  },
+  {
     version: '1.13.0',
     date:    '2026-08-27',
     changes: [

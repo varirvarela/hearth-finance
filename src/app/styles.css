@@ -2455,6 +2455,128 @@ button:active  { opacity: 0.7; transform: scale(0.97); }
   letter-spacing: 0.05em;
 }
 
+/* Rule editor — preview test results */
+.re-test-list {
+  margin-top: 0.5rem;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.re-test-item {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 6px 8px;
+  background: var(--surface2);
+  border-radius: 8px;
+  font-size: 0.8rem;
+}
+.re-test-desc {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.re-test-meta {
+  color: var(--muted);
+  font-size: 0.75rem;
+  white-space: nowrap;
+}
+.re-test-more {
+  font-size: 0.78rem;
+  color: var(--muted);
+  text-align: center;
+  padding: 4px 0;
+}
+.re-test-empty {
+  font-size: 0.82rem;
+  color: var(--muted);
+  padding: 8px 0;
+  text-align: center;
+}
+
+/* Apply sheet (ars) */
+.ars-body {
+  padding: 1rem;
+  overflow-y: auto;
+  flex: 1;
+}
+.ars-radio-group {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  margin-top: 0.35rem;
+}
+.ars-radio-opt {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.9rem;
+  cursor: pointer;
+  padding: 6px 10px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+}
+.ars-radio-opt:has(input:checked) {
+  background: var(--brand-xl);
+  border-color: var(--brand);
+}
+.ars-radio-opt input[type=radio] { accent-color: var(--brand); }
+.ars-custom-range {
+  display: flex;
+  gap: 0.5rem;
+  margin-top: 0.5rem;
+}
+.ars-pick-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  max-height: 42vh;
+  overflow-y: auto;
+}
+.ars-pick-row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 8px 10px;
+  background: var(--surface2);
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 0.85rem;
+}
+.ars-pick-row:has(input:checked) { background: var(--brand-xl); }
+.ars-pick-row input[type=checkbox] { accent-color: var(--brand); flex-shrink: 0; }
+.ars-pick-info { flex: 1; min-width: 0; }
+.ars-pick-desc {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: 500;
+}
+.ars-pick-meta { font-size: 0.75rem; color: var(--muted); }
+.ars-pick-arrow {
+  font-size: 0.78rem;
+  color: var(--muted);
+  white-space: nowrap;
+  padding-left: 0.25rem;
+}
+.ars-select-all-row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.85rem;
+  color: var(--muted);
+  padding: 6px 2px 0;
+  cursor: pointer;
+}
+.ars-select-all-row input { accent-color: var(--brand); }
+.ars-empty {
+  font-size: 0.85rem;
+  color: var(--muted);
+  text-align: center;
+  padding: 1.5rem 0;
+}
+
 /* Automation empty state */
 .auto-empty {
   text-align: center;
