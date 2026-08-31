@@ -20,8 +20,8 @@ const st = (overrides = {}) => ({ ...blankState(), ...overrides });
 // ── blankState ──────────────────────────────────────────────────────────────
 
 describe('blankState', () => {
-  it('hides transfers by default', () => {
-    expect(blankState().hideTransfers).toBe(true);
+  it('shows transfers by default', () => {
+    expect(blankState().hideTransfers).toBe(false);
   });
   it('dateMode defaults to all', () => {
     expect(blankState().dateMode).toBe('all');
@@ -77,18 +77,18 @@ describe('needsReview', () => {
 describe('applyFilters — hideTransfers', () => {
   it('excludes isTransfer:true when hideTransfers is on', () => {
     const txns = [tx('a', { isTransfer: true }), tx('b')];
-    const result = applyFilters(txns, st());
+    const result = applyFilters(txns, st({ hideTransfers: true }));
     expect(result).toHaveLength(1);
     expect(result[0][0]).toBe('b');
   });
   it('excludes group:"transfer" when hideTransfers is on (Tiller imports)', () => {
     const txns = [tx('a', { group: 'transfer', isTransfer: false }), tx('b')];
-    const result = applyFilters(txns, st());
+    const result = applyFilters(txns, st({ hideTransfers: true }));
     expect(result).toHaveLength(1);
     expect(result[0][0]).toBe('b');
   });
   it('excludes transactions with both flags set', () => {
-    expect(applyFilters([tx('a', { isTransfer: true, group: 'transfer' })], st())).toHaveLength(0);
+    expect(applyFilters([tx('a', { isTransfer: true, group: 'transfer' })], st({ hideTransfers: true }))).toHaveLength(0);
   });
   it('allows transfers through when hideTransfers is false', () => {
     const txns = [tx('a', { isTransfer: true }), tx('b', { group: 'transfer' })];
@@ -96,7 +96,7 @@ describe('applyFilters — hideTransfers', () => {
   });
   it('keeps non-transfer transactions when hideTransfers is on', () => {
     const txns = [tx('a'), tx('b', { amount: -100 })];
-    expect(applyFilters(txns, st())).toHaveLength(2);
+    expect(applyFilters(txns, st({ hideTransfers: true }))).toHaveLength(2);
   });
 });
 
