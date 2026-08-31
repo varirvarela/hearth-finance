@@ -1,5 +1,12 @@
 export const CHANGELOG = [
   {
+    version: '1.16.2',
+    date:    '2026-08-31',
+    changes: [
+      'Automation: new rule editor now has a "Save & Apply to past transactions" button that saves the rule and immediately opens the apply sheet.',
+    ],
+  },
+  {
     version: '1.16.1',
     date:    '2026-08-31',
     changes: [

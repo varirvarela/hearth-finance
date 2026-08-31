@@ -422,9 +422,10 @@ export function openRuleEditor(uid, ruleId = null, prefill = null, prefillCatId 
       </button>
       <div class="re-test-results" id="re-test-results" style="display:none"></div>
 
-      <div style="display:flex;gap:0.5rem;margin-top:1rem">
+      <div style="display:flex;gap:0.5rem;margin-top:1rem;flex-wrap:wrap">
         <button class="btn-ghost modal-cancel" style="flex:1">Cancel</button>
         <button class="btn-primary modal-save" style="flex:1">${isEdit ? 'Save Changes' : 'Save Rule'} →</button>
+        ${!isEdit ? `<button class="btn-secondary modal-save-apply" style="flex-basis:100%;margin-top:0.25rem;font-size:0.82rem">Save &amp; Apply to past transactions →</button>` : ''}
       </div>
     </div>
   `;
@@ -602,15 +603,12 @@ export function openRuleEditor(uid, ruleId = null, prefill = null, prefillCatId 
     });
   });
 
-  modal.querySelector('.modal-save').addEventListener('click', async () => {
+  async function doSave() {
     syncFromDom();
     const invalid = conditions.some(c =>
       Array.isArray(c.value) ? c.value.length === 0 : !String(c.value ?? '').trim()
     );
-    if (invalid) {
-      alert('Please fill in all condition values.');
-      return;
-    }
+    if (invalid) { alert('Please fill in all condition values.'); return null; }
 
     const priority = priAutoEl.checked ? 30 : Math.max(1, Math.min(100, parseInt(priValEl.value, 10) || 30));
     const catId    = catEl.value;
@@ -622,12 +620,26 @@ export function openRuleEditor(uid, ruleId = null, prefill = null, prefillCatId 
 
     const rule = buildRule({ conditions, categoryId: catId, name, priority });
 
+    let savedId = ruleId;
     if (isEdit) {
-      await dbSet(`rules/${uid}/${ruleId}`, { ...rule, createdAt: prefill.createdAt ?? Date.now() });
+      await dbSet(`rules/${uid}/${ruleId}`, { ...rule, createdAt: prefill?.createdAt ?? Date.now() });
     } else {
-      await dbPush(`rules/${uid}`, rule);
+      const ref = await dbPush(`rules/${uid}`, rule);
+      savedId = ref.key;
     }
+    return { id: savedId, rule };
+  }
+
+  modal.querySelector('.modal-save').addEventListener('click', async () => {
+    const result = await doSave();
+    if (result) modal.remove();
+  });
+
+  modal.querySelector('.modal-save-apply')?.addEventListener('click', async () => {
+    const result = await doSave();
+    if (!result) return;
     modal.remove();
+    openApplySheet(uid, { [result.id]: result.rule }, { singleRule: { id: result.id, rule: result.rule } });
   });
 
   modal.querySelector('.modal-cancel').addEventListener('click', () => modal.remove());
