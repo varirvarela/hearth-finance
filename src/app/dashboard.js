@@ -310,9 +310,8 @@ export function renderDashboard(container) {
       vsPrevEl.textContent = '—'; vsPrevEl.style.color = ''; vsPrevSub.textContent = 'no prior data';
     }
 
-    // hide alert and bars for annual — show pace bar instead
+    // hide alert for annual — show pace bar + category breakdown
     container.querySelector('#dash-alert').style.display = 'none';
-    container.querySelector('#spend-section').style.display = 'none';
     container.querySelector('#dash-review-cta').style.display = 'none';
 
     const paceSection = container.querySelector('#pace-annual-section');
@@ -333,6 +332,14 @@ export function renderDashboard(container) {
     } else {
       paceSection.style.display = 'none';
     }
+
+    // category breakdown for the year
+    container.querySelector('#spend-section').style.display = '';
+    container.querySelector('#spend-section-label').textContent = `Category Breakdown — ${selYear}`;
+    const annualBudgets = Object.fromEntries(
+      Object.entries(latestBudgets ?? {}).map(([k, v]) => [k, { monthly: (v.monthly ?? 0) * 12 }])
+    );
+    renderSpendBars(container, expenses, annualBudgets, pacePct, selYear, selMonth, true);
 
     renderTrendChart(container, allTxns, selYear, selMonth, 'annual');
     renderRecentTxns(container, allTxns);
@@ -376,7 +383,7 @@ function renderAlert(container, spent, totalBudget, pacePct, reviewCount, allTxn
 }
 
 // ── Category spend-vs-budget bars ────────────────────────
-function renderSpendBars(container, expenses, budgets, pacePct, selYear, selMonth) {
+function renderSpendBars(container, expenses, budgets, pacePct, selYear, selMonth, includeAnnual = false) {
   const barsEl = container.querySelector('#spend-bars');
   if (!barsEl) return;
 
@@ -394,7 +401,7 @@ function renderSpendBars(container, expenses, budgets, pacePct, selYear, selMont
     const limit = budgets[leaf.id]?.monthly ?? 0;
     const catSpent = spentByCat[leaf.id] ?? 0;
     if (!limit && !catSpent) continue;
-    if (leaf.isAnnual) continue; // annual cats excluded from monthly pace
+    if (leaf.isAnnual && !includeAnnual) continue; // annual cats excluded from monthly pace
     seen.add(leaf.id);
     rows.push({ cat: leaf, spent: catSpent, limit });
   }
@@ -403,7 +410,8 @@ function renderSpendBars(container, expenses, budgets, pacePct, selYear, selMont
   for (const [catId, amt] of Object.entries(spentByCat)) {
     if (seen.has(catId)) continue;
     const cat = getCategoryById(catId);
-    if (cat.isIncome || cat.id === 'transfer' || cat.isAnnual) continue;
+    if (cat.isIncome || cat.id === 'transfer') continue;
+    if (cat.isAnnual && !includeAnnual) continue;
     rows.push({ cat, spent: amt, limit: 0 });
   }
 

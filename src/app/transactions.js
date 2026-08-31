@@ -1192,16 +1192,22 @@ function renderPage(filtered, state, uid, refresh, accountMap) {
 
         // ── Create rule from transaction ──
         detail.querySelector('.btn-create-rule')?.addEventListener('click', () => {
-          const prefill = {
-            conditions: [{
-              field: t.merchantName ? 'merchant' : 'description',
-              op:    'contains',
-              value: (t.merchantName ?? t.description ?? '').trim(),
-            }],
-            actionValue: (t.category && t.category !== 'uncategorized') ? t.category : null,
-            priority: 50,
-          };
-          openRuleEditor(uid, null, prefill, prefill.actionValue);
+          const conditions = [];
+          if (t.merchantName?.trim())
+            conditions.push({ field: 'merchant',     op: 'contains', value: t.merchantName.trim() });
+          if (t.description?.trim())
+            conditions.push({ field: 'description',  op: 'contains', value: t.description.trim() });
+          if (t.accountName?.trim())
+            conditions.push({ field: 'accountName',  op: 'equals',   value: t.accountName.trim() });
+          if (!conditions.length)
+            conditions.push({ field: 'description',  op: 'contains', value: '' });
+
+          const aiSug   = _aiSugCache.get(id);
+          const sugCatId = aiSug?.catId && aiSug.catId !== 'uncategorized' ? aiSug.catId : null;
+          const catId    = (t.category && t.category !== 'uncategorized') ? t.category : sugCatId;
+
+          const prefill = { conditions, actionValue: catId, priority: 50 };
+          openRuleEditor(uid, null, prefill, catId);
         });
       }
     });

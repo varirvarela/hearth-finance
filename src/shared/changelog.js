@@ -1,5 +1,15 @@
 export const CHANGELOG = [
   {
+    version: '1.16.1',
+    date:    '2026-08-31',
+    changes: [
+      'Transactions: expanding a suggestion strip no longer overlaps buttons — they wrap below the full-width text.',
+      'Transactions: "Create rule" now pre-fills merchant, description, and account name as separate conditions (remove what you don\'t need).',
+      'Transactions: "Create rule" pre-selects the AI-suggested category when the transaction has no confirmed category.',
+      'Dashboard: annual view now shows a full category spend breakdown (with annual budgets) below the pace bar.',
+    ],
+  },
+  {
     version: '1.16.0',
     date:    '2026-08-31',
     changes: [
