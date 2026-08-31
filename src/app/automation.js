@@ -365,7 +365,7 @@ const OP_EDITOR_LABELS = {
   in:          'is one of',
 };
 
-function openRuleEditor(uid, ruleId = null, prefill = null, prefillCatId = null) {
+export function openRuleEditor(uid, ruleId = null, prefill = null, prefillCatId = null) {
   const isEdit  = ruleId != null;
   const expCats = CATEGORIES.filter(c => !c.isIncome && c.id !== 'transfer' && c.parent);
 

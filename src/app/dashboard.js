@@ -242,6 +242,10 @@ export function renderDashboard(container) {
     // alert banner
     renderAlert(container, spent, totalBudget, pacePct, reviewCount, allTxns, monthStr, latestBudgets);
 
+    // restore spend-section visibility (may have been hidden by renderAnnual)
+    container.querySelector('#spend-section').style.display = '';
+    container.querySelector('#pace-annual-section').style.display = 'none';
+
     // spend vs budget bars
     container.querySelector('#spend-section-label').textContent =
       `Spend vs Budget — Day ${paceDay} of ${daysInMonth} · ${pacePct}% pace`;

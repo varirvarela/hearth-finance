@@ -15,7 +15,7 @@ export function blankState() {
     sources:       [],
     review:        false,
     pending:       false,
-    hideTransfers: true,
+    hideTransfers: false,
     page:          0,
   };
 }

@@ -9,6 +9,7 @@ import {
 } from '../shared/categories.js';
 import { blankState, needsReview, applyFilters, countActive, normalizeSource, findDuplicates } from '../shared/filter-utils.js';
 import { buildRule, evaluateRules } from '../shared/rules.js';
+import { openRuleEditor } from './automation.js';
 import { normalizeMerchant } from '../shared/normalize-merchant.js';
 
 const PAGE_SIZE = 100;
@@ -124,6 +125,12 @@ export function renderTransactions(container) {
       }
       .btn-ai-suggest:hover { opacity: 1; }
       .btn-ai-suggest:disabled { opacity: 0.45; cursor: default; }
+      .btn-create-rule {
+        font-size: 0.8rem; background: none; border: 1.5px solid var(--muted);
+        color: var(--muted); border-radius: 8px; padding: 4px 12px;
+        cursor: pointer; opacity: 0.75; transition: opacity 0.15s;
+      }
+      .btn-create-rule:hover { opacity: 1; color: var(--text); border-color: var(--text); }
       .detail-ai-result {
         flex-basis: 100%; display: flex; align-items: center; gap: 0.6rem;
         flex-wrap: wrap; font-size: 0.82rem; padding-top: 4px;
@@ -974,11 +981,12 @@ function renderPage(filtered, state, uid, refresh, accountMap) {
     });
   });
 
-  // ── Tap category name to expand full lineage ──
-  el.querySelectorAll('.sug-cat').forEach(catEl => {
-    catEl.addEventListener('click', e => {
+  // ── Tap anywhere on the suggestion strip (except buttons) to expand full category lineage ──
+  el.querySelectorAll('.sug-strip').forEach(strip => {
+    strip.addEventListener('click', e => {
+      if (e.target.closest('button')) return;
       e.stopPropagation();
-      catEl.classList.toggle('sug-cat-expanded');
+      strip.querySelector('.sug-cat')?.classList.toggle('sug-cat-expanded');
     });
   });
 
@@ -1051,6 +1059,7 @@ function renderPage(filtered, state, uid, refresh, accountMap) {
             <button class="btn-delete-cancel">Cancel</button>
           </div>
           <button class="btn-ai-suggest">✦ Ask AI</button>
+          <button class="btn-create-rule">+ Create rule</button>
           <div class="detail-ai-result" hidden></div>
         </div>` : ''}
       `;
@@ -1179,6 +1188,20 @@ function renderPage(filtered, state, uid, refresh, accountMap) {
             aiBtn.disabled = false;
             aiBtn.textContent = '✦ Ask AI';
           }
+        });
+
+        // ── Create rule from transaction ──
+        detail.querySelector('.btn-create-rule')?.addEventListener('click', () => {
+          const prefill = {
+            conditions: [{
+              field: t.merchantName ? 'merchant' : 'description',
+              op:    'contains',
+              value: (t.merchantName ?? t.description ?? '').trim(),
+            }],
+            actionValue: (t.category && t.category !== 'uncategorized') ? t.category : null,
+            priority: 50,
+          };
+          openRuleEditor(uid, null, prefill, prefill.actionValue);
         });
       }
     });

@@ -1,5 +1,15 @@
 export const CHANGELOG = [
   {
+    version: '1.16.0',
+    date:    '2026-08-31',
+    changes: [
+      'Transactions: tap anywhere on the suggestion strip (including the justification text) to expand the category recommendation.',
+      'Transactions: new "Create rule" button in the transaction detail panel — opens the rule editor pre-filled with the transaction\'s merchant/description and current category.',
+      'Dashboard: category spend breakdown no longer disappears after switching between monthly and annual views.',
+      'Transactions: "Hide transfers" filter is now unchecked by default.',
+    ],
+  },
+  {
     version: '1.15.0',
     date:    '2026-08-28',
     changes: [
