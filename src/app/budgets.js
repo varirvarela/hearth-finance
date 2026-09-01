@@ -8,12 +8,13 @@ let _budgetGroupId = null;
 let _budgetCatId   = null;
 
 // ── Annual cascading tile state ───────────────────────────
-let _annualLevel      = 1;
-let _annualGroupId    = null;
-let _annualCatId      = null;
-let _showHiddenAnnual = false;
-let _budgetDetailPage = 0;
-const BUD_DETAIL_PAGE = 15;
+let _annualLevel             = 1;
+let _annualGroupId           = null;
+let _annualCatId             = null;
+let _showHiddenAnnual        = false;
+let _annualUncategorizedSpend = 0;
+let _budgetDetailPage        = 0;
+const BUD_DETAIL_PAGE        = 15;
 
 export function renderBudgets(container) {
   const now = new Date();
@@ -469,10 +470,22 @@ function renderBudgetAnnual(uid, budgets, txns, year) {
     if (data?.monthly > 0) totalAnnualBudget += data.monthly * 12;
   }
 
-  // Spent total: only expense leaf categories (matches what tiles show)
+  // Uncategorized spend: transactions not in any expense leaf (root-level, uncategorized, unknown)
+  let uncatSpend = 0;
+  for (const t of Object.values(txns)) {
+    if (!t.date?.startsWith(yearStr) || t.amount <= 0 || t.ignored || t.isTransfer || t.group === 'transfer') continue;
+    const m = parseInt(t.date.slice(5, 7), 10);
+    if (m > maxMonth) continue;
+    const cat = getCategoryById(t.category);
+    if (cat.isIncome || cat.id === 'transfer' || cat.parent === 'transfer') continue;
+    if (!cat.parent) uncatSpend += t.amount;
+  }
+  _annualUncategorizedSpend = uncatSpend;
+
+  // Spent total: leaf categories + uncategorized
   const totalSpent = expenseLeaves
     .filter(l => !l.hide || _showHiddenAnnual)
-    .reduce((s, l) => s + (spentByCat[l.id] ?? 0), 0);
+    .reduce((s, l) => s + (spentByCat[l.id] ?? 0), 0) + uncatSpend;
 
   const annualRemaining = totalAnnualBudget - totalSpent;
   summaryEl.innerHTML = `
@@ -507,13 +520,22 @@ function renderBudgetAnnual(uid, budgets, txns, year) {
 function renderAnnualNav(listEl, rootCats, rootMap, budgets, spentByCat, txns, pacePct, year) {
   let bcHtml = '';
   if (_annualLevel >= 2) {
+    const isUncatDirect = _annualLevel === 3 && _annualCatId === '__uncategorized__' && !_annualGroupId;
     const grp = rootCats.find(r => r.id === _annualGroupId);
-    bcHtml = `<div class="bud-breadcrumb">
-      <span class="bud-bc-link" data-level="1">All groups</span>
-      <span class="bud-bc-sep">›</span>
-      <span class="${_annualLevel === 2 ? 'bud-bc-current' : 'bud-bc-link'}" data-level="2">${grp?.icon ?? ''} ${grp?.name ?? ''}</span>
-      ${_annualLevel === 3 ? `<span class="bud-bc-sep">›</span><span class="bud-bc-current">${getCatName(_annualCatId)}</span>` : ''}
-    </div>`;
+    if (isUncatDirect) {
+      bcHtml = `<div class="bud-breadcrumb">
+        <span class="bud-bc-link" data-level="1">All groups</span>
+        <span class="bud-bc-sep">›</span>
+        <span class="bud-bc-current">❓ Uncategorized</span>
+      </div>`;
+    } else {
+      bcHtml = `<div class="bud-breadcrumb">
+        <span class="bud-bc-link" data-level="1">All groups</span>
+        <span class="bud-bc-sep">›</span>
+        <span class="${_annualLevel === 2 ? 'bud-bc-current' : 'bud-bc-link'}" data-level="2">${grp?.icon ?? ''} ${grp?.name ?? ''}</span>
+        ${_annualLevel === 3 ? `<span class="bud-bc-sep">›</span><span class="bud-bc-current">${getCatName(_annualCatId)}</span>` : ''}
+      </div>`;
+    }
   }
 
   listEl.innerHTML = bcHtml + '<div id="bud-annual-level-content"></div>';
@@ -568,7 +590,22 @@ function renderAnnualGroupTiles(el, rootCats, rootMap, budgets, spentByCat, list
     </div>`;
   }).join('');
 
-  el.innerHTML = `<div class="bud-group-tiles-grid">${tiles || '<p class="empty">No budgets set this year.</p>'}</div>`;
+  const uncatTile = _annualUncategorizedSpend > 0 ? `
+    <div class="bud-group-tile zero bud-uncat-tile" data-group="__uncategorized__" style="cursor:pointer">
+      <div class="bud-tile-hdr">
+        <span class="bud-tile-icon">❓</span>
+      </div>
+      <div class="bud-tile-name">Uncategorized</div>
+      <div class="bud-tile-amounts">
+        <span class="bud-tile-spent" style="color:#ef4444">${fmtCurrency(_annualUncategorizedSpend)}</span>
+      </div>
+      <div class="bud-tile-footer">
+        <span class="bud-tile-pct" style="color:#ef4444">needs review</span>
+        <span class="bud-tile-arrow">›</span>
+      </div>
+    </div>` : '';
+
+  el.innerHTML = `<div class="bud-group-tiles-grid">${tiles}${uncatTile}${!tiles && !uncatTile ? '<p class="empty">No spending this year.</p>' : ''}</div>`;
 
   el.querySelectorAll('.bud-tile-edit-btn').forEach(btn => {
     btn.addEventListener('click', e => {
@@ -580,8 +617,14 @@ function renderAnnualGroupTiles(el, rootCats, rootMap, budgets, spentByCat, list
 
   el.querySelectorAll('.bud-group-tile').forEach(tile => {
     tile.addEventListener('click', () => {
-      _annualLevel   = 2;
-      _annualGroupId = tile.dataset.group;
+      if (tile.dataset.group === '__uncategorized__') {
+        _annualLevel = 3;
+        _annualCatId = '__uncategorized__';
+        _budgetDetailPage = 0;
+      } else {
+        _annualLevel   = 2;
+        _annualGroupId = tile.dataset.group;
+      }
       renderAnnualNav(listEl, allRoots, rootMap, budgets, spentByCat, txns, pacePct, year);
     });
   });
@@ -654,6 +697,62 @@ function renderAnnualCategoryTiles(el, groupId, rootMap, budgets, spentByCat, li
 }
 
 function renderAnnualCategoryDetail(el, catId, budgets, spentByCat, txns, year) {
+  // Special case: uncategorized transactions
+  if (catId === '__uncategorized__') {
+    const yearStr    = String(year);
+    const allCatTxns = Object.values(txns)
+      .filter(t => {
+        if (!t.date?.startsWith(yearStr) || t.amount <= 0 || t.ignored || t.isTransfer || t.group === 'transfer') return false;
+        const cat2 = getCategoryById(t.category);
+        return !cat2.isIncome && cat2.id !== 'transfer' && cat2.parent !== 'transfer' && !cat2.parent;
+      })
+      .sort((a, b) => b.date.localeCompare(a.date));
+    const totalTxns  = allCatTxns.length;
+    const totalPages = Math.max(1, Math.ceil(totalTxns / BUD_DETAIL_PAGE));
+    _budgetDetailPage = Math.min(_budgetDetailPage, totalPages - 1);
+    const catTxns    = allCatTxns.slice(_budgetDetailPage * BUD_DETAIL_PAGE, (_budgetDetailPage + 1) * BUD_DETAIL_PAGE);
+
+    const txnRows = catTxns.map(t => `
+      <div class="bud-detail-txn-row">
+        <div class="bud-detail-txn-icon">❓</div>
+        <div class="bud-detail-txn-name">${t.merchantName ?? t.description ?? 'Unknown'}</div>
+        <div class="bud-detail-txn-date">${t.date?.slice(0, 7) ?? ''}</div>
+        <div class="bud-detail-txn-amt">${fmtCurrency(t.amount)}</div>
+      </div>`).join('') || '<div style="padding:12px 0;font-size:0.8rem;color:var(--muted)">No uncategorized transactions.</div>';
+
+    const paginationHTML = totalPages > 1 ? `
+      <div class="bud-detail-pagination">
+        <button class="btn-ghost bud-dp-prev" ${_budgetDetailPage === 0 ? 'disabled' : ''}>← Prev</button>
+        <span class="bud-dp-info">Page ${_budgetDetailPage + 1} of ${totalPages} · ${totalTxns} transactions</span>
+        <button class="btn-ghost bud-dp-next" ${_budgetDetailPage >= totalPages - 1 ? 'disabled' : ''}>Next →</button>
+      </div>` : '';
+
+    el.innerHTML = `
+      <div class="bud-detail-hdr">
+        <div class="bud-detail-icon" style="background:#fef2f2">❓</div>
+        <div>
+          <div class="bud-detail-name">Uncategorized</div>
+          <div class="bud-detail-meta">${totalTxns} transaction${totalTxns !== 1 ? 's' : ''} · needs review</div>
+        </div>
+        <div class="bud-detail-amounts-right">
+          <div class="bud-detail-spent-big" style="color:#ef4444">${fmtCurrency(_annualUncategorizedSpend)}</div>
+        </div>
+      </div>
+      <div class="bud-detail-txn-title">Transactions</div>
+      ${txnRows}
+      ${paginationHTML}
+    `;
+    el.querySelector('.bud-dp-prev')?.addEventListener('click', () => {
+      _budgetDetailPage--;
+      renderAnnualCategoryDetail(el, catId, budgets, spentByCat, txns, year);
+    });
+    el.querySelector('.bud-dp-next')?.addEventListener('click', () => {
+      _budgetDetailPage++;
+      renderAnnualCategoryDetail(el, catId, budgets, spentByCat, txns, year);
+    });
+    return;
+  }
+
   const cat          = CATEGORIES.find(c => c.id === catId) ?? { icon: '?', name: catId, color: '#64748b' };
   const spent        = spentByCat[catId] ?? 0;
   const monthlyLimit = budgets[catId]?.monthly ?? 0;

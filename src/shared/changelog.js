@@ -1,5 +1,12 @@
 export const CHANGELOG = [
   {
+    version: '1.18.2',
+    date:    '2026-09-01',
+    changes: [
+      'Budgets annual view: added Uncategorized card showing spend from transactions with no recognized category — tap to see all transactions and total.',
+    ],
+  },
+  {
     version: '1.18.1',
     date:    '2026-09-01',
     changes: [
