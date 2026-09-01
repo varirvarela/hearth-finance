@@ -9,9 +9,10 @@ export function renderDashboard(container) {
   const nowMonth = now.getMonth() + 1;
   const nowDay   = now.getDate();
 
-  let selYear   = nowYear;
-  let selMonth  = nowMonth;
-  let viewMode  = 'monthly';
+  let selYear        = nowYear;
+  let selMonth       = nowMonth;
+  let viewMode       = 'monthly';
+  let showHiddenDash = false;
 
   let latestTxns        = null;
   let latestOwnerTxns   = null;
@@ -247,7 +248,9 @@ export function renderDashboard(container) {
     container.querySelector('#pace-annual-section').style.display = 'none';
 
     // spend vs budget bars
-    container.querySelector('#spend-section-label').textContent =
+    const monthLabelEl = container.querySelector('#spend-section-label');
+    monthLabelEl.style.display = '';
+    monthLabelEl.textContent =
       `Spend vs Budget — Day ${paceDay} of ${daysInMonth} · ${pacePct}% pace`;
     renderSpendBars(container, expenses, latestBudgets ?? {}, pacePct, selYear, selMonth);
 
@@ -271,10 +274,16 @@ export function renderDashboard(container) {
     const pacePct  = selYear === nowYear ? Math.round((nowMonth / 12) * 100) : 100;
 
     const yearTxns = allTxns.filter(t => {
-      if (!t.date?.startsWith(yearStr) || t.ignored || t.pending) return false;
+      if (!t.date?.startsWith(yearStr) || t.ignored) return false;
       return parseInt(t.date.slice(5, 7), 10) <= maxMonth;
     });
-    const expenses    = yearTxns.filter(t => t.amount > 0 && !t.isTransfer && t.group !== 'transfer');
+    const expenses = yearTxns.filter(t => {
+      if (t.amount <= 0 || t.isTransfer || t.group === 'transfer') return false;
+      const cat = getCategoryById(t.category);
+      if (cat.isIncome || cat.id === 'transfer' || cat.parent === 'transfer') return false;
+      if (cat.hide && !showHiddenDash) return false;
+      return true;
+    });
     const spent       = expenses.reduce((s, t) => s + t.amount, 0);
     const incomeAmt   = yearTxns.filter(t => t.amount < 0).reduce((s, t) => s - t.amount, 0);
     const annualBudget = Object.values(latestBudgets ?? {}).reduce((s, b) => s + (b.monthly ?? 0), 0) * 12;
@@ -335,11 +344,21 @@ export function renderDashboard(container) {
 
     // category breakdown for the year
     container.querySelector('#spend-section').style.display = '';
-    container.querySelector('#spend-section-label').textContent = `Category Breakdown — ${selYear}`;
+    const spendLabelEl = container.querySelector('#spend-section-label');
+    spendLabelEl.innerHTML = `Category Breakdown — ${selYear}
+      <label class="dash-hidden-toggle" style="font-size:0.72rem;font-weight:400;color:var(--muted);margin-left:auto;display:flex;align-items:center;gap:4px;cursor:pointer">
+        <input type="checkbox" id="dash-show-hidden" ${showHiddenDash ? 'checked' : ''}> Show hidden
+      </label>`;
+    spendLabelEl.style.display = 'flex';
+    spendLabelEl.style.alignItems = 'center';
+    container.querySelector('#dash-show-hidden').addEventListener('change', e => {
+      showHiddenDash = e.target.checked;
+      renderAnnual();
+    });
     const annualBudgets = Object.fromEntries(
       Object.entries(latestBudgets ?? {}).map(([k, v]) => [k, { monthly: (v.monthly ?? 0) * 12 }])
     );
-    renderSpendBars(container, expenses, annualBudgets, pacePct, selYear, selMonth, true);
+    renderSpendBars(container, expenses, annualBudgets, pacePct, selYear, selMonth, true, showHiddenDash);
 
     renderTrendChart(container, allTxns, selYear, selMonth, 'annual');
     renderRecentTxns(container, allTxns);
@@ -383,7 +402,7 @@ function renderAlert(container, spent, totalBudget, pacePct, reviewCount, allTxn
 }
 
 // ── Category spend-vs-budget bars ────────────────────────
-function renderSpendBars(container, expenses, budgets, pacePct, selYear, selMonth, includeAnnual = false) {
+function renderSpendBars(container, expenses, budgets, pacePct, selYear, selMonth, includeAnnual = false, showHidden = false) {
   const barsEl = container.querySelector('#spend-bars');
   if (!barsEl) return;
 
@@ -392,7 +411,7 @@ function renderSpendBars(container, expenses, budgets, pacePct, selYear, selMont
     spentByCat[t.category] = (spentByCat[t.category] ?? 0) + t.amount;
   }
 
-  // All categories that have a budget OR have spending this month
+  // All categories that have a budget OR have spending this period
   const rows = [];
   const seen = new Set();
   const leaves = CATEGORIES.filter(c => c.parent && !c.isIncome);
@@ -401,7 +420,8 @@ function renderSpendBars(container, expenses, budgets, pacePct, selYear, selMont
     const limit = budgets[leaf.id]?.monthly ?? 0;
     const catSpent = spentByCat[leaf.id] ?? 0;
     if (!limit && !catSpent) continue;
-    if (leaf.isAnnual && !includeAnnual) continue; // annual cats excluded from monthly pace
+    if (leaf.isAnnual && !includeAnnual) continue;
+    if (leaf.hide && !showHidden) continue;
     seen.add(leaf.id);
     rows.push({ cat: leaf, spent: catSpent, limit });
   }
@@ -412,6 +432,7 @@ function renderSpendBars(container, expenses, budgets, pacePct, selYear, selMont
     const cat = getCategoryById(catId);
     if (cat.isIncome || cat.id === 'transfer') continue;
     if (cat.isAnnual && !includeAnnual) continue;
+    if (cat.hide && !showHidden) continue;
     rows.push({ cat, spent: amt, limit: 0 });
   }
 

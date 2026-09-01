@@ -1,5 +1,14 @@
 export const CHANGELOG = [
   {
+    version: '1.17.0',
+    date:    '2026-09-01',
+    changes: [
+      'Dashboard & Budgets: annual view now shows the same numbers — all categories regardless of whether a budget is set, and pending transactions included.',
+      'Dashboard & Budgets: annual view excludes transfer and income categories from spend totals.',
+      'Dashboard & Budgets: hidden categories (e.g. Gastos Argentina) are excluded from annual totals by default; toggle "Show hidden" to include them.',
+    ],
+  },
+  {
     version: '1.16.2',
     date:    '2026-08-31',
     changes: [

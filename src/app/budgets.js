@@ -1,6 +1,6 @@
 import { dbListen, dbSet, auth, getPartnerUid, getHouseholdId } from '../shared/firebase.js';
 import { fmtCurrency, fmtMonth } from '../shared/format.js';
-import { CATEGORIES } from '../shared/categories.js';
+import { CATEGORIES, getCategoryById } from '../shared/categories.js';
 
 // ── Cascading budget tile state ───────────────────────────
 let _budgetLevel   = 1;   // 1 = group tiles, 2 = category tiles, 3 = detail
@@ -8,9 +8,10 @@ let _budgetGroupId = null;
 let _budgetCatId   = null;
 
 // ── Annual cascading tile state ───────────────────────────
-let _annualLevel   = 1;
-let _annualGroupId = null;
-let _annualCatId   = null;
+let _annualLevel      = 1;
+let _annualGroupId    = null;
+let _annualCatId      = null;
+let _showHiddenAnnual = false;
 
 export function renderBudgets(container) {
   const now = new Date();
@@ -426,33 +427,44 @@ function renderBudgetAnnual(uid, budgets, txns, year) {
   // Pace tick position (only for current year)
   const pacePct = year === nowYear ? Math.round((nowMonth / 12) * 100) : null;
 
-  // Aggregate spending for the year
+  // Aggregate spending for the year (include pending, exclude transfers and hidden unless toggled)
   const spentByCat = {};
   for (const t of Object.values(txns)) {
     if (!t.date?.startsWith(yearStr) || t.amount <= 0 || t.ignored || t.isTransfer || t.group === 'transfer') continue;
     const m = parseInt(t.date.slice(5, 7), 10);
     if (m > maxMonth) continue;
+    const cat = getCategoryById(t.category);
+    if (cat.isIncome || cat.id === 'transfer' || cat.parent === 'transfer') continue;
+    if (cat.hide && !_showHiddenAnnual) continue;
     spentByCat[t.category] = (spentByCat[t.category] ?? 0) + t.amount;
   }
 
   const expenseLeaves = CATEGORIES.filter(c => c.parent && !c.isIncome);
 
-  // Compute totals
+  // Budget total: all budgeted categories × 12
   let totalAnnualBudget = 0;
-  let totalSpent        = 0;
   for (const [catId, data] of Object.entries(budgets)) {
-    if (data?.monthly > 0) {
-      totalAnnualBudget += data.monthly * 12;
-      totalSpent        += spentByCat[catId] ?? 0;
-    }
+    if (data?.monthly > 0) totalAnnualBudget += data.monthly * 12;
   }
+
+  // Spent total: ALL categories (not just budgeted)
+  const totalSpent = Object.values(spentByCat).reduce((s, v) => s + v, 0);
 
   const annualRemaining = totalAnnualBudget - totalSpent;
   summaryEl.innerHTML = `
-    <span style="color:var(--muted)">Budget ${fmtCurrency(totalAnnualBudget)}</span>
-    <span style="color:#ef4444">${fmtCurrency(totalSpent)} YTD</span>
-    <span style="color:${annualRemaining >= 0 ? 'var(--brand)' : '#ef4444'}">${fmtCurrency(Math.abs(annualRemaining))} ${annualRemaining >= 0 ? 'left' : 'over'}</span>
+    <div style="display:flex;align-items:center;gap:1rem;flex-wrap:wrap">
+      <span style="color:var(--muted)">Budget ${fmtCurrency(totalAnnualBudget)}</span>
+      <span style="color:#ef4444">${fmtCurrency(totalSpent)} YTD</span>
+      <span style="color:${annualRemaining >= 0 ? 'var(--brand)' : '#ef4444'}">${fmtCurrency(Math.abs(annualRemaining))} ${annualRemaining >= 0 ? 'left' : 'over'}</span>
+      <label style="font-size:0.72rem;color:var(--muted);margin-left:auto;display:flex;align-items:center;gap:4px;cursor:pointer">
+        <input type="checkbox" id="bud-show-hidden" ${_showHiddenAnnual ? 'checked' : ''}> Show hidden
+      </label>
+    </div>
   `;
+  summaryEl.querySelector('#bud-show-hidden').addEventListener('change', e => {
+    _showHiddenAnnual = e.target.checked;
+    renderBudgetAnnual(uid, budgets, txns, year);
+  });
 
   const legendEl = document.getElementById('budget-pace-legend');
   if (legendEl) legendEl.style.display = 'none';
@@ -499,7 +511,11 @@ function renderAnnualNav(listEl, rootCats, rootMap, budgets, spentByCat, txns, p
 
 function renderAnnualGroupTiles(el, rootCats, rootMap, budgets, spentByCat, listEl, allRoots, txns, pacePct, year) {
   const tiles = rootCats.map(root => {
-    const leaves = (rootMap.get(root.id) ?? []).filter(l => !l.isIncome && ((budgets[l.id]?.monthly ?? 0) > 0 || (spentByCat[l.id] ?? 0) > 0));
+    const leaves = (rootMap.get(root.id) ?? []).filter(l =>
+      !l.isIncome &&
+      (!l.hide || _showHiddenAnnual) &&
+      ((budgets[l.id]?.monthly ?? 0) > 0 || (spentByCat[l.id] ?? 0) > 0)
+    );
     if (!leaves.length) return '';
 
     const groupSpent  = leaves.reduce((s, l) => s + (spentByCat[l.id] ?? 0), 0);
@@ -549,7 +565,10 @@ function renderAnnualGroupTiles(el, rootCats, rootMap, budgets, spentByCat, list
 
 function renderAnnualCategoryTiles(el, groupId, rootMap, budgets, spentByCat, listEl, allRoots, txns, pacePct, year) {
   const root   = CATEGORIES.find(c => c.id === groupId);
-  const leaves = (rootMap.get(groupId) ?? []).filter(l => (budgets[l.id]?.monthly ?? 0) > 0 || (spentByCat[l.id] ?? 0) > 0);
+  const leaves = (rootMap.get(groupId) ?? []).filter(l =>
+    (!l.hide || _showHiddenAnnual) &&
+    ((budgets[l.id]?.monthly ?? 0) > 0 || (spentByCat[l.id] ?? 0) > 0)
+  );
   const warnThresh = pacePct != null ? pacePct + 10 : 60;
 
   const tiles = leaves.map(leaf => {
