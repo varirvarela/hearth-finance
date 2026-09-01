@@ -1,5 +1,12 @@
 export const CHANGELOG = [
   {
+    version: '1.18.1',
+    date:    '2026-09-01',
+    changes: [
+      'Budgets & Dashboard: annual YTD total now matches the sum of category cards — uncategorized and root-level transactions were inflating the header total.',
+    ],
+  },
+  {
     version: '1.18.0',
     date:    '2026-09-01',
     changes: [

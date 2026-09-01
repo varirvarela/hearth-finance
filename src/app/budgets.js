@@ -456,7 +456,7 @@ function renderBudgetAnnual(uid, budgets, txns, year) {
     const m = parseInt(t.date.slice(5, 7), 10);
     if (m > maxMonth) continue;
     const cat = getCategoryById(t.category);
-    if (cat.isIncome || cat.id === 'transfer' || cat.parent === 'transfer') continue;
+    if (cat.isIncome || !cat.parent || cat.id === 'transfer' || cat.parent === 'transfer') continue;
     if (cat.hide && !_showHiddenAnnual) continue;
     spentByCat[t.category] = (spentByCat[t.category] ?? 0) + t.amount;
   }
@@ -469,8 +469,10 @@ function renderBudgetAnnual(uid, budgets, txns, year) {
     if (data?.monthly > 0) totalAnnualBudget += data.monthly * 12;
   }
 
-  // Spent total: ALL categories (not just budgeted)
-  const totalSpent = Object.values(spentByCat).reduce((s, v) => s + v, 0);
+  // Spent total: only expense leaf categories (matches what tiles show)
+  const totalSpent = expenseLeaves
+    .filter(l => !l.hide || _showHiddenAnnual)
+    .reduce((s, l) => s + (spentByCat[l.id] ?? 0), 0);
 
   const annualRemaining = totalAnnualBudget - totalSpent;
   summaryEl.innerHTML = `

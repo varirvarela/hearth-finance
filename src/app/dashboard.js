@@ -280,7 +280,7 @@ export function renderDashboard(container) {
     const expenses = yearTxns.filter(t => {
       if (t.amount <= 0 || t.isTransfer || t.group === 'transfer') return false;
       const cat = getCategoryById(t.category);
-      if (cat.isIncome || cat.id === 'transfer' || cat.parent === 'transfer') return false;
+      if (cat.isIncome || !cat.parent || cat.id === 'transfer' || cat.parent === 'transfer') return false;
       if (cat.hide && !showHiddenDash) return false;
       return true;
     });
