@@ -1,5 +1,14 @@
 export const CHANGELOG = [
   {
+    version: '1.18.0',
+    date:    '2026-09-01',
+    changes: [
+      'Transactions: filtered total shown in the summary line — spend and income for the current filter, all pages.',
+      'Transactions: category picker now shows hidden categories (e.g. Gastos Argentina) with a "Hidden" badge so they can be assigned.',
+      'Budgets: category detail now shows all transactions for the selected category and period, paginated 15 at a time (both monthly and annual).',
+    ],
+  },
+  {
     version: '1.17.0',
     date:    '2026-09-01',
     changes: [

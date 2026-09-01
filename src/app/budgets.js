@@ -12,6 +12,8 @@ let _annualLevel      = 1;
 let _annualGroupId    = null;
 let _annualCatId      = null;
 let _showHiddenAnnual = false;
+let _budgetDetailPage = 0;
+const BUD_DETAIL_PAGE = 15;
 
 export function renderBudgets(container) {
   const now = new Date();
@@ -310,6 +312,7 @@ function renderCategoryTiles(el, groupId, rootMap, budgets, spentByCat, pacePct,
     tile.addEventListener('click', () => {
       _budgetLevel  = 3;
       _budgetCatId  = tile.dataset.cat;
+      _budgetDetailPage = 0;
       renderBudgetNav(listEl, allRoots, rootMap, budgets, spentByCat, txns, pacePct, year, month, prefix);
     });
   });
@@ -338,11 +341,14 @@ function renderCategoryDetail(el, catId, budgets, spentByCat, txns, pacePct, yea
   const status = spent > limit && limit > 0 ? 'over' : pct >= pacePct + 10 ? 'warn' : limit > 0 ? 'good' : 'zero';
   const barColor = status === 'over' ? '#ef4444' : status === 'warn' ? '#f59e0b' : '#16a34a';
 
-  // Recent transactions for this category this month
-  const catTxns = Object.values(txns)
+  // All transactions for this category this month, paginated
+  const allCatTxns = Object.values(txns)
     .filter(t => t.category === catId && t.date?.startsWith(prefix) && !t.ignored && !t.isTransfer)
-    .sort((a, b) => b.date.localeCompare(a.date))
-    .slice(0, 8);
+    .sort((a, b) => b.date.localeCompare(a.date));
+  const totalTxns  = allCatTxns.length;
+  const totalPages = Math.max(1, Math.ceil(totalTxns / BUD_DETAIL_PAGE));
+  _budgetDetailPage = Math.min(_budgetDetailPage, totalPages - 1);
+  const catTxns    = allCatTxns.slice(_budgetDetailPage * BUD_DETAIL_PAGE, (_budgetDetailPage + 1) * BUD_DETAIL_PAGE);
 
   const txnRows = catTxns.map(t => `
     <div class="bud-detail-txn-row">
@@ -352,12 +358,19 @@ function renderCategoryDetail(el, catId, budgets, spentByCat, txns, pacePct, yea
       <div class="bud-detail-txn-amt">${fmtCurrency(t.amount)}</div>
     </div>`).join('') || '<div style="padding:12px 0;font-size:0.8rem;color:var(--muted)">No transactions this month.</div>';
 
+  const paginationHTML = totalPages > 1 ? `
+    <div class="bud-detail-pagination">
+      <button class="btn-ghost bud-dp-prev" ${_budgetDetailPage === 0 ? 'disabled' : ''}>← Prev</button>
+      <span class="bud-dp-info">Page ${_budgetDetailPage + 1} of ${totalPages} · ${totalTxns} transactions</span>
+      <button class="btn-ghost bud-dp-next" ${_budgetDetailPage >= totalPages - 1 ? 'disabled' : ''}>Next →</button>
+    </div>` : '';
+
   el.innerHTML = `
     <div class="bud-detail-hdr">
       <div class="bud-detail-icon" style="background:${cat.color ? cat.color + '1a' : 'var(--faint)'}">${cat.icon}</div>
       <div>
         <div class="bud-detail-name">${cat.name}</div>
-        <div class="bud-detail-meta">${catTxns.length} transaction${catTxns.length !== 1 ? 's' : ''} this month</div>
+        <div class="bud-detail-meta">${totalTxns} transaction${totalTxns !== 1 ? 's' : ''} this month</div>
       </div>
       <div class="bud-detail-amounts-right">
         <div class="bud-detail-spent-big" style="color:${barColor}">${fmtCurrency(spent)}</div>
@@ -385,22 +398,23 @@ function renderCategoryDetail(el, catId, budgets, spentByCat, txns, pacePct, yea
       </div>
       <div class="bud-detail-stat-card">
         <div class="bud-detail-stat-label">Transactions</div>
-        <div class="bud-detail-stat-val">${catTxns.length}</div>
+        <div class="bud-detail-stat-val">${totalTxns}</div>
       </div>
-      ${catTxns.length > 0 ? `
+      ${totalTxns > 0 ? `
       <div class="bud-detail-stat-card">
         <div class="bud-detail-stat-label">Largest</div>
-        <div class="bud-detail-stat-val">${fmtCurrency(Math.max(...catTxns.map(t => t.amount)))}</div>
+        <div class="bud-detail-stat-val">${fmtCurrency(Math.max(...allCatTxns.map(t => t.amount)))}</div>
       </div>
       <div class="bud-detail-stat-card">
         <div class="bud-detail-stat-label">Average</div>
-        <div class="bud-detail-stat-val">${fmtCurrency(spent / catTxns.length)}</div>
+        <div class="bud-detail-stat-val">${fmtCurrency(spent / totalTxns)}</div>
       </div>` : ''}
     </div>
 
-    <div class="bud-detail-txn-title">Recent transactions</div>
+    <div class="bud-detail-txn-title">Transactions</div>
     ${txnRows}
-    ${catTxns.length === 0 && limit > 0 ? `
+    ${paginationHTML}
+    ${totalTxns === 0 && limit > 0 ? `
     <div style="margin-top:14px">
       <button class="bud-edit-budget-btn" data-cat="${catId}">Edit budget (${fmtCurrency(limit)}/mo) →</button>
     </div>` : ''}
@@ -408,6 +422,14 @@ function renderCategoryDetail(el, catId, budgets, spentByCat, txns, pacePct, yea
 
   el.querySelector('.bud-edit-budget-btn')?.addEventListener('click', e => {
     openInlineEdit(e.currentTarget, getHouseholdId(), catId, budgets[catId]?.monthly ?? 0);
+  });
+  el.querySelector('.bud-dp-prev')?.addEventListener('click', () => {
+    _budgetDetailPage--;
+    renderCategoryDetail(el, catId, budgets, spentByCat, txns, pacePct, year, month, prefix);
+  });
+  el.querySelector('.bud-dp-next')?.addEventListener('click', () => {
+    _budgetDetailPage++;
+    renderCategoryDetail(el, catId, budgets, spentByCat, txns, pacePct, year, month, prefix);
   });
 }
 
@@ -623,6 +645,7 @@ function renderAnnualCategoryTiles(el, groupId, rootMap, budgets, spentByCat, li
     tile.addEventListener('click', () => {
       _annualLevel  = 3;
       _annualCatId  = tile.dataset.cat;
+      _budgetDetailPage = 0;
       renderAnnualNav(listEl, allRoots, rootMap, budgets, spentByCat, txns, pacePct, year);
     });
   });
@@ -643,11 +666,14 @@ function renderAnnualCategoryDetail(el, catId, budgets, spentByCat, txns, year) 
   const monthsRemaining = 12 - monthsElapsed;
   const projected      = monthsElapsed > 0 ? (spent / monthsElapsed) * 12 : 0;
 
-  const yearStr = String(year);
-  const catTxns = Object.values(txns)
+  const yearStr    = String(year);
+  const allCatTxns = Object.values(txns)
     .filter(t => t.category === catId && t.date?.startsWith(yearStr) && !t.ignored && !t.isTransfer)
-    .sort((a, b) => b.date.localeCompare(a.date))
-    .slice(0, 10);
+    .sort((a, b) => b.date.localeCompare(a.date));
+  const totalTxns  = allCatTxns.length;
+  const totalPages = Math.max(1, Math.ceil(totalTxns / BUD_DETAIL_PAGE));
+  _budgetDetailPage = Math.min(_budgetDetailPage, totalPages - 1);
+  const catTxns    = allCatTxns.slice(_budgetDetailPage * BUD_DETAIL_PAGE, (_budgetDetailPage + 1) * BUD_DETAIL_PAGE);
 
   const txnRows = catTxns.map(t => `
     <div class="bud-detail-txn-row">
@@ -657,12 +683,19 @@ function renderAnnualCategoryDetail(el, catId, budgets, spentByCat, txns, year) 
       <div class="bud-detail-txn-amt">${fmtCurrency(t.amount)}</div>
     </div>`).join('') || '<div style="padding:12px 0;font-size:0.8rem;color:var(--muted)">No transactions this year.</div>';
 
+  const paginationHTML = totalPages > 1 ? `
+    <div class="bud-detail-pagination">
+      <button class="btn-ghost bud-dp-prev" ${_budgetDetailPage === 0 ? 'disabled' : ''}>← Prev</button>
+      <span class="bud-dp-info">Page ${_budgetDetailPage + 1} of ${totalPages} · ${totalTxns} transactions</span>
+      <button class="btn-ghost bud-dp-next" ${_budgetDetailPage >= totalPages - 1 ? 'disabled' : ''}>Next →</button>
+    </div>` : '';
+
   el.innerHTML = `
     <div class="bud-detail-hdr">
       <div class="bud-detail-icon" style="background:${cat.color ? cat.color + '1a' : 'var(--faint)'}">${cat.icon}</div>
       <div>
         <div class="bud-detail-name">${cat.name}</div>
-        <div class="bud-detail-meta">${catTxns.length} transaction${catTxns.length !== 1 ? 's' : ''} this year</div>
+        <div class="bud-detail-meta">${totalTxns} transaction${totalTxns !== 1 ? 's' : ''} this year</div>
       </div>
       <div class="bud-detail-amounts-right">
         <div class="bud-detail-spent-big" style="color:${barColor}">${fmtCurrency(spent)}</div>
@@ -701,8 +734,9 @@ function renderAnnualCategoryDetail(el, catId, budgets, spentByCat, txns, year) 
       </div>
     </div>
 
-    <div class="bud-detail-txn-title">Recent transactions</div>
+    <div class="bud-detail-txn-title">Transactions</div>
     ${txnRows}
+    ${paginationHTML}
     <div style="margin-top:14px">
       <button class="bud-edit-budget-btn" data-cat="${catId}">${annualLimit > 0 ? `Edit annual budget (${fmtCurrency(annualLimit)}/yr) →` : 'Set annual budget →'}</button>
     </div>
@@ -710,6 +744,14 @@ function renderAnnualCategoryDetail(el, catId, budgets, spentByCat, txns, year) 
 
   el.querySelector('.bud-edit-budget-btn')?.addEventListener('click', e => {
     openAnnualCatBudgetEdit(e.currentTarget, getHouseholdId(), catId, monthlyLimit);
+  });
+  el.querySelector('.bud-dp-prev')?.addEventListener('click', () => {
+    _budgetDetailPage--;
+    renderAnnualCategoryDetail(el, catId, budgets, spentByCat, txns, year);
+  });
+  el.querySelector('.bud-dp-next')?.addEventListener('click', () => {
+    _budgetDetailPage++;
+    renderAnnualCategoryDetail(el, catId, budgets, spentByCat, txns, year);
   });
 }
 

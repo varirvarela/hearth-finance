@@ -914,9 +914,17 @@ function renderPage(filtered, state, uid, refresh, accountMap) {
   }).join('') : '';
   const filterChips = activeCats ? `<div class="txn-filter-chips">${activeCats}</div>` : '';
 
+  const filteredSpend  = filtered.reduce((s, [, t]) => t.amount > 0 ? s + t.amount : s, 0);
+  const filteredIncome = filtered.reduce((s, [, t]) => t.amount < 0 ? s - t.amount : s, 0);
+  const totalStr = filteredSpend > 0 && filteredIncome > 0
+    ? `<span class="txn-total-spend">${fmtCurrency(filteredSpend)}</span> <span class="txn-total-sep">·</span> <span class="txn-total-income">+${fmtCurrency(filteredIncome)}</span>`
+    : filteredSpend > 0
+      ? `<span class="txn-total-spend">${fmtCurrency(filteredSpend)}</span>`
+      : `<span class="txn-total-income">+${fmtCurrency(filteredIncome)}</span>`;
+
   el.innerHTML = `
     ${filterChips}
-    <div class="txn-summary">${total.toLocaleString()} transactions · showing ${start + 1}–${end}</div>
+    <div class="txn-summary">${total.toLocaleString()} transactions · ${totalStr} · showing ${start + 1}–${end}</div>
     <div class="card-rows">${rows}</div>
     ${paginationHTML}
   `;
@@ -1293,7 +1301,7 @@ function openCategoryPicker(txnId, currentCat, uid, rowEl) {
 
   function renderLeafStep(groupId) {
     const group  = getCategoryById(groupId);
-    const leaves = getChildCategories(groupId).filter(c => !c.hide || c.id === currentCat);
+    const leaves = getChildCategories(groupId);
 
     modal.innerHTML = `
       <div class="modal modal-picker">
@@ -1302,11 +1310,12 @@ function openCategoryPicker(txnId, currentCat, uid, rowEl) {
           ${leaves.map(c => `
             <button class="picker-leaf-btn${c.id === currentCat ? ' active' : ''}"
                     data-id="${c.id}"
-                    style="--leaf-color:${c.color}">
+                    style="--leaf-color:${c.color}${c.hide ? ';opacity:0.6' : ''}">
               <span>${c.icon}</span>
               <span>${c.name}</span>
               ${c.isFixed  ? '<span class="leaf-badge">Fijo</span>'   : ''}
               ${c.isAnnual ? '<span class="leaf-badge annual">Anual</span>' : ''}
+              ${c.hide     ? '<span class="leaf-badge" style="background:#e5e7eb;color:#6b7280">Hidden</span>' : ''}
             </button>`).join('')}
         </div>
         <div style="display:flex;gap:0.5rem;margin-top:1rem">
