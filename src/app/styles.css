@@ -2878,6 +2878,29 @@ button:active  { opacity: 0.7; transform: scale(0.97); }
   text-align: center;
   padding: 4px 0 2px;
 }
+.prog-section-hdr {
+  font-size: 0.7rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--muted);
+  margin: 12px 0 4px;
+}
+.prog-section-total {
+  font-size: 0.78rem;
+  font-weight: 600;
+  text-align: right;
+  padding: 4px 0 2px;
+}
+.bud-section-hdr {
+  font-size: 0.7rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--muted);
+  margin: 12px 0 6px;
+}
+.bud-income-section { margin-bottom: 4px; }
 
 .dash-txn-row {
   display: flex;

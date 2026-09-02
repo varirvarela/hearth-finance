@@ -1,5 +1,15 @@
 export const CHANGELOG = [
   {
+    version: '1.20.0',
+    date:    '2026-09-01',
+    changes: [
+      'Budget annual: income categories now appear as tiles above expense groups — shows actual vs. target, pace marker, and full transaction detail on tap.',
+      'Budget annual: summary header now shows Income / Expenses / Net instead of budget-remaining only.',
+      'Dashboard annual: 3rd mini-card is now "Net YTD" (income minus expenses). Income categories appear as a separate section in the category breakdown bars.',
+      'Dashboard annual: tapping an income bar navigates to that category\'s transactions.',
+    ],
+  },
+  {
     version: '1.19.0',
     date:    '2026-09-01',
     changes: [

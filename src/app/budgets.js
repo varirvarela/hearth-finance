@@ -17,6 +17,9 @@ let _budgetDetailPage        = 0;
 const BUD_DETAIL_PAGE        = 15;
 let _annualSummaryData       = null; // cached for level-aware header updates
 let _annualParams            = null; // { uid, budgets, txns, year } for re-renders
+let _annualIncomeByCat       = {};   // catId → positive income amount for the year
+let _annualTotalIncome       = 0;
+let _annualTotalIncomeBudget = 0;
 
 export function renderBudgets(container) {
   const now = new Date();
@@ -489,15 +492,37 @@ function renderBudgetAnnual(uid, budgets, txns, year) {
     .filter(l => !l.hide || _showHiddenAnnual)
     .reduce((s, l) => s + (spentByCat[l.id] ?? 0), 0) + uncatSpend;
 
-  _annualSummaryData = { totalSpent, totalAnnualBudget, spentByCat, budgets, rootMap: null /* filled below */ };
+  // Income: sum credit transactions in income categories
+  const incomeByCat = {};
+  let totalIncomeAmt = 0;
+  for (const t of Object.values(txns)) {
+    if (!t.date?.startsWith(yearStr) || t.amount >= 0 || t.ignored) continue;
+    const m = parseInt(t.date.slice(5, 7), 10);
+    if (m > maxMonth) continue;
+    const cat = getCategoryById(t.category);
+    if (!cat.isIncome) continue;
+    const amt = -t.amount;
+    incomeByCat[t.category] = (incomeByCat[t.category] ?? 0) + amt;
+    totalIncomeAmt += amt;
+  }
+  const totalIncomeBudget = CATEGORIES
+    .filter(c => c.isIncome)
+    .reduce((s, c) => s + (budgets[c.id]?.monthly ?? 0) * 12, 0);
+  _annualIncomeByCat       = incomeByCat;
+  _annualTotalIncome       = totalIncomeAmt;
+  _annualTotalIncomeBudget = totalIncomeBudget;
+
+  const net = totalIncomeAmt - totalSpent;
+  _annualSummaryData = { totalSpent, totalAnnualBudget, spentByCat, budgets, rootMap: null, totalIncomeAmt, totalIncomeBudget };
   _annualParams      = { uid, budgets, txns, year };
 
-  const annualRemaining = totalAnnualBudget - totalSpent;
   summaryEl.innerHTML = `
-    <div id="bud-annual-summary-inner" style="display:flex;align-items:center;gap:1rem;flex-wrap:wrap">
-      <span style="color:var(--muted)">Budget ${fmtCurrency(totalAnnualBudget)}</span>
-      <span style="color:#ef4444">${fmtCurrency(totalSpent)} YTD</span>
-      <span style="color:${annualRemaining >= 0 ? 'var(--brand)' : '#ef4444'}">${fmtCurrency(Math.abs(annualRemaining))} ${annualRemaining >= 0 ? 'left' : 'over'}</span>
+    <div id="bud-annual-summary-inner" style="display:flex;align-items:center;gap:0.6rem;flex-wrap:wrap">
+      <span style="color:#16a34a;font-weight:500">↑ ${fmtCurrency(totalIncomeAmt)}</span><span style="color:var(--muted);font-size:0.75rem">income</span>
+      <span style="color:var(--muted)">·</span>
+      <span style="color:#ef4444;font-weight:500">↓ ${fmtCurrency(totalSpent)}</span><span style="color:var(--muted);font-size:0.75rem">expenses</span>
+      <span style="color:var(--muted)">·</span>
+      <span style="font-weight:600;color:${net >= 0 ? '#16a34a' : '#ef4444'}">${net >= 0 ? '+' : ''}${fmtCurrency(net)} net</span>
       <label style="font-size:0.72rem;color:var(--muted);margin-left:auto;display:flex;align-items:center;gap:4px;cursor:pointer">
         <input type="checkbox" id="bud-show-hidden" ${_showHiddenAnnual ? 'checked' : ''}> Show hidden
       </label>
@@ -526,13 +551,21 @@ function renderBudgetAnnual(uid, budgets, txns, year) {
 function renderAnnualNav(listEl, rootCats, rootMap, budgets, spentByCat, txns, pacePct, year) {
   let bcHtml = '';
   if (_annualLevel >= 2) {
-    const isUncatDirect = _annualLevel === 3 && _annualCatId === '__uncategorized__' && !_annualGroupId;
+    const isUncatDirect  = _annualLevel === 3 && _annualCatId === '__uncategorized__' && !_annualGroupId;
+    const isIncomeDirect = _annualLevel === 3 && !_annualGroupId && CATEGORIES.find(c => c.id === _annualCatId)?.isIncome;
     const grp = rootCats.find(r => r.id === _annualGroupId);
     if (isUncatDirect) {
       bcHtml = `<div class="bud-breadcrumb">
         <span class="bud-bc-link" data-level="1">All groups</span>
         <span class="bud-bc-sep">›</span>
         <span class="bud-bc-current">❓ Uncategorized</span>
+      </div>`;
+    } else if (isIncomeDirect) {
+      const cat = CATEGORIES.find(c => c.id === _annualCatId);
+      bcHtml = `<div class="bud-breadcrumb">
+        <span class="bud-bc-link" data-level="1">All groups</span>
+        <span class="bud-bc-sep">›</span>
+        <span class="bud-bc-current">${cat?.icon ?? ''} ${cat?.name ?? _annualCatId}</span>
       </div>`;
     } else {
       bcHtml = `<div class="bud-breadcrumb">
@@ -565,9 +598,11 @@ function renderAnnualNav(listEl, rootCats, rootMap, budgets, spentByCat, txns, p
 function updateAnnualSummary() {
   const el = document.getElementById('bud-annual-summary-inner');
   if (!el || !_annualSummaryData) return;
-  const { totalSpent, totalAnnualBudget, spentByCat, budgets, rootMap } = _annualSummaryData;
+  const { totalSpent, totalAnnualBudget, spentByCat, budgets, rootMap, totalIncomeAmt } = _annualSummaryData;
 
-  let displaySpent, displayBudget, titleHtml = '';
+  const isIncomeCat = _annualLevel === 3 && _annualCatId && CATEGORIES.find(c => c.id === _annualCatId)?.isIncome;
+
+  let displaySpent, displayBudget, titleHtml = '', isIncome = false;
   if (_annualLevel === 2 && _annualGroupId && rootMap) {
     const leaves  = rootMap.get(_annualGroupId) ?? [];
     displaySpent  = leaves.reduce((s, l) => s + (spentByCat[l.id] ?? 0), 0);
@@ -578,30 +613,48 @@ function updateAnnualSummary() {
     displaySpent  = _annualUncategorizedSpend;
     displayBudget = 0;
     titleHtml = '<span style="font-weight:600">❓ Uncategorized</span>';
+  } else if (isIncomeCat) {
+    displaySpent  = _annualIncomeByCat[_annualCatId] ?? 0;
+    displayBudget = (budgets[_annualCatId]?.monthly ?? 0) * 12;
+    const cat     = CATEGORIES.find(c => c.id === _annualCatId);
+    titleHtml = `<span style="font-weight:600">${cat?.icon ?? ''} ${cat?.name ?? _annualCatId}</span>`;
+    isIncome = true;
   } else if (_annualLevel === 3 && _annualCatId) {
     displaySpent  = spentByCat[_annualCatId] ?? 0;
     displayBudget = (budgets[_annualCatId]?.monthly ?? 0) * 12;
     const cat     = CATEGORIES.find(c => c.id === _annualCatId);
     titleHtml = `<span style="font-weight:600">${cat?.icon ?? ''} ${cat?.name ?? _annualCatId}</span>`;
   } else {
-    displaySpent  = totalSpent;
-    displayBudget = totalAnnualBudget;
+    // Level 1: show income / expenses / net
+    const net = (totalIncomeAmt ?? 0) - totalSpent;
+    el.innerHTML = `
+      <span style="color:#16a34a;font-weight:500">↑ ${fmtCurrency(totalIncomeAmt ?? 0)}</span><span style="color:var(--muted);font-size:0.75rem">income</span>
+      <span style="color:var(--muted)">·</span>
+      <span style="color:#ef4444;font-weight:500">↓ ${fmtCurrency(totalSpent)}</span><span style="color:var(--muted);font-size:0.75rem">expenses</span>
+      <span style="color:var(--muted)">·</span>
+      <span style="font-weight:600;color:${net >= 0 ? '#16a34a' : '#ef4444'}">${net >= 0 ? '+' : ''}${fmtCurrency(net)} net</span>
+      <label style="font-size:0.72rem;color:var(--muted);margin-left:auto;display:flex;align-items:center;gap:4px;cursor:pointer">
+        <input type="checkbox" id="bud-show-hidden" ${_showHiddenAnnual ? 'checked' : ''}> Show hidden
+      </label>
+    `;
+    el.querySelector('#bud-show-hidden')?.addEventListener('change', e => {
+      _showHiddenAnnual = e.target.checked;
+      if (_annualParams) renderBudgetAnnual(_annualParams.uid, _annualParams.budgets, _annualParams.txns, _annualParams.year);
+    });
+    return;
   }
 
-  const remaining = displayBudget - displaySpent;
+  const amtColor    = isIncome ? '#16a34a' : '#ef4444';
+  const remaining   = displayBudget - displaySpent;
+  const remainColor = isIncome
+    ? (remaining <= 0 ? '#16a34a' : '#ef4444')   // income: positive = on track, negative = short
+    : (remaining >= 0 ? 'var(--brand)' : '#ef4444');
   el.innerHTML = `
     ${titleHtml}
     ${displayBudget > 0 ? `<span style="color:var(--muted)">Budget ${fmtCurrency(displayBudget)}</span>` : ''}
-    <span style="color:#ef4444">${fmtCurrency(displaySpent)} YTD</span>
-    ${displayBudget > 0 ? `<span style="color:${remaining >= 0 ? 'var(--brand)' : '#ef4444'}">${fmtCurrency(Math.abs(remaining))} ${remaining >= 0 ? 'left' : 'over'}</span>` : ''}
-    ${_annualLevel === 1 ? `<label style="font-size:0.72rem;color:var(--muted);margin-left:auto;display:flex;align-items:center;gap:4px;cursor:pointer">
-      <input type="checkbox" id="bud-show-hidden" ${_showHiddenAnnual ? 'checked' : ''}> Show hidden
-    </label>` : ''}
+    <span style="color:${amtColor}">${fmtCurrency(displaySpent)} YTD</span>
+    ${displayBudget > 0 ? `<span style="color:${remainColor}">${fmtCurrency(Math.abs(remaining))} ${isIncome ? (remaining <= 0 ? 'received ✓' : 'short') : (remaining >= 0 ? 'left' : 'over')}</span>` : ''}
   `;
-  el.querySelector('#bud-show-hidden')?.addEventListener('change', e => {
-    _showHiddenAnnual = e.target.checked;
-    if (_annualParams) renderBudgetAnnual(_annualParams.uid, _annualParams.budgets, _annualParams.txns, _annualParams.year);
-  });
 }
 
 function renderAnnualGroupTiles(el, rootCats, rootMap, budgets, spentByCat, listEl, allRoots, txns, pacePct, year) {
@@ -657,13 +710,56 @@ function renderAnnualGroupTiles(el, rootCats, rootMap, budgets, spentByCat, list
       </div>
     </div>` : '';
 
-  el.innerHTML = `<div class="bud-group-tiles-grid">${tiles}${uncatTile}${!tiles && !uncatTile ? '<p class="empty">No spending this year.</p>' : ''}</div>`;
+  // Income tiles — flat (income cats have no sub-groups)
+  const incomeLeaves = CATEGORIES.filter(c => c.isIncome && ((_annualIncomeByCat[c.id] ?? 0) > 0 || (budgets[c.id]?.monthly ?? 0) > 0));
+  const incomeTilesHtml = incomeLeaves.map(leaf => {
+    const actual    = _annualIncomeByCat[leaf.id] ?? 0;
+    const budget    = (budgets[leaf.id]?.monthly ?? 0) * 12;
+    const pct       = budget > 0 ? Math.min(100, Math.round((actual / budget) * 100)) : 0;
+    const onTrack   = budget === 0 || actual >= budget * 0.9;
+    const statusCls = budget === 0 ? 'zero' : actual >= budget ? 'good' : actual >= budget * 0.75 ? 'warn' : 'over';
+    const paceLabel = budget > 0 ? `${pct}%${actual >= budget ? ' ✓ on target' : actual >= budget * 0.9 ? ' on track' : ' ⚠ below target'}` : `${fmtCurrency(actual)} received`;
+    return `<div class="bud-income-tile bud-cat-tile ${statusCls}" data-income-cat="${leaf.id}" style="cursor:pointer">
+      <div class="bud-tile-hdr">
+        <div class="bud-cat-tile-icon" style="background:#16a34a28">${leaf.icon}</div>
+      </div>
+      <div class="bud-tile-name">${leaf.name}</div>
+      <div class="bud-tile-amounts">
+        <span class="bud-tile-spent" style="color:#16a34a">${fmtCurrency(actual)}</span>
+        ${budget > 0 ? `<span class="bud-tile-budget"> / ${fmtCurrency(budget)}/yr</span>` : ''}
+      </div>
+      ${budget > 0 ? `
+        <div class="bud-tile-bar-track">
+          <div class="bud-tile-bar-fill" style="width:${pct}%;background:#16a34a"></div>
+          ${pacePct != null ? `<div class="bud-tile-bar-pace" style="left:${pacePct}%"></div>` : ''}
+        </div>
+        <div class="bud-tile-pct" style="color:${onTrack ? '#16a34a' : '#ef4444'}">${paceLabel}</div>
+      ` : `<div class="bud-tile-pct" style="color:var(--muted)">${paceLabel}</div>`}
+    </div>`;
+  }).join('');
+
+  const incomeSection = incomeLeaves.length ? `
+    <div class="bud-section-hdr">Income</div>
+    <div class="bud-cat-tiles-grid bud-income-section">${incomeTilesHtml}</div>
+    <div class="bud-section-hdr">Expenses</div>` : '';
+
+  el.innerHTML = `${incomeSection}<div class="bud-group-tiles-grid">${tiles}${uncatTile}${!tiles && !uncatTile ? '<p class="empty">No spending this year.</p>' : ''}</div>`;
 
   el.querySelectorAll('.bud-tile-edit-btn').forEach(btn => {
     btn.addEventListener('click', e => {
       e.stopPropagation();
       const uid2 = getHouseholdId();
       openAnnualGroupBudgetEdit(btn.dataset.group, rootMap, budgets, uid2, listEl, allRoots, txns, pacePct, year);
+    });
+  });
+
+  el.querySelectorAll('[data-income-cat]').forEach(tile => {
+    tile.addEventListener('click', () => {
+      _annualLevel      = 3;
+      _annualCatId      = tile.dataset.incomeCat;
+      _annualGroupId    = null;
+      _budgetDetailPage = 0;
+      renderAnnualNav(listEl, allRoots, rootMap, budgets, spentByCat, txns, pacePct, year);
     });
   });
 
@@ -752,6 +848,62 @@ function renderAnnualCategoryTiles(el, groupId, rootMap, budgets, spentByCat, li
 }
 
 function renderAnnualCategoryDetail(el, catId, budgets, spentByCat, txns, year) {
+  // Special case: income category
+  const incomeCat = CATEGORIES.find(c => c.id === catId && c.isIncome);
+  if (incomeCat) {
+    const yearStr    = String(year);
+    const allCatTxns = Object.values(txns)
+      .filter(t => t.category === catId && t.date?.startsWith(yearStr) && !t.ignored && t.amount < 0)
+      .sort((a, b) => b.date.localeCompare(a.date));
+    const totalTxns  = allCatTxns.length;
+    const totalPages = Math.max(1, Math.ceil(totalTxns / BUD_DETAIL_PAGE));
+    _budgetDetailPage = Math.min(_budgetDetailPage, totalPages - 1);
+    const catTxns    = allCatTxns.slice(_budgetDetailPage * BUD_DETAIL_PAGE, (_budgetDetailPage + 1) * BUD_DETAIL_PAGE);
+    const actualTotal = _annualIncomeByCat[catId] ?? 0;
+    const budget      = (budgets[catId]?.monthly ?? 0) * 12;
+
+    const txnRows = catTxns.map(t => `
+      <div class="bud-detail-txn-row">
+        <div class="bud-detail-txn-icon">${incomeCat.icon}</div>
+        <div class="bud-detail-txn-name">${t.merchantName ?? t.description ?? 'Unknown'}</div>
+        <div class="bud-detail-txn-date">${t.date?.slice(0, 7) ?? ''}</div>
+        <div class="bud-detail-txn-amt" style="color:#16a34a">+${fmtCurrency(-t.amount)}</div>
+      </div>`).join('') || '<div style="padding:12px 0;font-size:0.8rem;color:var(--muted)">No income transactions this year.</div>';
+
+    const paginationHTML = totalPages > 1 ? `
+      <div class="bud-detail-pagination">
+        <button class="btn-ghost bud-dp-prev" ${_budgetDetailPage === 0 ? 'disabled' : ''}>← Prev</button>
+        <span class="bud-dp-info">Page ${_budgetDetailPage + 1} of ${totalPages} · ${totalTxns} transactions</span>
+        <button class="btn-ghost bud-dp-next" ${_budgetDetailPage >= totalPages - 1 ? 'disabled' : ''}>Next →</button>
+      </div>` : '';
+
+    el.innerHTML = `
+      <div class="bud-detail-hdr">
+        <div class="bud-detail-icon" style="background:#16a34a28">${incomeCat.icon}</div>
+        <div>
+          <div class="bud-detail-name">${incomeCat.name}</div>
+          <div class="bud-detail-meta">${totalTxns} transaction${totalTxns !== 1 ? 's' : ''}</div>
+        </div>
+        <div class="bud-detail-amounts-right">
+          <div class="bud-detail-spent-big" style="color:#16a34a">+${fmtCurrency(actualTotal)}</div>
+          ${budget > 0 ? `<div style="color:var(--muted);font-size:0.78rem">of ${fmtCurrency(budget)}/yr target</div>` : ''}
+        </div>
+      </div>
+      <div class="bud-detail-txn-title">Transactions</div>
+      ${txnRows}
+      ${paginationHTML}
+    `;
+    el.querySelector('.bud-dp-prev')?.addEventListener('click', () => {
+      _budgetDetailPage--;
+      renderAnnualCategoryDetail(el, catId, budgets, spentByCat, txns, year);
+    });
+    el.querySelector('.bud-dp-next')?.addEventListener('click', () => {
+      _budgetDetailPage++;
+      renderAnnualCategoryDetail(el, catId, budgets, spentByCat, txns, year);
+    });
+    return;
+  }
+
   // Special case: uncategorized transactions
   if (catId === '__uncategorized__') {
     const yearStr    = String(year);

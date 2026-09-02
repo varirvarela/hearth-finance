@@ -314,16 +314,24 @@ export function renderDashboard(container) {
     vsBudgetEl.style.color  = barColor;
     vsBudgetSub.textContent = spentPct > pacePct + 10 ? 'over annual pace' : spentPct > pacePct ? 'slightly over' : 'on pace ✓';
 
+    // Income by category (credit transactions in income categories)
+    const incomeByCat = {};
+    for (const t of yearTxns) {
+      if (t.amount >= 0 || t.ignored) continue;
+      const cat = getCategoryById(t.category);
+      if (!cat.isIncome) continue;
+      incomeByCat[t.category] = (incomeByCat[t.category] ?? 0) + (-t.amount);
+    }
+    const totalIncomeYTD = Object.values(incomeByCat).reduce((s, v) => s + v, 0);
+    const net = totalIncomeYTD - totalSpentDisplay;
+
+    // 3rd mini-card: Net YTD instead of vs-last-year in annual mode
+    container.querySelector('#vs-prev-label').textContent = 'Net YTD';
     const vsPrevEl  = container.querySelector('#vs-prev-val');
     const vsPrevSub = container.querySelector('#vs-prev-sub');
-    if (prevDiff !== null) {
-      const better = prevDiff < 0;
-      vsPrevEl.textContent  = `${prevDiff > 0 ? '+' : ''}${prevDiff}%`;
-      vsPrevEl.style.color  = better ? '#16a34a' : 'var(--red,#ef4444)';
-      vsPrevSub.textContent = better ? 'better ✓' : 'higher spend';
-    } else {
-      vsPrevEl.textContent = '—'; vsPrevEl.style.color = ''; vsPrevSub.textContent = 'no prior data';
-    }
+    vsPrevEl.textContent  = (net >= 0 ? '+' : '') + fmtCurrency(net);
+    vsPrevEl.style.color  = net >= 0 ? '#16a34a' : 'var(--red,#ef4444)';
+    vsPrevSub.textContent = net >= 0 ? 'surplus ✓' : 'deficit';
 
     // hide alert for annual — show pace bar + category breakdown
     container.querySelector('#dash-alert').style.display = 'none';
@@ -381,6 +389,48 @@ export function renderDashboard(container) {
         barsEl.querySelector('.prog-row-uncat')?.addEventListener('click', () => {
           sessionStorage.setItem('txn-filter-intent', JSON.stringify({ review: true, year: selYear }));
           location.hash = 'transactions';
+        });
+      }
+    }
+
+    // Income section
+    if (totalIncomeYTD > 0) {
+      const barsEl = container.querySelector('#spend-bars');
+      if (barsEl) {
+        const incomeLeaves = CATEGORIES.filter(c => c.isIncome && (incomeByCat[c.id] ?? 0) > 0);
+        const incomeBudgets = Object.fromEntries(
+          Object.entries(latestBudgets ?? {}).map(([k, v]) => [k, { monthly: (v.monthly ?? 0) * 12 }])
+        );
+        const incomeRows = incomeLeaves.map(leaf => {
+          const actual   = incomeByCat[leaf.id] ?? 0;
+          const budget   = incomeBudgets[leaf.id]?.monthly ?? 0;
+          const pct      = budget > 0 ? Math.min(100, Math.round((actual / budget) * 100)) : 0;
+          const onTarget = budget === 0 || actual >= budget;
+          return `
+            <div class="prog-row" data-income-cat="${leaf.id}" style="cursor:pointer" title="Tap to see ${leaf.name} transactions">
+              <div class="prog-row-top">
+                <span class="prog-icon">${leaf.icon}</span>
+                <span class="prog-name">${leaf.name}</span>
+                <span class="prog-amt" style="color:#16a34a">+${fmtCurrency(actual)}${budget > 0 ? ' / ' + fmtCurrency(budget) : ''}</span>
+              </div>
+              ${budget > 0 ? `
+                <div class="prog-track">
+                  <div class="prog-fill" style="width:${pct}%;background:#16a34a"></div>
+                  <div class="prog-pace" style="left:${pacePct}%"></div>
+                </div>
+                <div class="prog-footer" style="color:${onTarget ? '#16a34a' : '#ef4444'}">${pct}%${onTarget ? ' ✓ on target' : ' below target'}</div>
+              ` : `<div class="prog-footer" style="color:var(--muted)">no target set</div>`}
+            </div>`;
+        }).join('');
+        barsEl.insertAdjacentHTML('beforeend', `
+          <div class="prog-section-hdr">Income</div>
+          ${incomeRows}
+          <div class="prog-section-total" style="color:#16a34a">Total income: +${fmtCurrency(totalIncomeYTD)}</div>`);
+        barsEl.querySelectorAll('[data-income-cat]').forEach(row => {
+          row.addEventListener('click', () => {
+            sessionStorage.setItem('txn-filter-intent', JSON.stringify({ catId: row.dataset.incomeCat, year: selYear }));
+            location.hash = 'transactions';
+          });
         });
       }
     }
