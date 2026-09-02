@@ -178,6 +178,11 @@ function rebuildCategoryList(el, uid, descs) {
     });
   });
 
+  // Edit custom category
+  el.querySelectorAll('.cat-edit-btn').forEach(btn => {
+    btn.addEventListener('click', () => openEditCategoryModal(uid, btn.dataset.cat, el, descs));
+  });
+
   // Delete custom category
   el.querySelectorAll('.cat-delete-btn').forEach(btn => {
     btn.addEventListener('click', async () => {
@@ -212,6 +217,7 @@ function renderLeafRow(leaf, descs) {
           ${leaf.isCustom      ? '<span class="cat-leaf-badge custom-badge">Custom</span>': ''}
         </div>
         <div class="cat-leaf-actions">
+          ${leaf.isCustom ? `<button class="cat-edit-btn" data-cat="${leaf.id}" title="Edit category">✎</button>` : ''}
           <button class="cat-hide-btn" data-cat="${leaf.id}" title="${isHidden ? 'Show in pickers' : 'Hide from pickers'}">
             ${isHidden ? '👁 Show' : '🙈 Hide'}
           </button>
@@ -306,6 +312,53 @@ function openAddCategoryModal(uid, groupId, listEl, descs) {
     };
     await dbSet(`customCategories/${uid}/${catId}`, catDef);
     addCustomCategory(catDef);
+    close();
+    rebuildCategoryList(listEl, uid, descs);
+  });
+}
+
+function openEditCategoryModal(uid, catId, listEl, descs) {
+  const cat = CATEGORY_MAP[catId];
+  if (!cat?.isCustom) return;
+  const overlay = document.createElement('div');
+  overlay.className = 'modal-overlay';
+  overlay.innerHTML = `
+    <div class="modal">
+      <div class="modal-hdr">
+        <span>Edit ${cat.icon ?? '📌'} ${cat.name}</span>
+        <button class="modal-close">✕</button>
+      </div>
+      <div class="modal-body">
+        <label class="modal-label">Name
+          <input id="ec-name" class="modal-input" value="${cat.name}" maxlength="40" />
+        </label>
+        <label class="modal-label">Icon
+          <input id="ec-icon" class="modal-input" value="${cat.icon ?? '📌'}" maxlength="2" style="width:4rem" />
+        </label>
+        <label class="modal-label" style="flex-direction:row;align-items:center;gap:8px">
+          <input type="checkbox" id="ec-annual" ${cat.isAnnual ? 'checked' : ''}> Annual expense (e.g. vacations, insurance)
+        </label>
+        <label class="modal-label" style="flex-direction:row;align-items:center;gap:8px">
+          <input type="checkbox" id="ec-fixed" ${cat.isFixed ? 'checked' : ''}> Fixed expense (same amount monthly)
+        </label>
+      </div>
+      <div class="modal-footer">
+        <button class="btn-primary modal-save-edit">Save changes</button>
+      </div>
+    </div>`;
+  document.body.appendChild(overlay);
+  const close = () => overlay.remove();
+  overlay.querySelector('.modal-close').addEventListener('click', close);
+  overlay.addEventListener('click', e => { if (e.target === overlay) close(); });
+  overlay.querySelector('.modal-save-edit').addEventListener('click', async () => {
+    const name = overlay.querySelector('#ec-name').value.trim();
+    if (!name) return alert('Name is required.');
+    const icon     = overlay.querySelector('#ec-icon').value.trim() || '📌';
+    const isAnnual = overlay.querySelector('#ec-annual').checked;
+    const isFixed  = overlay.querySelector('#ec-fixed').checked;
+    const stored   = (await dbGet(`customCategories/${uid}/${catId}`).catch(() => null)) ?? {};
+    await dbSet(`customCategories/${uid}/${catId}`, { ...stored, name, icon, isAnnual, isFixed });
+    Object.assign(CATEGORY_MAP[catId], { name, icon, isAnnual, isFixed });
     close();
     rebuildCategoryList(listEl, uid, descs);
   });

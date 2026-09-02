@@ -1,5 +1,15 @@
 export const CHANGELOG = [
   {
+    version: '1.19.0',
+    date:    '2026-09-01',
+    changes: [
+      'Settings: custom categories can now be edited (name, icon, annual/fixed flags) via the ✎ button.',
+      'Dashboard annual: Uncategorized row now appears in the category breakdown — tap to review those transactions.',
+      'Budgets annual: tile bars show a pace marker (▏) at the current year-elapsed % so you can see at a glance whether spend is ahead or behind schedule.',
+      'Budgets annual: summary header now recalculates for the selected group or category when you drill down, instead of always showing overall totals.',
+    ],
+  },
+  {
     version: '1.18.4',
     date:    '2026-09-01',
     changes: [

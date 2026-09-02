@@ -285,9 +285,15 @@ export function renderDashboard(container) {
       return true;
     });
     const spent       = expenses.reduce((s, t) => s + t.amount, 0);
+    const uncatSpend  = yearTxns.reduce((s, t) => {
+      if (t.amount <= 0 || t.isTransfer || t.group === 'transfer' || t.ignored) return s;
+      const cat = getCategoryById(t.category);
+      return (!cat.isIncome && cat.id !== 'transfer' && cat.parent !== 'transfer' && !cat.parent) ? s + t.amount : s;
+    }, 0);
+    const totalSpentDisplay = spent + uncatSpend;
     const incomeAmt   = yearTxns.filter(t => t.amount < 0).reduce((s, t) => s - t.amount, 0);
     const annualBudget = Object.values(latestBudgets ?? {}).reduce((s, b) => s + (b.monthly ?? 0), 0) * 12;
-    const spentPct     = annualBudget > 0 ? Math.round((spent / annualBudget) * 100) : 0;
+    const spentPct     = annualBudget > 0 ? Math.round((totalSpentDisplay / annualBudget) * 100) : 0;
 
     // vs prior year
     const prevYearStr  = String(selYear - 1);
@@ -298,7 +304,7 @@ export function renderDashboard(container) {
 
     container.querySelector('#spent-label').textContent   = 'Spent YTD';
     container.querySelector('#vs-prev-label').textContent = 'vs Last Year';
-    container.querySelector('#spent-val').textContent     = fmtCurrency(spent);
+    container.querySelector('#spent-val').textContent     = fmtCurrency(totalSpentDisplay);
     container.querySelector('#spent-sub').textContent     = `of ${fmtCurrency(annualBudget)} budget`;
 
     const barColor = spentPct > pacePct + 10 ? 'var(--red,#ef4444)' : spentPct > pacePct ? 'var(--amber,#f59e0b)' : '#16a34a';
@@ -328,7 +334,7 @@ export function renderDashboard(container) {
       paceSection.style.display = '';
       container.querySelector('#pace-bar-annual').innerHTML = `
         <div class="pace-labels">
-          <span>${fmtCurrency(spent)} YTD</span>
+          <span>${fmtCurrency(totalSpentDisplay)} YTD</span>
           <span style="color:var(--muted)">${pacePct}% of year elapsed</span>
           <span>${fmtCurrency(annualBudget)} annual budget</span>
         </div>
@@ -359,6 +365,25 @@ export function renderDashboard(container) {
       Object.entries(latestBudgets ?? {}).map(([k, v]) => [k, { monthly: (v.monthly ?? 0) * 12 }])
     );
     renderSpendBars(container, expenses, annualBudgets, pacePct, selYear, selMonth, true, showHiddenDash);
+
+    if (uncatSpend > 0) {
+      const barsEl = container.querySelector('#spend-bars');
+      if (barsEl) {
+        barsEl.insertAdjacentHTML('beforeend', `
+          <div class="prog-row prog-row-uncat" style="cursor:pointer" title="Tap to review uncategorized transactions">
+            <div class="prog-row-top">
+              <span class="prog-icon">❓</span>
+              <span class="prog-name">Uncategorized</span>
+              <span class="prog-amt" style="color:#ef4444">${fmtCurrency(uncatSpend)}</span>
+            </div>
+            <div class="prog-footer" style="color:#ef4444">needs review</div>
+          </div>`);
+        barsEl.querySelector('.prog-row-uncat')?.addEventListener('click', () => {
+          sessionStorage.setItem('txn-filter-intent', JSON.stringify({ review: true, year: selYear }));
+          location.hash = 'transactions';
+        });
+      }
+    }
 
     renderTrendChart(container, allTxns, selYear, selMonth, 'annual');
     renderRecentTxns(container, allTxns);

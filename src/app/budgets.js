@@ -15,6 +15,8 @@ let _showHiddenAnnual        = false;
 let _annualUncategorizedSpend = 0;
 let _budgetDetailPage        = 0;
 const BUD_DETAIL_PAGE        = 15;
+let _annualSummaryData       = null; // cached for level-aware header updates
+let _annualParams            = null; // { uid, budgets, txns, year } for re-renders
 
 export function renderBudgets(container) {
   const now = new Date();
@@ -487,9 +489,12 @@ function renderBudgetAnnual(uid, budgets, txns, year) {
     .filter(l => !l.hide || _showHiddenAnnual)
     .reduce((s, l) => s + (spentByCat[l.id] ?? 0), 0) + uncatSpend;
 
+  _annualSummaryData = { totalSpent, totalAnnualBudget, spentByCat, budgets, rootMap: null /* filled below */ };
+  _annualParams      = { uid, budgets, txns, year };
+
   const annualRemaining = totalAnnualBudget - totalSpent;
   summaryEl.innerHTML = `
-    <div style="display:flex;align-items:center;gap:1rem;flex-wrap:wrap">
+    <div id="bud-annual-summary-inner" style="display:flex;align-items:center;gap:1rem;flex-wrap:wrap">
       <span style="color:var(--muted)">Budget ${fmtCurrency(totalAnnualBudget)}</span>
       <span style="color:#ef4444">${fmtCurrency(totalSpent)} YTD</span>
       <span style="color:${annualRemaining >= 0 ? 'var(--brand)' : '#ef4444'}">${fmtCurrency(Math.abs(annualRemaining))} ${annualRemaining >= 0 ? 'left' : 'over'}</span>
@@ -513,6 +518,7 @@ function renderBudgetAnnual(uid, budgets, txns, year) {
     rootMap.get(leaf.parent).push(leaf);
   }
   const rootCats = CATEGORIES.filter(c => !c.parent && !c.isIncome && c.id !== 'transfer' && rootMap.has(c.id));
+  if (_annualSummaryData) _annualSummaryData.rootMap = rootMap;
 
   renderAnnualNav(listEl, rootCats, rootMap, budgets, spentByCat, txns, pacePct, year);
 }
@@ -553,6 +559,49 @@ function renderAnnualNav(listEl, rootCats, rootMap, budgets, spentByCat, txns, p
   if (_annualLevel === 1) renderAnnualGroupTiles(contentEl, rootCats, rootMap, budgets, spentByCat, listEl, rootCats, txns, pacePct, year);
   else if (_annualLevel === 2) renderAnnualCategoryTiles(contentEl, _annualGroupId, rootMap, budgets, spentByCat, listEl, rootCats, txns, pacePct, year);
   else if (_annualLevel === 3) renderAnnualCategoryDetail(contentEl, _annualCatId, budgets, spentByCat, txns, year);
+  updateAnnualSummary();
+}
+
+function updateAnnualSummary() {
+  const el = document.getElementById('bud-annual-summary-inner');
+  if (!el || !_annualSummaryData) return;
+  const { totalSpent, totalAnnualBudget, spentByCat, budgets, rootMap } = _annualSummaryData;
+
+  let displaySpent, displayBudget, titleHtml = '';
+  if (_annualLevel === 2 && _annualGroupId && rootMap) {
+    const leaves  = rootMap.get(_annualGroupId) ?? [];
+    displaySpent  = leaves.reduce((s, l) => s + (spentByCat[l.id] ?? 0), 0);
+    displayBudget = leaves.reduce((s, l) => s + (budgets[l.id]?.monthly ?? 0) * 12, 0);
+    const grp     = CATEGORIES.find(c => c.id === _annualGroupId);
+    titleHtml = `<span style="font-weight:600">${grp?.icon ?? ''} ${grp?.name ?? ''}</span>`;
+  } else if (_annualLevel === 3 && _annualCatId === '__uncategorized__') {
+    displaySpent  = _annualUncategorizedSpend;
+    displayBudget = 0;
+    titleHtml = '<span style="font-weight:600">❓ Uncategorized</span>';
+  } else if (_annualLevel === 3 && _annualCatId) {
+    displaySpent  = spentByCat[_annualCatId] ?? 0;
+    displayBudget = (budgets[_annualCatId]?.monthly ?? 0) * 12;
+    const cat     = CATEGORIES.find(c => c.id === _annualCatId);
+    titleHtml = `<span style="font-weight:600">${cat?.icon ?? ''} ${cat?.name ?? _annualCatId}</span>`;
+  } else {
+    displaySpent  = totalSpent;
+    displayBudget = totalAnnualBudget;
+  }
+
+  const remaining = displayBudget - displaySpent;
+  el.innerHTML = `
+    ${titleHtml}
+    ${displayBudget > 0 ? `<span style="color:var(--muted)">Budget ${fmtCurrency(displayBudget)}</span>` : ''}
+    <span style="color:#ef4444">${fmtCurrency(displaySpent)} YTD</span>
+    ${displayBudget > 0 ? `<span style="color:${remaining >= 0 ? 'var(--brand)' : '#ef4444'}">${fmtCurrency(Math.abs(remaining))} ${remaining >= 0 ? 'left' : 'over'}</span>` : ''}
+    ${_annualLevel === 1 ? `<label style="font-size:0.72rem;color:var(--muted);margin-left:auto;display:flex;align-items:center;gap:4px;cursor:pointer">
+      <input type="checkbox" id="bud-show-hidden" ${_showHiddenAnnual ? 'checked' : ''}> Show hidden
+    </label>` : ''}
+  `;
+  el.querySelector('#bud-show-hidden')?.addEventListener('change', e => {
+    _showHiddenAnnual = e.target.checked;
+    if (_annualParams) renderBudgetAnnual(_annualParams.uid, _annualParams.budgets, _annualParams.txns, _annualParams.year);
+  });
 }
 
 function renderAnnualGroupTiles(el, rootCats, rootMap, budgets, spentByCat, listEl, allRoots, txns, pacePct, year) {
@@ -582,9 +631,12 @@ function renderAnnualGroupTiles(el, rootCats, rootMap, budgets, spentByCat, list
         <span class="bud-tile-spent">${fmtCurrency(groupSpent)}</span>
         <span class="bud-tile-budget"> / ${fmtCurrency(groupBudget)}/yr</span>
       </div>
-      <div class="bud-tile-bar-track"><div class="bud-tile-bar-fill" style="width:${pct}%"></div></div>
+      <div class="bud-tile-bar-track">
+        <div class="bud-tile-bar-fill" style="width:${pct}%"></div>
+        ${pacePct != null ? `<div class="bud-tile-bar-pace" style="left:${pacePct}%"></div>` : ''}
+      </div>
       <div class="bud-tile-footer">
-        <span class="bud-tile-pct">${pct}% ${status === 'over' ? '↑ over' : status === 'warn' ? '⚠ on pace' : 'spent'}</span>
+        <span class="bud-tile-pct">${pct}% ${status === 'over' ? '↑ over budget' : pacePct != null && pct > pacePct + 10 ? '⚠ over pace' : pacePct != null && pct < pacePct ? '✓ under pace' : 'on pace'}</span>
         <span class="bud-tile-arrow">›</span>
       </div>
     </div>`;
@@ -657,8 +709,11 @@ function renderAnnualCategoryTiles(el, groupId, rootMap, budgets, spentByCat, li
         ${annualLimit > 0 ? `<span class="bud-tile-budget"> / ${fmtCurrency(annualLimit)}/yr</span>` : ''}
       </div>
       ${annualLimit > 0
-        ? `<div class="bud-tile-bar-track"><div class="bud-tile-bar-fill" style="width:${pct}%"></div></div>
-           <div class="bud-tile-pct">${pct}%${leaf.isFixed ? ' — fixed' : pct >= 100 ? ' ↑ over' : ''}</div>`
+        ? `<div class="bud-tile-bar-track">
+             <div class="bud-tile-bar-fill" style="width:${pct}%"></div>
+             ${pacePct != null ? `<div class="bud-tile-bar-pace" style="left:${pacePct}%"></div>` : ''}
+           </div>
+           <div class="bud-tile-pct">${pct}%${leaf.isFixed ? ' — fixed' : pct >= 100 ? ' ↑ over' : pacePct != null && pct > pacePct + 10 ? ' ⚠ pace' : pacePct != null && pct < pacePct ? ' ✓' : ''}</div>`
         : `<div class="bud-set-link" data-cat="${leaf.id}">Set annual budget</div>`
       }
     </div>`;
