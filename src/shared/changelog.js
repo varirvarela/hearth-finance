@@ -1,5 +1,14 @@
 export const CHANGELOG = [
   {
+    version: '1.18.3',
+    date:    '2026-09-01',
+    changes: [
+      'Categories: hiding a custom category no longer deletes it from the database — it can now be shown again without re-creating it.',
+      'Transactions: "Needs Review" filter now surfaces transactions whose category was deleted or is otherwise unrecognized.',
+      'Categories: restored Travel › Passthrough as a built-in category.',
+    ],
+  },
+  {
     version: '1.18.2',
     date:    '2026-09-01',
     changes: [

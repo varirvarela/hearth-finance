@@ -165,7 +165,9 @@ function rebuildCategoryList(el, uid, descs) {
       const nowHide = !cat.hide;
       hideCategory(catId, nowHide);
       if (cat.isCustom) {
-        if (nowHide) await dbRemove(`customCategories/${uid}/${catId}`);
+        // Preserve the full catDef so it reloads correctly after hide/show
+        const stored = (await dbGet(`customCategories/${uid}/${catId}`).catch(() => null)) ?? {};
+        await dbSet(`customCategories/${uid}/${catId}`, { ...stored, hide: nowHide });
       } else {
         await dbSet(`customCategories/${uid}/${catId}`, { userHide: nowHide });
       }

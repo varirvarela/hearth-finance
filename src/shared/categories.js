@@ -98,8 +98,10 @@ export const CATEGORIES = [
     description: 'Family vacation trips: beach holidays, road trips, theme parks, and leisure travel with the whole family.' },
   { id: 'travel_vari',      name: 'Vari',      parent: 'travel', icon: '🗺️', color: '#042f2e', isFixed: false, isAnnual: true,
     description: 'Travel and outings specifically for Vari (one of the children): activities, camps, or trips centered on her.' },
-  { id: 'travel_guli',      name: 'Guli',      parent: 'travel', icon: '👶', color: '#022c22', isFixed: false, isAnnual: true,
+  { id: 'travel_guli',           name: 'Guli',        parent: 'travel', icon: '👶', color: '#022c22', isFixed: false, isAnnual: true,
     description: 'Travel and outings specifically for Guli (one of the children): activities, camps, or trips centered on them.' },
+  { id: 'travel_custom_passthrough', name: 'Passthrough', parent: 'travel', icon: '🔁', color: '#0d9488', isFixed: false, isAnnual: false,
+    description: 'Travel-related expenses that pass through — e.g. reimbursable costs or temporary holds.' },
 
   // ── Business ────────────────────────────────────────────────────────────
   { id: 'business_accenture', name: 'Gastos Accenture', parent: 'business', icon: '💼', color: '#334155', isFixed: false, isAnnual: false,

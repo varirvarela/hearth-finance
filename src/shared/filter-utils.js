@@ -1,3 +1,5 @@
+import { CATEGORY_MAP } from './categories.js';
+
 export function blankState() {
   return {
     query:         '',
@@ -22,7 +24,9 @@ export function blankState() {
 
 export function needsReview(t) {
   if (t.categorySource === 'manual') return false; // user confirmed — never prompt again
-  return t.needsReview === true || t.category === 'uncategorized' || (t.aiConfidence != null && t.aiConfidence < 0.75);
+  const catId = t.category;
+  const unknownCat = catId && catId !== 'uncategorized' && !CATEGORY_MAP[catId];
+  return t.needsReview === true || !catId || catId === 'uncategorized' || unknownCat || (t.aiConfidence != null && t.aiConfidence < 0.75);
 }
 
 // Normalize the raw source values stored on a transaction to a canonical bucket
