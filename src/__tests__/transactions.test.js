@@ -56,19 +56,22 @@ describe('needsReview', () => {
     expect(needsReview({ category: 'uncategorized' })).toBe(true);
   });
   it('returns true when aiConfidence is below 0.75', () => {
-    expect(needsReview({ category: 'food_dining', aiConfidence: 0.74 })).toBe(true);
+    expect(needsReview({ category: 'salidas_comunes', aiConfidence: 0.74 })).toBe(true);
   });
   it('returns false when aiConfidence is exactly 0.75', () => {
-    expect(needsReview({ category: 'food_dining', aiConfidence: 0.75 })).toBe(false);
+    expect(needsReview({ category: 'salidas_comunes', aiConfidence: 0.75 })).toBe(false);
   });
   it('returns false for a clean transaction with high confidence', () => {
-    expect(needsReview({ category: 'food_dining', aiConfidence: 0.95, needsReview: false })).toBe(false);
+    expect(needsReview({ category: 'salidas_comunes', aiConfidence: 0.95, needsReview: false })).toBe(false);
   });
   it('returns false when aiConfidence is absent (not AI-categorized)', () => {
-    expect(needsReview({ category: 'food_dining' })).toBe(false);
+    expect(needsReview({ category: 'salidas_comunes' })).toBe(false);
   });
   it('returns false when needsReview is false and category is set', () => {
-    expect(needsReview({ category: 'auto_gas', needsReview: false })).toBe(false);
+    expect(needsReview({ category: 'auto_comunes', needsReview: false })).toBe(false);
+  });
+  it('returns true when category ID is unknown (deleted custom category)', () => {
+    expect(needsReview({ category: 'travel_custom_deleted_xyz' })).toBe(true);
   });
 });
 
@@ -294,15 +297,15 @@ describe('applyFilters — accounts', () => {
 
 describe('applyFilters — review and pending', () => {
   it('review filter includes only transactions that need review (uncategorized)', () => {
-    const txns = [tx('a', { category: 'uncategorized' }), tx('b', { category: 'food_dining' })];
+    const txns = [tx('a', { category: 'uncategorized' }), tx('b', { category: 'salidas_comunes' })];
     const result = applyFilters(txns, st({ review: true }));
     expect(result).toHaveLength(1);
     expect(result[0][0]).toBe('a');
   });
   it('review filter includes low-confidence AI categorizations', () => {
     const txns = [
-      tx('a', { category: 'food_dining', aiConfidence: 0.5 }),
-      tx('b', { category: 'food_dining', aiConfidence: 0.9 }),
+      tx('a', { category: 'salidas_comunes', aiConfidence: 0.5 }),
+      tx('b', { category: 'salidas_comunes', aiConfidence: 0.9 }),
     ];
     const result = applyFilters(txns, st({ review: true }));
     expect(result).toHaveLength(1);

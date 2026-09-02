@@ -1,5 +1,13 @@
 export const CHANGELOG = [
   {
+    version: '1.18.4',
+    date:    '2026-09-01',
+    changes: [
+      'Apply rules: "All transactions" is now the first and default scope option — overwrites any existing categorization.',
+      'Tests: fixed category ID references to use real IDs; added test for unknown-category needsReview detection.',
+    ],
+  },
+  {
     version: '1.18.3',
     date:    '2026-09-01',
     changes: [

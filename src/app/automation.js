@@ -721,7 +721,8 @@ function openApplySheet(uid, rules, { singleRule = null, filterCatId = null } = 
 
           <div class="modal-label" style="margin-top:1rem">Transactions to include</div>
           <div class="ars-radio-group">
-            <label class="ars-radio-opt"><input type="radio" name="ars-s" value="nonManual" checked> All (skip manual)</label>
+            <label class="ars-radio-opt"><input type="radio" name="ars-s" value="all" checked> All transactions (overwrite everything)</label>
+            <label class="ars-radio-opt"><input type="radio" name="ars-s" value="nonManual"> All except manually set</label>
             <label class="ars-radio-opt"><input type="radio" name="ars-s" value="uncategorized"> Uncategorized only</label>
             <label class="ars-radio-opt"><input type="radio" name="ars-s" value="review"> Has AI suggestion (needs review)</label>
           </div>
@@ -831,7 +832,7 @@ function openApplySheet(uid, rules, { singleRule = null, filterCatId = null } = 
 
   sheet.querySelector('#ars-preview-btn').addEventListener('click', async () => {
     const dateVal  = sheet.querySelector('input[name="ars-d"]:checked')?.value ?? 'all';
-    const scopeVal = sheet.querySelector('input[name="ars-s"]:checked')?.value ?? 'nonManual';
+    const scopeVal = sheet.querySelector('input[name="ars-s"]:checked')?.value ?? 'all';
 
     let fromDate = null, toDate = null;
     if (dateVal === 'custom') {
@@ -870,6 +871,7 @@ function openApplySheet(uid, rules, { singleRule = null, filterCatId = null } = 
     const candidates = Object.entries(txns ?? {}).filter(([, t]) => {
       if (fromDate && (t.date ?? '') < fromDate) return false;
       if (toDate   && (t.date ?? '') > toDate)   return false;
+      // 'all' skips no transactions based on categorization state
       if (scopeVal === 'nonManual'     && t.categorySource === 'manual')                return false;
       if (scopeVal === 'uncategorized' && t.category && t.category !== 'uncategorized') return false;
       if (scopeVal === 'review'        && !t.needsReview)                               return false;
