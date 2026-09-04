@@ -758,6 +758,43 @@ button:active  { opacity: 0.7; transform: scale(0.97); }
 }
 .modal input:focus, .modal select:focus { border-color: var(--brand); background: var(--surface); }
 
+.modal-hdr {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding-top: 0.25rem;
+}
+.modal-title { font-size: 1rem; font-weight: 700; }
+.modal-close {
+  background: none;
+  border: none;
+  font-size: 1.1rem;
+  color: var(--muted);
+  cursor: pointer;
+  padding: 4px 8px;
+  line-height: 1;
+}
+.modal-close:hover { color: var(--text); }
+.modal-body { display: flex; flex-direction: column; gap: 0.75rem; }
+.modal-footer {
+  display: flex;
+  gap: 0.6rem;
+  padding-top: 0.25rem;
+}
+.modal-input {
+  width: 100%;
+  padding: 0.7rem 0.9rem;
+  border: 1.5px solid var(--border);
+  border-radius: var(--r-sm);
+  font-size: 0.9rem;
+  background: var(--bg);
+  color: var(--text);
+  font-family: inherit;
+  box-sizing: border-box;
+  transition: border-color 0.15s;
+}
+.modal-input:focus { border-color: var(--brand); outline: none; }
+
 /* ── Sheet overlay (bottom drawer / full-height sheet) ── */
 .sheet-overlay {
   position: fixed;

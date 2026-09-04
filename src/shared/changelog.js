@@ -1,5 +1,14 @@
 export const CHANGELOG = [
   {
+    version: '1.21.0',
+    date:    '2026-09-03',
+    changes: [
+      'Transactions: new ✎ Edit button lets you correct merchant name, description, date, and amount on any transaction. Edited transactions are flagged so automatic syncs never overwrite your changes.',
+      'Transactions: new ⧉ Split button lets you divide a single transaction into two parts with different categories and amounts.',
+      'Sync: switched to Plaid /transactions/sync (cursor-based). Pending transactions now disappear automatically when they settle, and any category you set on a pending transaction carries over to the settled version.',
+    ],
+  },
+  {
     version: '1.20.0',
     date:    '2026-09-01',
     changes: [

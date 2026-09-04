@@ -115,6 +115,29 @@ export async function getTransactions(env, accessToken, startDate, endDate, slot
   return res.json();
 }
 
+export async function transactionsSync(env, accessToken, cursor, slot = 1) {
+  const res = await fetch(plaidUrl(env, '/transactions/sync'), {
+    method: 'POST',
+    headers: plaidHeaders(env, slot),
+    body: JSON.stringify({
+      access_token: accessToken,
+      ...(cursor ? { cursor } : {}),
+      options: { include_personal_finance_category: true },
+    }),
+  });
+  return res.json();
+}
+
+// Fires a Plaid sandbox webhook to simulate transaction events (sandbox only)
+export async function fireSandboxWebhook(env, accessToken, webhookCode, slot = 1) {
+  const res = await fetch(plaidUrl(env, '/sandbox/item/fire_webhook'), {
+    method: 'POST',
+    headers: plaidHeaders(env, slot),
+    body: JSON.stringify({ access_token: accessToken, webhook_code: webhookCode }),
+  });
+  return res.json();
+}
+
 const CORS = { 'Access-Control-Allow-Origin': '*', 'Content-Type': 'application/json' };
 
 async function getUidFromRequest(request, env) {

@@ -37,13 +37,25 @@ export default {
         const token = (request.headers.get('Authorization') ?? '').replace(/^Bearer\s+/i, '');
         const uid   = uidFromJwt(token);
         if (!uid) return json({ error: 'Unauthorized' }, 401);
-        const body = await request.json().catch(() => ({}));
-        const { startDate, endDate } = body;
         // Resolve household: members sync under the owner's namespace
         const { fbGet } = await import('./firebase.js');
         const userProfile = await fbGet(env, `users/${uid}`).catch(() => null);
         const syncUid = (typeof userProfile === 'object' && userProfile?.householdId) ? userProfile.householdId : uid;
-        const result = await handleUserSync(env, syncUid, { startDate, endDate });
+        const result = await handleUserSync(env, syncUid);
+        return json(result);
+      }
+
+      // Sandbox-only: fire a Plaid webhook to simulate transaction settlement
+      if (pathname === '/plaid/sandbox-fire' && request.method === 'POST') {
+        const token = (request.headers.get('Authorization') ?? '').replace(/^Bearer\s+/i, '');
+        const uid   = uidFromJwt(token);
+        if (!uid) return json({ error: 'Unauthorized' }, 401);
+        const body = await request.json().catch(() => ({}));
+        const { itemId, slot = 1, webhookCode = 'DEFAULT_UPDATE' } = body;
+        const accessToken = await env.PLAID_TOKENS.get(`s${slot}:${uid}:${itemId}`);
+        if (!accessToken) return json({ error: 'Item not found' }, 404);
+        const { fireSandboxWebhook } = await import('./plaid.js');
+        const result = await fireSandboxWebhook(env, accessToken, webhookCode, slot);
         return json(result);
       }
 

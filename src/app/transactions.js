@@ -1,4 +1,4 @@
-import { dbListen, dbGet, dbSet, dbUpdate, dbRemove, auth, getPartnerUid, getHouseholdId } from '../shared/firebase.js';
+import { dbListen, dbGet, dbSet, dbUpdate, dbRemove, dbPush, auth, getPartnerUid, getHouseholdId } from '../shared/firebase.js';
 import { fmtCurrency, fmtDate }     from '../shared/format.js';
 import { openImportModal } from './import.js';
 import {
@@ -102,6 +102,12 @@ export function renderTransactions(container) {
         margin-top: 0.9rem; padding-top: 0.7rem; border-top: 1px solid var(--border);
         display: flex; align-items: center; gap: 0.6rem; flex-wrap: wrap;
       }
+      .btn-edit-txn, .btn-split-txn {
+        font-size: 0.8rem; background: none; border: 1.5px solid var(--border);
+        color: var(--text); border-radius: 8px; padding: 4px 12px;
+        cursor: pointer; opacity: 0.75; transition: opacity 0.15s;
+      }
+      .btn-edit-txn:hover, .btn-split-txn:hover { opacity: 1; border-color: var(--brand); color: var(--brand); }
       .btn-delete-txn {
         font-size: 0.8rem; color: #ef4444; background: none;
         border: 1.5px solid #ef4444; border-radius: 8px; padding: 4px 12px;
@@ -1060,7 +1066,9 @@ function renderPage(filtered, state, uid, refresh, accountMap) {
         </div>
         ${!isPartner ? `
         <div class="txn-detail-actions">
-          <button class="btn-delete-txn">Delete transaction</button>
+          <button class="btn-edit-txn">✎ Edit</button>
+          <button class="btn-split-txn">⧉ Split</button>
+          <button class="btn-delete-txn">Delete</button>
           <div class="delete-confirm" hidden>
             <span class="delete-confirm-msg">Permanently delete this transaction?</span>
             <button class="btn-delete-confirm">Delete</button>
@@ -1217,6 +1225,16 @@ function renderPage(filtered, state, uid, refresh, accountMap) {
           const prefill = { conditions, actionValue: catId, priority: 50 };
           openRuleEditor(uid, null, prefill, catId);
         });
+
+        // ── Edit transaction attributes ──
+        detail.querySelector('.btn-edit-txn')?.addEventListener('click', () => {
+          openEditTransactionModal(id, t, uid);
+        });
+
+        // ── Split transaction ──
+        detail.querySelector('.btn-split-txn')?.addEventListener('click', () => {
+          openSplitTransactionModal(id, t, uid, item, detail);
+        });
       }
     });
   });
@@ -1261,6 +1279,217 @@ function showRulePrompt(row, txn, catObj, uid) {
   });
 
   prompt.querySelector('.btn-rule-skip').addEventListener('click', () => prompt.remove());
+}
+
+// ── Edit transaction modal ────────────────────────────────────────────────
+
+function openEditTransactionModal(txnId, t, uid) {
+  const absAmt = Math.abs(t.amount);
+  const sign   = t.amount < 0 ? -1 : 1; // preserve sign on save
+
+  const modal = document.createElement('div');
+  modal.className = 'modal-overlay';
+  document.body.appendChild(modal);
+
+  modal.innerHTML = `
+    <div class="modal">
+      <div class="modal-hdr">
+        <span class="modal-title">Edit transaction</span>
+        <button class="modal-close">✕</button>
+      </div>
+      <div class="modal-body" style="display:flex;flex-direction:column;gap:0.9rem">
+        <label class="modal-label">
+          Merchant name
+          <input class="modal-input" id="edit-merchant" type="text" value="${(t.merchantName ?? '').replace(/"/g, '&quot;')}">
+        </label>
+        <label class="modal-label">
+          Description
+          <input class="modal-input" id="edit-desc" type="text" value="${(t.description ?? '').replace(/"/g, '&quot;')}">
+        </label>
+        <label class="modal-label">
+          Date
+          <input class="modal-input" id="edit-date" type="date" value="${t.date ?? ''}">
+        </label>
+        <label class="modal-label">
+          Amount
+          <input class="modal-input" id="edit-amount" type="number" step="0.01" min="0" value="${absAmt.toFixed(2)}">
+        </label>
+        <div id="edit-error" style="color:#ef4444;font-size:0.8rem;display:none"></div>
+      </div>
+      <div class="modal-footer" style="display:flex;gap:0.6rem;justify-content:flex-end">
+        <button class="btn-ghost modal-cancel-btn">Cancel</button>
+        <button class="btn-primary" id="edit-save-btn">Save</button>
+      </div>
+    </div>`;
+
+  const close = () => modal.remove();
+  modal.querySelector('.modal-close').addEventListener('click', close);
+  modal.querySelector('.modal-cancel-btn').addEventListener('click', close);
+  modal.addEventListener('click', e => { if (e.target === modal) close(); });
+
+  modal.querySelector('#edit-save-btn').addEventListener('click', async () => {
+    const newMerchant = modal.querySelector('#edit-merchant').value.trim() || null;
+    const newDesc     = modal.querySelector('#edit-desc').value.trim();
+    const newDate     = modal.querySelector('#edit-date').value;
+    const newAbsAmt   = parseFloat(modal.querySelector('#edit-amount').value);
+    const errEl       = modal.querySelector('#edit-error');
+
+    if (!newDesc) { errEl.textContent = 'Description is required.'; errEl.style.display = ''; return; }
+    if (!newDate) { errEl.textContent = 'Date is required.'; errEl.style.display = ''; return; }
+    if (isNaN(newAbsAmt) || newAbsAmt <= 0) { errEl.textContent = 'Amount must be a positive number.'; errEl.style.display = ''; return; }
+
+    await dbUpdate(`transactions/${uid}/${txnId}`, {
+      merchantName: newMerchant,
+      description:  newDesc,
+      date:         newDate,
+      amount:       parseFloat((sign * newAbsAmt).toFixed(2)),
+      isEdited:     true,
+    });
+    close();
+  });
+}
+
+// ── Split transaction modal ───────────────────────────────────────────────
+
+function buildLeafCatOptions(selectedId = '') {
+  const roots = getRootCategories();
+  let html = '';
+  for (const root of roots) {
+    if (root.isIncome) continue; // splits only for expenses
+    const children = getChildCategories(root.id).filter(c => !c.hide);
+    if (!children.length) continue;
+    html += `<optgroup label="${root.icon} ${root.name}">`;
+    for (const c of children) {
+      html += `<option value="${c.id}"${c.id === selectedId ? ' selected' : ''}>${c.icon} ${c.name}</option>`;
+    }
+    html += `</optgroup>`;
+  }
+  return html;
+}
+
+function openSplitTransactionModal(txnId, t, uid, itemEl, detailEl) {
+  const absTotal = Math.abs(t.amount);
+  const sign     = t.amount < 0 ? -1 : 1;
+
+  const modal = document.createElement('div');
+  modal.className = 'modal-overlay';
+  document.body.appendChild(modal);
+
+  const half1 = (absTotal / 2).toFixed(2);
+  const half2 = (absTotal - parseFloat(half1)).toFixed(2);
+  const catOpts = buildLeafCatOptions(t.category);
+
+  modal.innerHTML = `
+    <div class="modal">
+      <div class="modal-hdr">
+        <span class="modal-title">Split transaction</span>
+        <button class="modal-close">✕</button>
+      </div>
+      <div class="modal-body" style="display:flex;flex-direction:column;gap:0.9rem">
+        <div style="font-size:0.82rem;color:var(--muted)">Original: ${fmtCurrency(absTotal)} — ${t.merchantName ?? t.description}</div>
+        <div class="split-row" style="display:grid;grid-template-columns:1fr 1fr;gap:0.6rem;align-items:center">
+          <label class="modal-label" style="margin:0">
+            Part 1 amount
+            <input class="modal-input" id="split-amt-1" type="number" step="0.01" min="0.01" value="${half1}">
+          </label>
+          <label class="modal-label" style="margin:0">
+            Category
+            <select class="modal-input" id="split-cat-1">${catOpts}</select>
+          </label>
+        </div>
+        <div class="split-row" style="display:grid;grid-template-columns:1fr 1fr;gap:0.6rem;align-items:center">
+          <label class="modal-label" style="margin:0">
+            Part 2 amount
+            <input class="modal-input" id="split-amt-2" type="number" step="0.01" min="0.01" value="${half2}">
+          </label>
+          <label class="modal-label" style="margin:0">
+            Category
+            <select class="modal-input" id="split-cat-2">${catOpts}</select>
+          </label>
+        </div>
+        <div id="split-sum-check" style="font-size:0.8rem;color:var(--muted);text-align:right">Sum: ${fmtCurrency(absTotal)}</div>
+        <div id="split-error" style="color:#ef4444;font-size:0.8rem;display:none"></div>
+      </div>
+      <div class="modal-footer" style="display:flex;gap:0.6rem;justify-content:flex-end">
+        <button class="btn-ghost modal-cancel-btn">Cancel</button>
+        <button class="btn-primary" id="split-save-btn">Split</button>
+      </div>
+    </div>`;
+
+  const amt1El = modal.querySelector('#split-amt-1');
+  const amt2El = modal.querySelector('#split-amt-2');
+  const sumEl  = modal.querySelector('#split-sum-check');
+  const errEl  = modal.querySelector('#split-error');
+
+  function updateSum() {
+    const a1 = parseFloat(amt1El.value) || 0;
+    const a2 = parseFloat(amt2El.value) || 0;
+    const sum = a1 + a2;
+    const diff = Math.abs(sum - absTotal);
+    sumEl.textContent = `Sum: ${fmtCurrency(sum)}`;
+    sumEl.style.color = diff > 0.01 ? '#ef4444' : 'var(--muted)';
+  }
+
+  // Auto-fill part 2 as remainder when part 1 changes
+  amt1El.addEventListener('input', () => {
+    const a1 = parseFloat(amt1El.value) || 0;
+    amt2El.value = Math.max(0, absTotal - a1).toFixed(2);
+    updateSum();
+  });
+  amt2El.addEventListener('input', updateSum);
+
+  const close = () => modal.remove();
+  modal.querySelector('.modal-close').addEventListener('click', close);
+  modal.querySelector('.modal-cancel-btn').addEventListener('click', close);
+  modal.addEventListener('click', e => { if (e.target === modal) close(); });
+
+  modal.querySelector('#split-save-btn').addEventListener('click', async () => {
+    errEl.style.display = 'none';
+    const a1 = parseFloat(amt1El.value);
+    const a2 = parseFloat(amt2El.value);
+    const cat1 = modal.querySelector('#split-cat-1').value;
+    const cat2 = modal.querySelector('#split-cat-2').value;
+
+    if (isNaN(a1) || a1 <= 0 || isNaN(a2) || a2 <= 0) {
+      errEl.textContent = 'Both amounts must be positive.'; errEl.style.display = ''; return;
+    }
+    if (Math.abs(a1 + a2 - absTotal) > 0.01) {
+      errEl.textContent = `Amounts must sum to ${fmtCurrency(absTotal)}.`; errEl.style.display = ''; return;
+    }
+
+    const makeSplit = (amt, catId) => {
+      const catObj = getCategoryById(catId);
+      return {
+        ...t,
+        amount:         parseFloat((sign * amt).toFixed(2)),
+        category:       catId,
+        group:          catObj.parent ?? catId,
+        isFixed:        catObj.isFixed  ?? false,
+        isAnnual:       catObj.isAnnual ?? false,
+        categorySource: 'manual',
+        needsReview:    false,
+        isSplit:        true,
+        splitFrom:      txnId,
+        // clear keys that should not be copied
+        plaidId:        undefined,
+      };
+    };
+
+    const [ref1, ref2] = await Promise.all([
+      dbPush(`transactions/${uid}`, makeSplit(a1, cat1)),
+      dbPush(`transactions/${uid}`, makeSplit(a2, cat2)),
+    ]);
+
+    await dbUpdate(`transactions/${uid}/${txnId}`, {
+      ignored:   true,
+      splitInto: [ref1.key, ref2.key],
+    });
+
+    close();
+    // Remove the original row + detail from the DOM (ignored items are hidden by default)
+    itemEl.remove();
+    detailEl.remove();
+  });
 }
 
 // ── Category picker modal ──────────────────────────────────────────────────
