@@ -34,7 +34,8 @@ let accountMap       = {};
 let allRulesSnapshot = {};
 let _merchantRules   = {}; // normalizedName → { catId, confirmedAt }
 let _catDescriptions = {};
-const _aiSugCache    = new Map(); // txnId → { catId, source }
+const _aiSugCache    = new Map();
+let _txnState        = null; // persists filter/sort/search state across navigation // txnId → { catId, source }
 
 function getSourceBadge(source) {
   const map = {
@@ -180,7 +181,8 @@ export function renderTransactions(container) {
   partnerAllTxns = [];
   partnerInitial = 'P';
 
-  const state = blankState();
+  if (!_txnState) _txnState = blankState();
+  const state = _txnState;
 
   // Category drill-down from Dashboard: read sessionStorage intent
   const filterIntent = sessionStorage.getItem('txn-filter-intent');

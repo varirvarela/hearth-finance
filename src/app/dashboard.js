@@ -278,7 +278,7 @@ export function renderDashboard(container) {
       return parseInt(t.date.slice(5, 7), 10) <= maxMonth;
     });
     const expenses = yearTxns.filter(t => {
-      if (t.amount <= 0 || t.isTransfer || t.group === 'transfer') return false;
+      if (t.isTransfer || t.group === 'transfer') return false;
       const cat = getCategoryById(t.category);
       if (cat.isIncome || !cat.parent || cat.id === 'transfer' || cat.parent === 'transfer') return false;
       if (cat.hide && !showHiddenDash) return false;
@@ -447,9 +447,10 @@ function renderAlert(container, spent, totalBudget, pacePct, reviewCount, allTxn
 
   const spentByCat = {};
   for (const t of allTxns) {
-    if (t.date?.startsWith(monthStr) && t.amount > 0 && !t.isTransfer && t.group !== 'transfer' && !t.ignored) {
-      spentByCat[t.category] = (spentByCat[t.category] ?? 0) + t.amount;
-    }
+    if (!t.date?.startsWith(monthStr) || t.isTransfer || t.group === 'transfer' || t.ignored) continue;
+    const _ac = getCategoryById(t.category);
+    if (_ac.isIncome || !_ac.parent || _ac.id === 'transfer' || _ac.parent === 'transfer') continue;
+    spentByCat[t.category] = (spentByCat[t.category] ?? 0) + t.amount;
   }
 
   let overCount = 0;
@@ -527,36 +528,45 @@ function renderSpendBars(container, expenses, budgets, pacePct, selYear, selMont
   }
 
   const html = displayRows.map(({ cat, spent, limit }) => {
+    const isCredit  = spent < 0;
     const hasBudget = limit > 0;
-    const pct       = hasBudget ? Math.min(100, Math.round((spent / limit) * 100)) : 0;
-    const barColor  = !hasBudget ? '#94a3b8'
-      : pct >= 100       ? '#ef4444'
+    const pct       = isCredit ? 0 : hasBudget ? Math.max(0, Math.min(100, Math.round((spent / limit) * 100))) : 0;
+    const barColor  = isCredit ? '#16a34a'
+      : !hasBudget   ? '#94a3b8'
+      : pct >= 100   ? '#ef4444'
       : pct >= pacePct + 15 ? '#f59e0b'
       : '#16a34a';
 
-    const amtColor  = !hasBudget ? 'var(--muted)'
-      : pct >= 100       ? '#ef4444'
+    const amtColor  = isCredit ? '#16a34a'
+      : !hasBudget   ? 'var(--muted)'
+      : pct >= 100   ? '#ef4444'
       : pct >= pacePct + 15 ? '#b45309'
-      : pct >= 80        ? '#b45309'
+      : pct >= 80    ? '#b45309'
       : 'var(--brand,#16a34a)';
 
-    const tick = hasBudget ? `<div class="prog-pace" style="left:${pacePct}%"></div>` : '';
-    const footerText = !hasBudget
-      ? 'no budget set'
-      : pct >= 100
-        ? `${pct}% — ${fmtCurrency(spent - limit)} over`
-        : pct >= pacePct + 15
-          ? `${pct}% · on pace to overspend`
-          : cat.isFixed
-            ? 'Fixed — paid ✓'
-            : `${pct}% · ${pct <= pacePct ? 'on track' : 'under pace ✓'}`;
+    const tick = hasBudget && !isCredit ? `<div class="prog-pace" style="left:${pacePct}%"></div>` : '';
+    const footerText = isCredit
+      ? `net credit — ${fmtCurrency(Math.abs(spent))} back ✓`
+      : !hasBudget
+        ? 'no budget set'
+        : pct >= 100
+          ? `${pct}% — ${fmtCurrency(spent - limit)} over`
+          : pct >= pacePct + 15
+            ? `${pct}% · on pace to overspend`
+            : cat.isFixed
+              ? 'Fixed — paid ✓'
+              : `${pct}% · ${pct <= pacePct ? 'on track' : 'under pace ✓'}`;
+
+    const amtDisplay = isCredit
+      ? `↓ ${fmtCurrency(Math.abs(spent))}`
+      : `${fmtCurrency(spent)}${hasBudget ? ' / ' + fmtCurrency(limit) : ''}`;
 
     return `
       <div class="prog-row" data-cat="${cat.id}" title="Tap to see ${cat.name} transactions">
         <div class="prog-row-top">
           <span class="prog-icon">${cat.icon}</span>
           <span class="prog-name">${cat.name}</span>
-          <span class="prog-amt" style="color:${amtColor}">${fmtCurrency(spent)}${hasBudget ? ' / ' + fmtCurrency(limit) : ''}</span>
+          <span class="prog-amt" style="color:${amtColor}">${amtDisplay}</span>
         </div>
         <div class="prog-track">
           <div class="prog-fill" style="width:${hasBudget ? pct : 0}%;background:${barColor}"></div>

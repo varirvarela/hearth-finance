@@ -1,5 +1,13 @@
 export const CHANGELOG = [
   {
+    version: '1.22.0',
+    date:    '2026-09-07',
+    changes: [
+      'Transactions: filters, search, and sort now persist when you navigate away and come back.',
+      'Budget & Dashboard: expense categories now show net spend — credits and reimbursements in expense categories offset the gross spend, so a category with more reimbursements than charges shows as a net credit (green ↓).',
+    ],
+  },
+  {
     version: '1.21.0',
     date:    '2026-09-03',
     changes: [

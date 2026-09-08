@@ -157,9 +157,10 @@ function renderBudgetList(uid, budgets, txns, year, month) {
 
   const spentByCat = {};
   for (const t of Object.values(txns)) {
-    if (t.amount > 0 && !t.ignored && !t.isTransfer && t.group !== 'transfer' && t.date?.startsWith(prefix)) {
-      spentByCat[t.category] = (spentByCat[t.category] ?? 0) + t.amount;
-    }
+    if (t.ignored || t.isTransfer || t.group === 'transfer' || !t.date?.startsWith(prefix)) continue;
+    const _c = getCategoryById(t.category);
+    if (_c.isIncome || !_c.parent || _c.id === 'transfer' || _c.parent === 'transfer') continue;
+    spentByCat[t.category] = (spentByCat[t.category] ?? 0) + t.amount;
   }
 
   const expenseLeaves = CATEGORIES.filter(c => c.parent && !c.isIncome);
@@ -236,8 +237,8 @@ function renderGroupTiles(el, rootCats, rootMap, budgets, spentByCat, pacePct, l
 
     const groupSpent  = leaves.reduce((s, l) => s + (spentByCat[l.id] ?? 0), 0);
     const groupBudget = leaves.reduce((s, l) => s + (budgets[l.id]?.monthly ?? 0), 0);
-    const pct         = groupBudget > 0 ? Math.min(100, Math.round((groupSpent / groupBudget) * 100)) : 0;
-    const status      = groupSpent > groupBudget ? 'over' : pct >= pacePct + 10 ? 'warn' : groupBudget > 0 ? 'good' : 'zero';
+    const pct         = groupBudget > 0 ? Math.max(0, Math.min(100, Math.round((groupSpent / groupBudget) * 100))) : 0;
+    const status      = groupSpent < 0 ? 'good' : groupSpent > groupBudget ? 'over' : pct >= pacePct + 10 ? 'warn' : groupBudget > 0 ? 'good' : 'zero';
     const catCount    = leaves.length;
 
     return `<div class="bud-group-tile ${status}" data-group="${root.id}">
@@ -248,12 +249,12 @@ function renderGroupTiles(el, rootCats, rootMap, budgets, spentByCat, pacePct, l
       </div>
       <div class="bud-tile-name">${root.name}</div>
       <div class="bud-tile-amounts">
-        <span class="bud-tile-spent">${fmtCurrency(groupSpent)}</span>
+        <span class="bud-tile-spent" ${groupSpent < 0 ? 'style="color:#16a34a"' : ''}>${groupSpent < 0 ? '↓ ' : ''}${fmtCurrency(Math.abs(groupSpent))}</span>
         <span class="bud-tile-budget"> / ${fmtCurrency(groupBudget)}</span>
       </div>
       <div class="bud-tile-bar-track"><div class="bud-tile-bar-fill" style="width:${pct}%"></div></div>
       <div class="bud-tile-footer">
-        <span class="bud-tile-pct">${pct}% ${status === 'over' ? '↑ over' : status === 'warn' ? '⚠ on pace' : 'spent'}</span>
+        <span class="bud-tile-pct">${groupSpent < 0 ? 'net credit ✓' : pct + '% ' + (status === 'over' ? '↑ over' : status === 'warn' ? '⚠ on pace' : 'spent')}</span>
         <span class="bud-tile-arrow">›</span>
       </div>
     </div>`;
@@ -285,8 +286,8 @@ function renderCategoryTiles(el, groupId, rootMap, budgets, spentByCat, pacePct,
   const tiles = leaves.map(leaf => {
     const spent  = spentByCat[leaf.id] ?? 0;
     const limit  = budgets[leaf.id]?.monthly ?? 0;
-    const pct    = limit > 0 ? Math.min(100, Math.round((spent / limit) * 100)) : 0;
-    const status = spent > limit && limit > 0 ? 'over' : pct >= pacePct + 10 ? 'warn' : limit > 0 ? 'good' : 'zero';
+    const pct    = limit > 0 ? Math.max(0, Math.min(100, Math.round((spent / limit) * 100))) : 0;
+    const status = spent < 0 ? 'good' : spent > limit && limit > 0 ? 'over' : pct >= pacePct + 10 ? 'warn' : limit > 0 ? 'good' : 'zero';
     const badge  = leaf.isFixed ? '<span class="bud-fixed-badge">Fixed</span>' : leaf.isAnnual ? '<span class="bud-fixed-badge annual">Annual</span>' : '';
 
     return `<div class="bud-cat-tile ${status}" data-cat="${leaf.id}">
@@ -296,12 +297,12 @@ function renderCategoryTiles(el, groupId, rootMap, budgets, spentByCat, pacePct,
       </div>
       <div class="bud-tile-name">${leaf.name}${badge}</div>
       <div class="bud-tile-amounts">
-        <span class="bud-tile-spent">${fmtCurrency(spent)}</span>
+        <span class="bud-tile-spent" ${spent < 0 ? 'style="color:#16a34a"' : ''}>${spent < 0 ? '↓ ' : ''}${fmtCurrency(Math.abs(spent))}</span>
         ${limit > 0 ? `<span class="bud-tile-budget"> / ${fmtCurrency(limit)}</span>` : ''}
       </div>
       ${limit > 0
         ? `<div class="bud-tile-bar-track"><div class="bud-tile-bar-fill" style="width:${pct}%"></div></div>
-           <div class="bud-tile-pct">${pct}%${leaf.isFixed ? ' — fixed' : pct >= 100 ? ' ↑ over' : ''}</div>
+           <div class="bud-tile-pct">${spent < 0 ? 'net credit ✓' : pct + '%' + (leaf.isFixed ? ' — fixed' : pct >= 100 ? ' ↑ over' : '')}</div>
            <button class="bud-tile-edit-btn" data-cat="${leaf.id}" title="Edit budget">✎</button>`
         : `<div class="bud-set-link" data-cat="${leaf.id}">Set budget</div>`
       }
@@ -458,7 +459,7 @@ function renderBudgetAnnual(uid, budgets, txns, year) {
   // Aggregate spending for the year (include pending, exclude transfers and hidden unless toggled)
   const spentByCat = {};
   for (const t of Object.values(txns)) {
-    if (!t.date?.startsWith(yearStr) || t.amount <= 0 || t.ignored || t.isTransfer || t.group === 'transfer') continue;
+    if (!t.date?.startsWith(yearStr) || t.ignored || t.isTransfer || t.group === 'transfer') continue;
     const m = parseInt(t.date.slice(5, 7), 10);
     if (m > maxMonth) continue;
     const cat = getCategoryById(t.category);
