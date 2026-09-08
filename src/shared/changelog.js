@@ -1,5 +1,14 @@
 export const CHANGELOG = [
   {
+    version: '1.22.1',
+    date:    '2026-09-08',
+    changes: [
+      'Budget & Dashboard: monthly/annual view toggle now persists when you navigate away and come back — no more resetting to monthly.',
+      'Budget annual view: categories with net credits (reimbursements exceeding charges) now appear correctly instead of disappearing.',
+      'Budget & Dashboard annual view: uncategorized section now nets credits against charges, just like categorized expense sections.',
+    ],
+  },
+  {
     version: '1.22.0',
     date:    '2026-09-07',
     changes: [

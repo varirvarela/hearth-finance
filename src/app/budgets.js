@@ -21,23 +21,29 @@ let _annualIncomeByCat       = {};   // catId → positive income amount for the
 let _annualTotalIncome       = 0;
 let _annualTotalIncomeBudget = 0;
 
+let _budgetViewMode = 'monthly';
+let _budgetYear     = null;
+let _budgetMonth    = null;
+
 export function renderBudgets(container) {
   const now = new Date();
-  let year      = now.getFullYear();
-  let month     = now.getMonth() + 1;
-  let viewMode  = 'monthly'; // 'monthly' | 'annual'
+  if (_budgetYear === null)  _budgetYear  = now.getFullYear();
+  if (_budgetMonth === null) _budgetMonth = now.getMonth() + 1;
+  let year      = _budgetYear;
+  let month     = _budgetMonth;
+  let viewMode  = _budgetViewMode;
 
   container.innerHTML = `
     <div class="page budgets">
       <div class="view-toggle-row">
         <div class="view-toggle" id="bud-view-toggle">
-          <button class="view-toggle-btn active" data-mode="monthly">Monthly</button>
-          <button class="view-toggle-btn" data-mode="annual">Annual</button>
+          <button class="view-toggle-btn ${viewMode === 'monthly' ? 'active' : ''}" data-mode="monthly">Monthly</button>
+          <button class="view-toggle-btn ${viewMode === 'annual' ? 'active' : ''}" data-mode="annual">Annual</button>
         </div>
       </div>
       <div class="budget-month-nav">
         <button id="budget-prev">&#8592;</button>
-        <span id="budget-period-label">${fmtMonth(year, month)}</span>
+        <span id="budget-period-label">${viewMode === 'monthly' ? fmtMonth(year, month) : String(year)}</span>
         <button id="budget-next">&#8594;</button>
       </div>
       <div class="budget-summary" id="budget-summary"></div>
@@ -86,13 +92,13 @@ export function renderBudgets(container) {
   // View toggle
   container.querySelector('#bud-view-toggle').querySelectorAll('.view-toggle-btn').forEach(btn => {
     btn.addEventListener('click', () => {
-      viewMode = btn.dataset.mode;
+      viewMode = _budgetViewMode = btn.dataset.mode;
       container.querySelector('#bud-view-toggle').querySelectorAll('.view-toggle-btn').forEach(b =>
         b.classList.toggle('active', b.dataset.mode === viewMode)
       );
       // Reset to current period
-      year  = now.getFullYear();
-      month = now.getMonth() + 1;
+      year  = _budgetYear  = now.getFullYear();
+      month = _budgetMonth = now.getMonth() + 1;
       updatePeriodLabel();
       syncNextBtn();
       refresh();
@@ -122,8 +128,9 @@ export function renderBudgets(container) {
     if (viewMode === 'monthly') {
       month--;
       if (month < 1) { month = 12; year--; }
+      _budgetYear = year; _budgetMonth = month;
     } else {
-      year--;
+      _budgetYear = --year;
     }
     updatePeriodLabel();
     syncNextBtn();
@@ -134,8 +141,9 @@ export function renderBudgets(container) {
     if (viewMode === 'monthly') {
       month++;
       if (month > 12) { month = 1; year++; }
+      _budgetYear = year; _budgetMonth = month;
     } else {
-      year++;
+      _budgetYear = ++year;
     }
     updatePeriodLabel();
     syncNextBtn();
@@ -479,7 +487,7 @@ function renderBudgetAnnual(uid, budgets, txns, year) {
   // Uncategorized spend: transactions not in any expense leaf (root-level, uncategorized, unknown)
   let uncatSpend = 0;
   for (const t of Object.values(txns)) {
-    if (!t.date?.startsWith(yearStr) || t.amount <= 0 || t.ignored || t.isTransfer || t.group === 'transfer') continue;
+    if (!t.date?.startsWith(yearStr) || t.ignored || t.isTransfer || t.group === 'transfer') continue;
     const m = parseInt(t.date.slice(5, 7), 10);
     if (m > maxMonth) continue;
     const cat = getCategoryById(t.category);
@@ -663,7 +671,7 @@ function renderAnnualGroupTiles(el, rootCats, rootMap, budgets, spentByCat, list
     const leaves = (rootMap.get(root.id) ?? []).filter(l =>
       !l.isIncome &&
       (!l.hide || _showHiddenAnnual) &&
-      ((budgets[l.id]?.monthly ?? 0) > 0 || (spentByCat[l.id] ?? 0) > 0)
+      ((budgets[l.id]?.monthly ?? 0) > 0 || (spentByCat[l.id] ?? 0) !== 0)
     );
     if (!leaves.length) return '';
 

@@ -3,15 +3,21 @@ import { fmtCurrency, fmtMonth, fmtRelativeDate } from '../shared/format.js';
 import { getCategoryById, CATEGORIES } from '../shared/categories.js';
 import { needsReview } from '../shared/filter-utils.js';
 
+let _dashViewMode  = 'monthly';
+let _dashSelYear   = null;
+let _dashSelMonth  = null;
+
 export function renderDashboard(container) {
   const now      = new Date();
   const nowYear  = now.getFullYear();
   const nowMonth = now.getMonth() + 1;
   const nowDay   = now.getDate();
 
-  let selYear        = nowYear;
-  let selMonth       = nowMonth;
-  let viewMode       = 'monthly';
+  if (_dashSelYear === null)  _dashSelYear  = nowYear;
+  if (_dashSelMonth === null) _dashSelMonth = nowMonth;
+  let selYear        = _dashSelYear;
+  let selMonth       = _dashSelMonth;
+  let viewMode       = _dashViewMode;
   let showHiddenDash = false;
 
   let latestTxns        = null;
@@ -24,8 +30,8 @@ export function renderDashboard(container) {
     <div class="page dashboard" style="padding:0">
       <div class="dash-period-bar">
         <div class="dash-view-toggle" id="dash-view-toggle">
-          <button class="dash-toggle-btn active" data-mode="monthly">Monthly</button>
-          <button class="dash-toggle-btn" data-mode="annual">Annual</button>
+          <button class="dash-toggle-btn ${viewMode === 'monthly' ? 'active' : ''}" data-mode="monthly">Monthly</button>
+          <button class="dash-toggle-btn ${viewMode === 'annual' ? 'active' : ''}" data-mode="annual">Annual</button>
         </div>
         <div class="dash-period-nav">
           <button class="dash-nav-btn" id="nav-prev">&#8249;</button>
@@ -92,12 +98,12 @@ export function renderDashboard(container) {
   const toggleEl = container.querySelector('#dash-view-toggle');
   toggleEl.querySelectorAll('.dash-toggle-btn').forEach(btn => {
     btn.addEventListener('click', () => {
-      viewMode = btn.dataset.mode;
+      viewMode = _dashViewMode = btn.dataset.mode;
       toggleEl.querySelectorAll('.dash-toggle-btn').forEach(b =>
         b.classList.toggle('active', b.dataset.mode === viewMode)
       );
-      selYear  = nowYear;
-      selMonth = nowMonth;
+      selYear  = _dashSelYear  = nowYear;
+      selMonth = _dashSelMonth = nowMonth;
       updateNav();
       render();
     });
@@ -127,9 +133,9 @@ export function renderDashboard(container) {
       let m = selMonth + delta, y = selYear;
       if (m > 12) { m = 1; y++; }
       if (m < 1)  { m = 12; y--; }
-      selMonth = m; selYear = y;
+      selMonth = _dashSelMonth = m; selYear = _dashSelYear = y;
     } else {
-      selYear = Math.min(nowYear, selYear + delta);
+      selYear = _dashSelYear = Math.min(nowYear, selYear + delta);
     }
     updateNav();
     render();
@@ -286,7 +292,7 @@ export function renderDashboard(container) {
     });
     const spent       = expenses.reduce((s, t) => s + t.amount, 0);
     const uncatSpend  = yearTxns.reduce((s, t) => {
-      if (t.amount <= 0 || t.isTransfer || t.group === 'transfer' || t.ignored) return s;
+      if (t.isTransfer || t.group === 'transfer' || t.ignored) return s;
       const cat = getCategoryById(t.category);
       return (!cat.isIncome && cat.id !== 'transfer' && cat.parent !== 'transfer' && !cat.parent) ? s + t.amount : s;
     }, 0);
