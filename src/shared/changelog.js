@@ -1,5 +1,12 @@
 export const CHANGELOG = [
   {
+    version: '1.22.2',
+    date:    '2026-09-11',
+    changes: [
+      'Mobile: rule editor (and all bottom-sheet modals) now scroll when content is taller than the screen.',
+    ],
+  },
+  {
     version: '1.22.1',
     date:    '2026-09-08',
     changes: [
