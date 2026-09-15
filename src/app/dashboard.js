@@ -526,14 +526,13 @@ function renderSpendBars(container, expenses, budgets, pacePct, selYear, selMont
   });
 
   const maxRows = 7;
-  const displayRows = rows.slice(0, maxRows);
-
-  if (!displayRows.length) {
+  if (!rows.length) {
     barsEl.innerHTML = `<div class="empty-sm">No spending this period.</div>`;
     return;
   }
 
-  const html = displayRows.map(({ cat, spent, limit }) => {
+  function buildBarsHtml(visibleRows) {
+    return visibleRows.map(({ cat, spent, limit }) => {
     const isCredit  = spent < 0;
     const hasBudget = limit > 0;
     const pct       = isCredit ? 0 : hasBudget ? Math.max(0, Math.min(100, Math.round((spent / limit) * 100))) : 0;
@@ -580,25 +579,42 @@ function renderSpendBars(container, expenses, budgets, pacePct, selYear, selMont
         </div>
         <div class="prog-footer" style="color:${amtColor}">${footerText}</div>
       </div>`;
-  }).join('');
+    }).join('');
+  }
 
-  const moreCount = rows.length - maxRows;
-  barsEl.innerHTML = html + (moreCount > 0
-    ? `<div class="prog-more">+${moreCount} more categories</div>`
-    : '');
+  let expanded = false;
 
-  // Category drill-down: tap row → Transactions filtered to that category + month
-  barsEl.querySelectorAll('.prog-row[data-cat]').forEach(row => {
-    row.style.cursor = 'pointer';
-    row.addEventListener('click', () => {
-      sessionStorage.setItem('txn-filter-intent', JSON.stringify({
-        catId: row.dataset.cat,
-        year:  selYear,
-        month: selMonth,
-      }));
-      location.hash = 'transactions';
+  function render() {
+    const visibleRows = expanded ? rows : rows.slice(0, maxRows);
+    const moreCount   = rows.length - maxRows;
+    const toggleBtn   = moreCount > 0
+      ? `<button class="prog-more-btn">${expanded ? '↑ Show less' : `↓ Show all ${rows.length} categories`}</button>`
+      : '';
+    barsEl.innerHTML = buildBarsHtml(visibleRows) + toggleBtn;
+
+    barsEl.querySelector('.prog-more-btn')?.addEventListener('click', () => {
+      expanded = !expanded;
+      render();
+      wireDrilldown();
     });
-  });
+    wireDrilldown();
+  }
+
+  function wireDrilldown() {
+    barsEl.querySelectorAll('.prog-row[data-cat]').forEach(row => {
+      row.style.cursor = 'pointer';
+      row.addEventListener('click', () => {
+        sessionStorage.setItem('txn-filter-intent', JSON.stringify({
+          catId: row.dataset.cat,
+          year:  selYear,
+          month: selMonth,
+        }));
+        location.hash = 'transactions';
+      });
+    });
+  }
+
+  render();
 }
 
 // ── Trend chart ───────────────────────────────────────────

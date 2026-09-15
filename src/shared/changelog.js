@@ -1,5 +1,12 @@
 export const CHANGELOG = [
   {
+    version: '1.22.3',
+    date:    '2026-09-15',
+    changes: [
+      'Dashboard: spend bars now show all categories — tap "↓ Show all N categories" to expand, "↑ Show less" to collapse back to the top 7.',
+    ],
+  },
+  {
     version: '1.22.2',
     date:    '2026-09-11',
     changes: [
