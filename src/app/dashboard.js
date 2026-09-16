@@ -189,8 +189,12 @@ export function renderDashboard(container) {
     const allTxns   = Object.values(latestTxns ?? {});
     const monthStr  = `${selYear}-${String(selMonth).padStart(2, '0')}`;
     const thisMonth = allTxns.filter(t => t.date?.startsWith(monthStr) && !t.ignored && !t.pending);
-    const expenses  = thisMonth.filter(t => t.amount > 0 && !t.isTransfer && t.group !== 'transfer');
-    const income    = thisMonth.filter(t => t.amount < 0);
+    const expenses  = thisMonth.filter(t => {
+      if (t.isTransfer || t.group === 'transfer') return false;
+      const cat = getCategoryById(t.category);
+      return !cat.isIncome && cat.parent && cat.id !== 'transfer' && cat.parent !== 'transfer';
+    });
+    const income    = thisMonth.filter(t => getCategoryById(t.category).isIncome);
     const spent     = expenses.reduce((s, t) => s + t.amount, 0);
     const incomeAmt = income.reduce((s, t) => s - t.amount, 0);
 
@@ -202,7 +206,12 @@ export function renderDashboard(container) {
     // vs same month last year
     const prevMonthStr = `${selYear - 1}-${String(selMonth).padStart(2, '0')}`;
     const prevSpent    = allTxns
-      .filter(t => t.date?.startsWith(prevMonthStr) && t.amount > 0 && !t.isTransfer && t.group !== 'transfer' && !t.ignored)
+      .filter(t => {
+        if (!t.date?.startsWith(prevMonthStr) || t.ignored || t.pending) return false;
+        if (t.isTransfer || t.group === 'transfer') return false;
+        const cat = getCategoryById(t.category);
+        return !cat.isIncome && cat.parent && cat.id !== 'transfer' && cat.parent !== 'transfer';
+      })
       .reduce((s, t) => s + t.amount, 0);
     const prevDiff  = prevSpent > 0 ? Math.round(((spent - prevSpent) / prevSpent) * 100) : null;
 
@@ -464,6 +473,7 @@ function renderAlert(container, spent, totalBudget, pacePct, reviewCount, allTxn
   for (const [catId, data] of Object.entries(budgets ?? {})) {
     const limit = data?.monthly ?? 0;
     if (!limit) continue;
+    if (getCategoryById(catId).isAnnual) continue;
     const catSpent = spentByCat[catId] ?? 0;
     const pct = catSpent / limit * 100;
     if (pct >= 100) overCount++;

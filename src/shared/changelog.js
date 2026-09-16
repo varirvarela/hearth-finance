@@ -1,5 +1,13 @@
 export const CHANGELOG = [
   {
+    version: '1.22.4',
+    date:    '2026-09-15',
+    changes: [
+      'Dashboard: monthly "Spent" now uses the same category-aware, net-of-credits logic as the Budget screen — income and transfer categories are excluded, refunds reduce the total.',
+      'Dashboard: "N categories over budget" alert no longer counts annual-only categories in monthly view — the count now matches what\'s shown in red on the spend bars.',
+    ],
+  },
+  {
     version: '1.22.3',
     date:    '2026-09-15',
     changes: [
