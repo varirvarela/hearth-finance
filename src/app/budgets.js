@@ -180,10 +180,11 @@ function renderBudgetList(uid, budgets, txns, year, month) {
   const rootCats = CATEGORIES.filter(c => !c.parent && !c.isIncome && c.id !== 'transfer' && rootMap.has(c.id));
 
   // Summary
-  let totalBudgeted = 0, totalSpent = 0;
+  let totalBudgeted = 0;
   for (const [catId, data] of Object.entries(budgets)) {
-    if (data?.monthly > 0) { totalBudgeted += data.monthly; totalSpent += spentByCat[catId] ?? 0; }
+    if (data?.monthly > 0) totalBudgeted += data.monthly;
   }
+  const totalSpent = Object.values(spentByCat).reduce((s, v) => s + v, 0);
   const remaining = totalBudgeted - totalSpent;
   summaryEl.innerHTML = `
     <span style="color:var(--muted)">Budget ${fmtCurrency(totalBudgeted)}</span>
@@ -472,7 +473,6 @@ function renderBudgetAnnual(uid, budgets, txns, year) {
     if (m > maxMonth) continue;
     const cat = getCategoryById(t.category);
     if (cat.isIncome || !cat.parent || cat.id === 'transfer' || cat.parent === 'transfer') continue;
-    if (cat.hide && !_showHiddenAnnual) continue;
     spentByCat[t.category] = (spentByCat[t.category] ?? 0) + t.amount;
   }
 
@@ -496,9 +496,8 @@ function renderBudgetAnnual(uid, budgets, txns, year) {
   }
   _annualUncategorizedSpend = uncatSpend;
 
-  // Spent total: leaf categories + uncategorized
+  // Spent total: all leaf categories + uncategorized
   const totalSpent = expenseLeaves
-    .filter(l => !l.hide || _showHiddenAnnual)
     .reduce((s, l) => s + (spentByCat[l.id] ?? 0), 0) + uncatSpend;
 
   // Income: sum credit transactions in income categories

@@ -1,5 +1,12 @@
 export const CHANGELOG = [
   {
+    version: '1.22.7',
+    date:    '2026-09-17',
+    changes: [
+      'Budget: "Spent" now includes all expense categories — not just those with a monthly budget set. Dashboard and Budget totals now use the same definition.',
+    ],
+  },
+  {
     version: '1.22.6',
     date:    '2026-09-17',
     changes: [
