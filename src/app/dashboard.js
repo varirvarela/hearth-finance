@@ -646,8 +646,12 @@ function renderTrendChart(container, allTxns, selYear, selMonth, viewMode) {
   }
 
   const totals = months.map(({ key }) =>
-    allTxns.filter(t => t.date?.startsWith(key) && t.amount > 0 && !t.ignored && !t.isTransfer && t.group !== 'transfer')
-           .reduce((s, t) => s + t.amount, 0)
+    allTxns.filter(t => {
+      if (!t.date?.startsWith(key) || t.ignored || t.pending) return false;
+      if (t.isTransfer || t.group === 'transfer') return false;
+      const cat = getCategoryById(t.category);
+      return !cat.isIncome && cat.parent && cat.id !== 'transfer' && cat.parent !== 'transfer';
+    }).reduce((s, t) => s + t.amount, 0)
   );
   const maxSpend   = Math.max(...totals, 1);
   const selKey     = viewMode === 'annual'

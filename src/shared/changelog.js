@@ -1,5 +1,12 @@
 export const CHANGELOG = [
   {
+    version: '1.22.5',
+    date:    '2026-09-17',
+    changes: [
+      'Dashboard: trend bar chart now uses the same category-aware filter as the KPI — income and transfer categories are excluded, so monthly bars reflect true spending.',
+    ],
+  },
+  {
     version: '1.22.4',
     date:    '2026-09-15',
     changes: [
