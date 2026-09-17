@@ -11,7 +11,7 @@ let _budgetCatId   = null;
 let _annualLevel             = 1;
 let _annualGroupId           = null;
 let _annualCatId             = null;
-let _showHiddenAnnual        = false;
+let _showHiddenAnnual        = localStorage.getItem('hearth-show-hidden') === 'true';
 let _annualUncategorizedSpend = 0;
 let _budgetDetailPage        = 0;
 const BUD_DETAIL_PAGE        = 15;
@@ -165,7 +165,7 @@ function renderBudgetList(uid, budgets, txns, year, month) {
 
   const spentByCat = {};
   for (const t of Object.values(txns)) {
-    if (t.ignored || t.isTransfer || t.group === 'transfer' || !t.date?.startsWith(prefix)) continue;
+    if (t.ignored || t.pending || t.isTransfer || t.group === 'transfer' || !t.date?.startsWith(prefix)) continue;
     const _c = getCategoryById(t.category);
     if (_c.isIncome || !_c.parent || _c.id === 'transfer' || _c.parent === 'transfer') continue;
     spentByCat[t.category] = (spentByCat[t.category] ?? 0) + t.amount;
@@ -180,11 +180,14 @@ function renderBudgetList(uid, budgets, txns, year, month) {
   const rootCats = CATEGORIES.filter(c => !c.parent && !c.isIncome && c.id !== 'transfer' && rootMap.has(c.id));
 
   // Summary
+  const showHidden = localStorage.getItem('hearth-show-hidden') === 'true';
   let totalBudgeted = 0;
   for (const [catId, data] of Object.entries(budgets)) {
     if (data?.monthly > 0) totalBudgeted += data.monthly;
   }
-  const totalSpent = Object.values(spentByCat).reduce((s, v) => s + v, 0);
+  const totalSpent = Object.entries(spentByCat)
+    .filter(([catId]) => showHidden || !getCategoryById(catId).hide)
+    .reduce((s, [, v]) => s + v, 0);
   const remaining = totalBudgeted - totalSpent;
   summaryEl.innerHTML = `
     <span style="color:var(--muted)">Budget ${fmtCurrency(totalBudgeted)}</span>
@@ -240,8 +243,9 @@ function renderBudgetNav(listEl, rootCats, rootMap, budgets, spentByCat, txns, p
 }
 
 function renderGroupTiles(el, rootCats, rootMap, budgets, spentByCat, pacePct, listEl, allRoots, txns, year, month, prefix) {
+  const _sh = localStorage.getItem('hearth-show-hidden') === 'true';
   const tiles = rootCats.map(root => {
-    const leaves = (rootMap.get(root.id) ?? []).filter(l => !l.hide);
+    const leaves = (rootMap.get(root.id) ?? []).filter(l => _sh || !l.hide);
     if (!leaves.length) return '';
 
     const groupSpent  = leaves.reduce((s, l) => s + (spentByCat[l.id] ?? 0), 0);
@@ -289,8 +293,9 @@ function renderGroupTiles(el, rootCats, rootMap, budgets, spentByCat, pacePct, l
 }
 
 function renderCategoryTiles(el, groupId, rootMap, budgets, spentByCat, pacePct, listEl, allRoots, txns, year, month, prefix) {
+  const _sh    = localStorage.getItem('hearth-show-hidden') === 'true';
   const root   = CATEGORIES.find(c => c.id === groupId);
-  const leaves = (rootMap.get(groupId) ?? []).filter(l => !l.hide);
+  const leaves = (rootMap.get(groupId) ?? []).filter(l => _sh || !l.hide);
 
   const tiles = leaves.map(leaf => {
     const spent  = spentByCat[leaf.id] ?? 0;
@@ -465,10 +470,10 @@ function renderBudgetAnnual(uid, budgets, txns, year) {
   // Pace tick position (only for current year)
   const pacePct = year === nowYear ? Math.round((nowMonth / 12) * 100) : null;
 
-  // Aggregate spending for the year (include pending, exclude transfers and hidden unless toggled)
+  // Aggregate spending for the year (exclude pending, transfers)
   const spentByCat = {};
   for (const t of Object.values(txns)) {
-    if (!t.date?.startsWith(yearStr) || t.ignored || t.isTransfer || t.group === 'transfer') continue;
+    if (!t.date?.startsWith(yearStr) || t.ignored || t.pending || t.isTransfer || t.group === 'transfer') continue;
     const m = parseInt(t.date.slice(5, 7), 10);
     if (m > maxMonth) continue;
     const cat = getCategoryById(t.category);
@@ -538,6 +543,7 @@ function renderBudgetAnnual(uid, budgets, txns, year) {
   `;
   summaryEl.querySelector('#bud-show-hidden').addEventListener('change', e => {
     _showHiddenAnnual = e.target.checked;
+    localStorage.setItem('hearth-show-hidden', _showHiddenAnnual);
     renderBudgetAnnual(uid, budgets, txns, year);
   });
 
@@ -647,6 +653,7 @@ function updateAnnualSummary() {
     `;
     el.querySelector('#bud-show-hidden')?.addEventListener('change', e => {
       _showHiddenAnnual = e.target.checked;
+      localStorage.setItem('hearth-show-hidden', _showHiddenAnnual);
       if (_annualParams) renderBudgetAnnual(_annualParams.uid, _annualParams.budgets, _annualParams.txns, _annualParams.year);
     });
     return;

@@ -1,5 +1,14 @@
 export const CHANGELOG = [
   {
+    version: '1.22.8',
+    date:    '2026-09-17',
+    changes: [
+      'Dashboard & Budget: "Show hidden" toggle is now universal — toggling it in any view (Dashboard monthly, Dashboard annual, Budget annual) applies everywhere.',
+      'Dashboard monthly: pending transactions excluded from Spent total and bars, matching Budget and the annual view.',
+      'Budget: pending transactions excluded from Spent total (monthly and annual), matching Dashboard.',
+    ],
+  },
+  {
     version: '1.22.7',
     date:    '2026-09-17',
     changes: [
