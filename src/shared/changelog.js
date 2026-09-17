@@ -1,5 +1,13 @@
 export const CHANGELOG = [
   {
+    version: '1.22.6',
+    date:    '2026-09-17',
+    changes: [
+      'Dashboard bars: all expense categories now appear — annual and hidden categories are no longer filtered out, so the bars match the "Spent" KPI exactly.',
+      'Annual categories show "Annual expense" as their label instead of "no budget set" when viewed in monthly mode.',
+    ],
+  },
+  {
     version: '1.22.5',
     date:    '2026-09-17',
     changes: [

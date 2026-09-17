@@ -512,8 +512,6 @@ function renderSpendBars(container, expenses, budgets, pacePct, selYear, selMont
     const limit = budgets[leaf.id]?.monthly ?? 0;
     const catSpent = spentByCat[leaf.id] ?? 0;
     if (!limit && !catSpent) continue;
-    if (leaf.isAnnual && !includeAnnual) continue;
-    if (leaf.hide && !showHidden) continue;
     seen.add(leaf.id);
     rows.push({ cat: leaf, spent: catSpent, limit });
   }
@@ -523,8 +521,6 @@ function renderSpendBars(container, expenses, budgets, pacePct, selYear, selMont
     if (seen.has(catId)) continue;
     const cat = getCategoryById(catId);
     if (cat.isIncome || cat.id === 'transfer') continue;
-    if (cat.isAnnual && !includeAnnual) continue;
-    if (cat.hide && !showHidden) continue;
     rows.push({ cat, spent: amt, limit: 0 });
   }
 
@@ -559,11 +555,11 @@ function renderSpendBars(container, expenses, budgets, pacePct, selYear, selMont
       : pct >= 80    ? '#b45309'
       : 'var(--brand,#16a34a)';
 
-    const tick = hasBudget && !isCredit ? `<div class="prog-pace" style="left:${pacePct}%"></div>` : '';
+    const tick = hasBudget && !isCredit && !cat.isAnnual ? `<div class="prog-pace" style="left:${pacePct}%"></div>` : '';
     const footerText = isCredit
       ? `net credit — ${fmtCurrency(Math.abs(spent))} back ✓`
       : !hasBudget
-        ? 'no budget set'
+        ? (cat.isAnnual ? 'Annual expense' : 'no budget set')
         : pct >= 100
           ? `${pct}% — ${fmtCurrency(spent - limit)} over`
           : pct >= pacePct + 15
