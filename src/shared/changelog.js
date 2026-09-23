@@ -1,5 +1,12 @@
 export const CHANGELOG = [
   {
+    version: '1.22.9',
+    date:    '2026-09-23',
+    changes: [
+      'Settings: income categories (Sueldo, Bonus, Acciones, etc.) now appear in the category list.',
+    ],
+  },
+  {
     version: '1.22.8',
     date:    '2026-09-17',
     changes: [

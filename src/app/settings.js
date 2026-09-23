@@ -126,7 +126,7 @@ function renderCategoryMgmt(uid) {
 function rebuildCategoryList(el, uid, descs) {
   const groups = getRootCategories().filter(g => g.id !== 'transfer');
   el.innerHTML = groups.map(group => {
-    const leaves = getChildCategories(group.id).filter(l => !l.isIncome);
+    const leaves = getChildCategories(group.id);
     if (!leaves.length) return '';
     return `
       <details class="cat-group-details">
