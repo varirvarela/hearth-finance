@@ -774,7 +774,7 @@ async function appendAmazonItems(t, detail, hid) {
     const txnTime = new Date(t.date).getTime();
     const match   = orders.find(o => {
       if (!o.total || !o.shipDate) return false;
-      if (Math.abs(o.total - t.amount) > 0.10) return false;
+      if (Math.abs(o.total - t.amount) > 1.00) return false;
       const daysDiff = Math.abs(new Date(o.shipDate).getTime() - txnTime) / 86_400_000;
       return daysDiff <= 5;
     });

@@ -18,19 +18,21 @@ export async function handleGmail(request, env, pathname, uid) {
     return json({ url: buildAuthUrl() });
   }
   if (pathname === '/gmail/connect' && request.method === 'POST') {
-    const { code } = await request.json();
+    const { code, key = 'main' } = await request.json();
     if (!code) return json({ error: 'Missing code' }, 400);
-    await connectGmail(env, uid, code);
+    await connectGmail(env, uid, code, key);
     return json({ ok: true });
   }
   if (pathname === '/gmail/status' && request.method === 'GET') {
     return json(await getGmailStatus(env, uid));
   }
   if (pathname === '/gmail/sync' && request.method === 'POST') {
-    return json(await syncGmail(env, uid));
+    const body = await request.json().catch(() => ({}));
+    return json(await syncGmail(env, uid, body.key ?? null));
   }
   if (pathname === '/gmail/disconnect' && request.method === 'POST') {
-    await disconnectGmail(env, uid);
+    const { key = 'main' } = await request.json();
+    await disconnectGmail(env, uid, key);
     return json({ ok: true });
   }
   return json({ error: 'Not found' }, 404);
@@ -38,7 +40,7 @@ export async function handleGmail(request, env, pathname, uid) {
 
 // ── Auth URL ──────────────────────────────────────────────────────────────────
 
-function buildAuthUrl() {
+export function buildAuthUrl(key = 'main') {
   return `https://accounts.google.com/o/oauth2/v2/auth?${new URLSearchParams({
     client_id:     GMAIL_CLIENT_ID,
     redirect_uri:  REDIRECT_URI,
@@ -46,11 +48,11 @@ function buildAuthUrl() {
     scope:         GMAIL_SCOPE,
     access_type:   'offline',
     prompt:        'consent',
-    state:         'gmail-connect',
+    state:         `gmail-connect:${key}`,
   })}`;
 }
 
-// ── Token exchange ────────────────────────────────────────────────────────────
+// ── Token helpers ─────────────────────────────────────────────────────────────
 
 async function exchangeCode(env, code) {
   const resp = await fetch('https://oauth2.googleapis.com/token', {
@@ -66,10 +68,10 @@ async function exchangeCode(env, code) {
   });
   const data = await resp.json();
   if (data.error) throw new Error(data.error_description ?? data.error);
-  return data; // { access_token, refresh_token, ... }
+  return data;
 }
 
-async function getAccessToken(env, storedRefreshToken) {
+async function getAccessTokenFromRefresh(env, storedRefreshToken) {
   const resp = await fetch('https://oauth2.googleapis.com/token', {
     method:  'POST',
     headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
@@ -85,78 +87,143 @@ async function getAccessToken(env, storedRefreshToken) {
   return data.access_token;
 }
 
-// ── CRUD helpers ──────────────────────────────────────────────────────────────
+async function fetchGmailEmail(accessToken) {
+  try {
+    const resp = await fetch('https://gmail.googleapis.com/gmail/v1/users/me/profile', {
+      headers: { Authorization: `Bearer ${accessToken}` },
+    });
+    const data = await resp.json();
+    return data.emailAddress ?? null;
+  } catch { return null; }
+}
 
-async function connectGmail(env, uid, code) {
-  const { fbPatch } = await import('./firebase.js');
+// ── Account CRUD ──────────────────────────────────────────────────────────────
+
+async function connectGmail(env, uid, code, key = 'main') {
+  const { fbPatch, fbSet } = await import('./firebase.js');
   const tokens = await exchangeCode(env, code);
-  await fbPatch(env, `gmail/${uid}`, {
+  const email  = await fetchGmailEmail(tokens.access_token);
+
+  // Migrate old single-account schema if present
+  const { fbGet } = await import('./firebase.js');
+  const raw = await fbGet(env, `gmail/${uid}`).catch(() => null);
+  if (raw?.refreshToken && !raw?.accounts) {
+    await fbSet(env, `gmail/${uid}`, {
+      accounts: {
+        main: {
+          refreshToken: raw.refreshToken,
+          connected:    true,
+          connectedAt:  raw.connectedAt ?? new Date().toISOString(),
+          lastSync:     raw.lastSync ?? null,
+          email:        null,
+        },
+      },
+    });
+  }
+
+  await fbPatch(env, `gmail/${uid}/accounts/${key}`, {
     refreshToken: tokens.refresh_token,
     connected:    true,
     connectedAt:  new Date().toISOString(),
     lastSync:     null,
+    email:        email ?? null,
   });
 }
 
 async function getGmailStatus(env, uid) {
-  const { fbGet } = await import('./firebase.js');
-  const data = await fbGet(env, `gmail/${uid}`).catch(() => null);
-  return {
-    connected: data?.connected === true,
-    lastSync:  data?.lastSync ?? null,
-  };
-}
+  const { fbGet, fbSet } = await import('./firebase.js');
+  const raw = await fbGet(env, `gmail/${uid}`).catch(() => null);
+  if (!raw) return { accounts: {} };
 
-async function disconnectGmail(env, uid) {
-  const { fbSet } = await import('./firebase.js');
-  await fbSet(env, `gmail/${uid}`, null);
-}
-
-// ── Gmail sync + Amazon parsing ───────────────────────────────────────────────
-
-async function syncGmail(env, uid) {
-  const { fbGet, fbPatch } = await import('./firebase.js');
-
-  const gmailData = await fbGet(env, `gmail/${uid}`).catch(() => null);
-  if (!gmailData?.refreshToken) throw new Error('Gmail not connected');
-
-  const accessToken = await getAccessToken(env, gmailData.refreshToken);
-
-  // Search only for Amazon shipment emails, optionally bounded to new ones
-  let query = 'from:ship-confirm@amazon.com';
-  if (gmailData.lastSync) {
-    const after = new Date(gmailData.lastSync);
-    after.setDate(after.getDate() - 1); // 1-day buffer for timezone edges
-    query += ` after:${Math.floor(after.getTime() / 1000)}`;
+  // Migrate old single-account schema
+  if (raw.refreshToken && !raw.accounts) {
+    const migrated = {
+      main: {
+        refreshToken: raw.refreshToken,
+        connected:    raw.connected ?? true,
+        connectedAt:  raw.connectedAt ?? new Date().toISOString(),
+        lastSync:     raw.lastSync ?? null,
+        email:        null,
+      },
+    };
+    await fbSet(env, `gmail/${uid}`, { accounts: migrated });
+    return { accounts: { main: { connected: true, lastSync: migrated.main.lastSync, email: null } } };
   }
 
-  const searchResp = await fetch(
-    `https://gmail.googleapis.com/gmail/v1/users/me/messages?q=${encodeURIComponent(query)}&maxResults=100`,
-    { headers: { Authorization: `Bearer ${accessToken}` } },
-  );
-  const searchData = await searchResp.json();
-  const messages   = searchData.messages ?? [];
-
-  const patch  = {};
-  let   parsed = 0;
-
-  for (const msg of messages) {
-    const msgResp = await fetch(
-      `https://gmail.googleapis.com/gmail/v1/users/me/messages/${msg.id}?format=full`,
-      { headers: { Authorization: `Bearer ${accessToken}` } },
-    );
-    const msgData = await msgResp.json();
-    const order   = parseAmazonEmail(msgData);
-    if (order) {
-      patch[`amazonOrders/${uid}/${msg.id}`] = order;
-      parsed++;
+  const accounts = {};
+  for (const [key, acct] of Object.entries(raw.accounts ?? {})) {
+    if (acct?.connected) {
+      accounts[key] = { connected: true, lastSync: acct.lastSync ?? null, email: acct.email ?? null };
     }
   }
+  return { accounts };
+}
 
-  patch[`gmail/${uid}/lastSync`] = new Date().toISOString();
-  await fbPatch(env, '', patch);
+async function disconnectGmail(env, uid, key = 'main') {
+  const { fbSet } = await import('./firebase.js');
+  await fbSet(env, `gmail/${uid}/accounts/${key}`, null);
+}
 
-  return { messages: messages.length, parsed };
+// ── Sync ──────────────────────────────────────────────────────────────────────
+
+async function syncGmail(env, uid, specificKey = null) {
+  const { fbGet, fbPatch } = await import('./firebase.js');
+
+  // Resolve household so orders land under the shared namespace
+  const profile     = await fbGet(env, `users/${uid}`).catch(() => null);
+  const householdId = (typeof profile === 'object' && profile?.householdId) ? profile.householdId : uid;
+
+  const status = await getGmailStatus(env, uid);
+  const toSync = specificKey
+    ? Object.entries(status.accounts).filter(([k]) => k === specificKey)
+    : Object.entries(status.accounts);
+
+  if (!toSync.length) throw new Error('No Gmail accounts connected');
+
+  const patch  = {};
+  let messages = 0;
+  let parsed   = 0;
+
+  for (const [key] of toSync) {
+    const acctData = await fbGet(env, `gmail/${uid}/accounts/${key}`).catch(() => null);
+    if (!acctData?.refreshToken) continue;
+
+    const accessToken = await getAccessTokenFromRefresh(env, acctData.refreshToken);
+
+    let query = 'from:ship-confirm@amazon.com';
+    if (acctData.lastSync) {
+      const after = new Date(acctData.lastSync);
+      after.setDate(after.getDate() - 1);
+      query += ` after:${Math.floor(after.getTime() / 1000)}`;
+    }
+
+    const searchResp = await fetch(
+      `https://gmail.googleapis.com/gmail/v1/users/me/messages?q=${encodeURIComponent(query)}&maxResults=100`,
+      { headers: { Authorization: `Bearer ${accessToken}` } },
+    );
+    const searchData = await searchResp.json();
+    const msgs = searchData.messages ?? [];
+    messages  += msgs.length;
+
+    for (const msg of msgs) {
+      const msgResp = await fetch(
+        `https://gmail.googleapis.com/gmail/v1/users/me/messages/${msg.id}?format=full`,
+        { headers: { Authorization: `Bearer ${accessToken}` } },
+      );
+      const msgData = await msgResp.json();
+      const order   = parseAmazonEmail(msgData);
+      if (order) {
+        // Prefix msg id with account key so orders from different accounts never collide
+        patch[`amazonOrders/${householdId}/${key}_${msg.id}`] = order;
+        parsed++;
+      }
+    }
+
+    patch[`gmail/${uid}/accounts/${key}/lastSync`] = new Date().toISOString();
+  }
+
+  if (Object.keys(patch).length) await fbPatch(env, '', patch);
+  return { messages, parsed };
 }
 
 // ── Email parsing ─────────────────────────────────────────────────────────────
@@ -236,7 +303,6 @@ function parseAmazonBody(text) {
   const orderMatch = text.match(/\b(\d{3}-\d{7}-\d{7})\b/);
   if (orderMatch) orderNumber = orderMatch[1];
 
-  // Try patterns from most specific to least
   const totalPatterns = [
     /[Ss]hipment\s+[Tt]otal\s*:?\s*\$?([\d,]+\.\d{2})/,
     /[Oo]rder\s+[Tt]otal\s*:?\s*\$?([\d,]+\.\d{2})/,

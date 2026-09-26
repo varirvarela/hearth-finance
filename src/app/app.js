@@ -2,12 +2,15 @@ import { auth, dbGet, dbUpdate, dbRemove, setHouseholdId } from '../shared/fireb
 
 const WORKER_URL = import.meta.env.VITE_WORKER_URL ?? 'http://localhost:8787';
 
-// Detect Gmail OAuth callback (?code=...&state=gmail-connect) before anything else.
+// Detect Gmail OAuth callback (?code=...&state=gmail-connect:KEY) before anything else.
 // Clean the URL immediately so a refresh doesn't replay it.
 const _gmailCallbackParams = new URLSearchParams(location.search);
-const _pendingGmailCode = (_gmailCallbackParams.get('state') === 'gmail-connect')
+const _gmailStateVal       = _gmailCallbackParams.get('state') ?? '';
+const _pendingGmailCode    = _gmailStateVal.startsWith('gmail-connect')
   ? _gmailCallbackParams.get('code')
   : null;
+// Key is everything after the colon, defaulting to 'main' for backwards-compat
+const _pendingGmailKey = _gmailStateVal.includes(':') ? _gmailStateVal.split(':')[1] : 'main';
 if (_pendingGmailCode) {
   history.replaceState({}, '', location.pathname + '#settings');
 }
@@ -191,7 +194,7 @@ onAuthStateChanged(auth, async user => {
         const resp    = await fetch(`${WORKER_URL}/gmail/connect`, {
           method:  'POST',
           headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${idToken}` },
-          body:    JSON.stringify({ code: _pendingGmailCode }),
+          body:    JSON.stringify({ code: _pendingGmailCode, key: _pendingGmailKey }),
         });
         const data = await resp.json().catch(() => ({}));
         if (!resp.ok) {
