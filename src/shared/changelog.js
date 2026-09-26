@@ -1,5 +1,12 @@
 export const CHANGELOG = [
   {
+    version: '1.23.0',
+    date:    '2026-09-26',
+    changes: [
+      'Amazon Orders: connect Gmail in Settings to automatically match shipment emails to transactions and see itemized order details.',
+    ],
+  },
+  {
     version: '1.22.9',
     date:    '2026-09-23',
     changes: [

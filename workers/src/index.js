@@ -1,6 +1,7 @@
 import { handlePlaid }                    from './plaid.js';
 import { handleSync, handleUserSync }     from './sync.js';
 import { categorizeTransaction }          from './categorize.js';
+import { handleGmail }                    from './gmail.js';
 
 const CORS = {
   'Access-Control-Allow-Origin':  '*',
@@ -57,6 +58,13 @@ export default {
         const { fireSandboxWebhook } = await import('./plaid.js');
         const result = await fireSandboxWebhook(env, accessToken, webhookCode, slot);
         return json(result);
+      }
+
+      if (pathname.startsWith('/gmail/')) {
+        const token = (request.headers.get('Authorization') ?? '').replace(/^Bearer\s+/i, '');
+        const uid   = uidFromJwt(token);
+        if (!uid) return json({ error: 'Unauthorized' }, 401);
+        return await handleGmail(request, env, pathname, uid);
       }
 
       if (pathname === '/categorize' && request.method === 'POST') {

@@ -1,4 +1,16 @@
 import { auth, dbGet, dbUpdate, dbRemove, setHouseholdId } from '../shared/firebase.js';
+
+const WORKER_URL = import.meta.env.VITE_WORKER_URL ?? 'http://localhost:8787';
+
+// Detect Gmail OAuth callback (?code=...&state=gmail-connect) before anything else.
+// Clean the URL immediately so a refresh doesn't replay it.
+const _gmailCallbackParams = new URLSearchParams(location.search);
+const _pendingGmailCode = (_gmailCallbackParams.get('state') === 'gmail-connect')
+  ? _gmailCallbackParams.get('code')
+  : null;
+if (_pendingGmailCode) {
+  history.replaceState({}, '', location.pathname + '#settings');
+}
 import { hideCategory, addCustomCategory } from '../shared/categories.js';
 
 if ('serviceWorker' in navigator) {
@@ -171,6 +183,20 @@ onAuthStateChanged(auth, async user => {
         else if ('userHide' in data) hideCategory(id, data.userHide);
       }
     } catch { /* non-fatal — built-in categories still work */ }
+
+    // Exchange Gmail OAuth code if we were redirected back from Google
+    if (_pendingGmailCode) {
+      try {
+        const idToken = await user.getIdToken();
+        await fetch(`${WORKER_URL}/gmail/connect`, {
+          method:  'POST',
+          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${idToken}` },
+          body:    JSON.stringify({ code: _pendingGmailCode }),
+        });
+      } catch (e) {
+        console.error('Gmail connect failed:', e);
+      }
+    }
 
     const hash = location.hash.slice(1) || 'dashboard';
     mount(hash);

@@ -36,6 +36,7 @@ let _merchantRules   = {}; // normalizedName → { catId, confirmedAt }
 let _catDescriptions = {};
 const _aiSugCache    = new Map();
 let _txnState        = null; // persists filter/sort/search state across navigation // txnId → { catId, source }
+let _amazonOrders    = null; // cached amazonOrders for current household
 
 function getSourceBadge(source) {
   const map = {
@@ -180,6 +181,7 @@ export function renderTransactions(container) {
 
   partnerAllTxns = [];
   partnerInitial = 'P';
+  _amazonOrders  = null; // reset cache on page mount
 
   if (!_txnState) _txnState = blankState();
   const state = _txnState;
@@ -755,6 +757,49 @@ function resetSugStrip(txnId) {
   });
 }
 
+// Fetch (with cache) and match Amazon orders to a transaction, then append item list to detail panel.
+const AMAZON_PAT = /amazon|amzn/i;
+async function appendAmazonItems(t, detail, hid) {
+  const name = (t.merchantName ?? t.description ?? '').toLowerCase();
+  if (!AMAZON_PAT.test(name)) return; // not an Amazon charge
+
+  try {
+    if (!_amazonOrders) {
+      _amazonOrders = (await dbGet(`amazonOrders/${hid}`)) ?? {};
+    }
+    const orders = Object.values(_amazonOrders);
+    if (!orders.length) return;
+
+    // Match: amount within $0.10 and ship date within 5 days of transaction date
+    const txnTime = new Date(t.date).getTime();
+    const match   = orders.find(o => {
+      if (!o.total || !o.shipDate) return false;
+      if (Math.abs(o.total - t.amount) > 0.10) return false;
+      const daysDiff = Math.abs(new Date(o.shipDate).getTime() - txnTime) / 86_400_000;
+      return daysDiff <= 5;
+    });
+    if (!match) return;
+
+    const itemsHtml = match.items?.length
+      ? match.items.map(i => `
+          <div style="display:flex;justify-content:space-between;gap:0.5rem;padding:0.25rem 0;border-bottom:1px solid var(--border)">
+            <span style="font-size:0.82rem;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${i.name}</span>
+            <span style="font-size:0.82rem;white-space:nowrap;color:var(--muted)">$${i.price.toFixed(2)}</span>
+          </div>`).join('')
+      : '<p style="color:var(--muted);font-size:0.82rem;margin:0">No items extracted</p>';
+
+    const orderLabel = match.orderNumber ? ` · Order ${match.orderNumber}` : '';
+    const section    = document.createElement('div');
+    section.style.cssText = 'padding:0.6rem 0.8rem 0.4rem;border-top:1px solid var(--border)';
+    section.innerHTML = `
+      <p style="font-size:0.75rem;font-weight:600;color:var(--muted);margin:0 0 0.3rem;text-transform:uppercase;letter-spacing:0.05em">
+        Amazon Items${orderLabel}
+      </p>
+      ${itemsHtml}`;
+    detail.appendChild(section);
+  } catch { /* non-fatal */ }
+}
+
 // Writes a merchant → category mapping to Firebase so future transactions are auto-matched.
 function learnMerchant(uid, txnId, catId) {
   const txn = (allTxns.find(([id]) => id === txnId) ?? partnerAllTxns.find(([id]) => id === txnId))?.[1];
@@ -1083,6 +1128,7 @@ function renderPage(filtered, state, uid, refresh, accountMap) {
       `;
 
       item.insertAdjacentElement('afterend', detail);
+      appendAmazonItems(t, detail, hid); // async, non-blocking
 
       if (!isPartner) {
         const originalNotes = t.notes ?? '';
