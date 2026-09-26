@@ -80,11 +80,17 @@ async function renderGmailSection(uid) {
     const { connected, lastSync } = await resp.json();
 
     if (!connected) {
+      const prevError = sessionStorage.getItem('gmail-connect-error');
+      const errHtml   = prevError
+        ? `<p style="color:var(--danger);font-size:0.82rem;margin-bottom:0.6rem">Connection failed: ${prevError}. Try again.</p>`
+        : '';
       el.innerHTML = `
+        ${errHtml}
         <button class="btn-primary" id="gmail-connect-btn" style="width:auto;padding:0.5rem 1.2rem">
           Connect Gmail
         </button>`;
       el.querySelector('#gmail-connect-btn').addEventListener('click', () => {
+        sessionStorage.removeItem('gmail-connect-error');
         location.href = buildGmailAuthUrl();
       });
     } else {

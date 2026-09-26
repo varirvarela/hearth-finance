@@ -188,12 +188,21 @@ onAuthStateChanged(auth, async user => {
     if (_pendingGmailCode) {
       try {
         const idToken = await user.getIdToken();
-        await fetch(`${WORKER_URL}/gmail/connect`, {
+        const resp    = await fetch(`${WORKER_URL}/gmail/connect`, {
           method:  'POST',
           headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${idToken}` },
           body:    JSON.stringify({ code: _pendingGmailCode }),
         });
+        const data = await resp.json().catch(() => ({}));
+        if (!resp.ok) {
+          const msg = data.error ?? `HTTP ${resp.status}`;
+          sessionStorage.setItem('gmail-connect-error', msg);
+          console.error('Gmail connect failed:', msg);
+        } else {
+          sessionStorage.removeItem('gmail-connect-error');
+        }
       } catch (e) {
+        sessionStorage.setItem('gmail-connect-error', e.message);
         console.error('Gmail connect failed:', e);
       }
     }
