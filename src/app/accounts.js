@@ -499,16 +499,30 @@ async function renderAmazonSection(uid, hid) {
   }
 }
 
+function matchOrder(order, txns) {
+  if (!order.shipDate || !order.total) return null;
+  const orderTime = new Date(order.shipDate).getTime();
+  const amtTol    = Math.max(order.total * 0.10, 5.00); // 10% or $5, whichever is larger
+
+  // Pass 1: Amazon merchant, 10% amount, 10 days
+  let hit = txns.find(([, t]) => {
+    if (!AMAZON_PAT.test(t.merchantName ?? t.description ?? '')) return false;
+    if (Math.abs(t.amount - order.total) > amtTol) return false;
+    return Math.abs(new Date(t.date).getTime() - orderTime) / 86_400_000 <= 10;
+  });
+  if (hit) return hit;
+
+  // Pass 2: any merchant, tight amount (within $1), 14 days — catches unusual merchant names
+  hit = txns.find(([, t]) => {
+    if (t.isTransfer || t.amount < 0) return false;
+    if (Math.abs(t.amount - order.total) > 1.00) return false;
+    return Math.abs(new Date(t.date).getTime() - orderTime) / 86_400_000 <= 14;
+  });
+  return hit ?? null;
+}
+
 function countMatchedOrders(orders, txns) {
-  return orders.filter(([, order]) => {
-    if (!order.shipDate || !order.total) return false;
-    const orderTime = new Date(order.shipDate).getTime();
-    return txns.some(([, t]) => {
-      if (!AMAZON_PAT.test(t.merchantName ?? t.description ?? '')) return false;
-      if (Math.abs(t.amount - order.total) > 1.00) return false;
-      return Math.abs(new Date(t.date).getTime() - orderTime) / 86_400_000 <= 5;
-    });
-  }).length;
+  return orders.filter(([, order]) => matchOrder(order, txns) !== null).length;
 }
 
 async function openAmazonOrdersSheet(uid, hid, unmatchedOnly = false) {
@@ -546,18 +560,15 @@ async function openAmazonOrdersSheet(uid, hid, unmatchedOnly = false) {
       return;
     }
 
-    // Match each order to a transaction
+    // Match each order to a transaction using two-pass logic
     const matched = new Map(); // orderId → [txnId, txn]
     for (const [orderId, order] of allOrders) {
-      if (!order.shipDate || !order.total) continue;
-      const orderTime = new Date(order.shipDate).getTime();
-      const hit = allTxns.find(([, t]) => {
-        if (!AMAZON_PAT.test(t.merchantName ?? t.description ?? '')) return false;
-        if (Math.abs(t.amount - order.total) > 1.00) return false;
-        return Math.abs(new Date(t.date).getTime() - orderTime) / 86_400_000 <= 5;
-      });
+      const hit = matchOrder(order, allTxns);
       if (hit) matched.set(orderId, hit);
     }
+
+    // For diagnostics: find nearest Amazon txns (within 30 days) for each unmatched order
+    const nearbyAmazonTxns = allTxns.filter(([, t]) => AMAZON_PAT.test(t.merchantName ?? t.description ?? '') && t.amount > 0);
 
     // Sort newest first
     const sorted = [...allOrders].sort((a, b) =>
@@ -579,13 +590,35 @@ async function openAmazonOrdersSheet(uid, hid, unmatchedOnly = false) {
     const orderCards = toShow.map(([orderId, order]) => {
       const isMatched = matched.has(orderId);
       const txnEntry  = matched.get(orderId);
+      // For unmatched: find the 2 nearest Amazon transactions by date
+      let nearbyHtml = '';
+      if (!isMatched && order.shipDate) {
+        const orderTime = new Date(order.shipDate).getTime();
+        const nearby = nearbyAmazonTxns
+          .map(([, t]) => ({ t, diff: Math.abs(new Date(t.date).getTime() - orderTime) / 86_400_000 }))
+          .filter(x => x.diff <= 30)
+          .sort((a, b) => a.diff - b.diff)
+          .slice(0, 3);
+        if (nearby.length) {
+          nearbyHtml = `<div style="margin-top:0.3rem;font-size:0.75rem;color:var(--muted)">
+            Nearby Amazon charges:
+            ${nearby.map(({ t, diff }) =>
+              `<span style="display:inline-block;background:var(--bg);border:1px solid var(--border);border-radius:4px;padding:1px 5px;margin:2px">
+                ${t.date} · ${fmtCurrency(t.amount)} · ${t.description ?? t.merchantName} (${diff < 1 ? 'same day' : Math.round(diff) + 'd apart'})
+              </span>`).join('')}
+          </div>`;
+        } else {
+          nearbyHtml = `<div style="margin-top:0.3rem;font-size:0.75rem;color:var(--muted)">No Amazon charges found within 30 days of this order.</div>`;
+        }
+      }
+
       const statusBar = isMatched
         ? `<div style="color:#16a34a;font-size:0.78rem;font-weight:600;margin-bottom:0.3rem">
              ✓ Matched: ${txnEntry[1].description ?? txnEntry[1].merchantName ?? 'Amazon'} · ${fmtCurrency(txnEntry[1].amount)}
            </div>`
-        : `<div style="color:#d97706;font-size:0.78rem;font-weight:600;margin-bottom:0.3rem">
-             ⚠ No transaction matched — check Transactions tab for ${order.shipDate ? new Date(order.shipDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : ''}
-           </div>`;
+        : `<div style="color:#d97706;font-size:0.78rem;font-weight:600;margin-bottom:0.2rem">
+             ⚠ No match for ${fmtCurrency(order.total)} around ${order.shipDate ? new Date(order.shipDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : '—'}
+           </div>${nearbyHtml}`;
 
       const itemsHtml = order.items?.length
         ? order.items.slice(0, 5).map(i =>
