@@ -1,22 +1,5 @@
 import { dbGet, dbSet, dbPush, dbRemove, dbUpdate, auth, getHouseholdId, setHouseholdId } from '../shared/firebase.js';
 
-const WORKER_URL = import.meta.env.VITE_WORKER_URL ?? 'http://localhost:8787';
-
-const GMAIL_CLIENT_ID = '479821033709-4rk9nvhqf5affdtbb72irh0mg7r090ru.apps.googleusercontent.com';
-const GMAIL_REDIRECT  = 'https://varirvarela.github.io/hearth-finance/';
-const GMAIL_SCOPE     = 'https://www.googleapis.com/auth/gmail.readonly';
-
-function buildGmailAuthUrl(key = 'main') {
-  return `https://accounts.google.com/o/oauth2/v2/auth?${new URLSearchParams({
-    client_id:     GMAIL_CLIENT_ID,
-    redirect_uri:  GMAIL_REDIRECT,
-    response_type: 'code',
-    scope:         GMAIL_SCOPE,
-    access_type:   'offline',
-    prompt:        'consent',
-    state:         `gmail-connect:${key}`,
-  })}`;
-}
 import {
   getCategoryById, CATEGORIES, CATEGORY_MAP,
   getRootCategories, getChildCategories,
@@ -32,11 +15,6 @@ export function renderSettings(container) {
       <section class="section">
         <h3>Household</h3>
         <div id="household-section"></div>
-      </section>
-      <section class="section">
-        <h3>Amazon Orders</h3>
-        <p style="color:var(--muted);font-size:0.82rem;margin-bottom:0.75rem">Connect Gmail to match Amazon shipment emails to your transactions and see itemized order details.</p>
-        <div id="gmail-section"></div>
       </section>
       <section class="section">
         <h3>Categories</h3>
@@ -59,136 +37,10 @@ export function renderSettings(container) {
   const hid = getHouseholdId();
 
   renderHouseholdSection(uid, hid);
-  renderGmailSection(uid);
   renderCategoryMgmt(hid);
 
   document.getElementById('sign-out').addEventListener('click', () => signOut(auth));
   container.querySelector('#show-changelog').addEventListener('click', () => openChangelogSheet());
-}
-
-async function renderGmailSection(uid) {
-  const el = document.getElementById('gmail-section');
-  if (!el) return;
-
-  el.innerHTML = `<p style="color:var(--muted);font-size:0.85rem">Loading…</p>`;
-
-  try {
-    const idToken = await auth.currentUser?.getIdToken();
-    const resp    = await fetch(`${WORKER_URL}/gmail/status`, {
-      headers: { Authorization: `Bearer ${idToken}` },
-    });
-    if (!resp.ok) throw new Error(`Status fetch failed: ${resp.status}`);
-    const { accounts } = await resp.json();
-    const accountList   = Object.entries(accounts ?? {});
-
-    const prevError = sessionStorage.getItem('gmail-connect-error');
-    const errHtml   = prevError
-      ? `<p style="color:var(--danger);font-size:0.82rem;margin-bottom:0.6rem">Connection failed: ${prevError}. Try again.</p>`
-      : '';
-
-    // Render rows for each connected account
-    const accountRows = accountList.map(([key, acct]) => {
-      const label      = acct.email ? `<strong>${acct.email}</strong>` : `Gmail account`;
-      const lastSyncStr = acct.lastSync ? new Date(acct.lastSync).toLocaleString() : 'Never';
-      return `
-        <div class="gmail-account-row" data-key="${key}" style="border:1px solid var(--border);border-radius:8px;padding:0.6rem 0.75rem;margin-bottom:0.5rem">
-          <div style="font-size:0.85rem;margin-bottom:0.4rem">${label} · Last sync: ${lastSyncStr}</div>
-          <div style="display:flex;gap:0.5rem;flex-wrap:wrap">
-            <button class="btn-secondary gmail-sync-btn" data-key="${key}" style="width:auto;padding:0.3rem 0.8rem;font-size:0.82rem">Sync</button>
-            <button class="btn-danger gmail-disconnect-btn" data-key="${key}" style="width:auto;padding:0.3rem 0.8rem;font-size:0.82rem">Disconnect</button>
-          </div>
-          <p class="gmail-sync-msg" data-key="${key}" style="margin:0.4rem 0 0;font-size:0.8rem;color:var(--muted)"></p>
-        </div>`;
-    }).join('');
-
-    el.innerHTML = `
-      ${errHtml}
-      ${accountRows}
-      <div style="display:flex;gap:0.5rem;flex-wrap:wrap;margin-top:0.25rem">
-        ${accountList.length ? `<button class="btn-secondary" id="gmail-sync-all-btn" style="width:auto;padding:0.4rem 1rem">Sync All</button>` : ''}
-        <button class="btn-primary" id="gmail-add-btn" style="width:auto;padding:0.4rem 1rem">
-          ${accountList.length ? '+ Add another Gmail account' : 'Connect Gmail'}
-        </button>
-      </div>
-      <p id="gmail-sync-all-msg" style="margin-top:0.5rem;font-size:0.82rem;color:var(--muted)"></p>`;
-
-    // ── Add / Connect ──
-    el.querySelector('#gmail-add-btn').addEventListener('click', () => {
-      sessionStorage.removeItem('gmail-connect-error');
-      const key = Math.random().toString(36).slice(2, 10);
-      location.href = buildGmailAuthUrl(key);
-    });
-
-    // ── Sync All ──
-    el.querySelector('#gmail-sync-all-btn')?.addEventListener('click', async () => {
-      const btn = el.querySelector('#gmail-sync-all-btn');
-      const msg = el.querySelector('#gmail-sync-all-msg');
-      btn.disabled    = true;
-      btn.textContent = 'Syncing…';
-      msg.textContent = '';
-      try {
-        const token = await auth.currentUser?.getIdToken();
-        const r = await fetch(`${WORKER_URL}/gmail/sync`, {
-          method:  'POST',
-          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-          body:    '{}',
-        });
-        const data = await r.json();
-        if (!r.ok) throw new Error(data.error ?? 'Sync failed');
-        msg.textContent = `Synced ${data.parsed} order${data.parsed === 1 ? '' : 's'} from ${data.messages} email${data.messages === 1 ? '' : 's'}.`;
-        renderGmailSection(uid);
-      } catch (e) {
-        msg.textContent = `Error: ${e.message}`;
-        btn.disabled    = false;
-        btn.textContent = 'Sync All';
-      }
-    });
-
-    // ── Per-account Sync ──
-    el.querySelectorAll('.gmail-sync-btn').forEach(btn => {
-      btn.addEventListener('click', async () => {
-        const key = btn.dataset.key;
-        const msg = el.querySelector(`.gmail-sync-msg[data-key="${key}"]`);
-        btn.disabled    = true;
-        btn.textContent = 'Syncing…';
-        if (msg) msg.textContent = '';
-        try {
-          const token = await auth.currentUser?.getIdToken();
-          const r = await fetch(`${WORKER_URL}/gmail/sync`, {
-            method:  'POST',
-            headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-            body:    JSON.stringify({ key }),
-          });
-          const data = await r.json();
-          if (!r.ok) throw new Error(data.error ?? 'Sync failed');
-          if (msg) msg.textContent = `Synced ${data.parsed} order${data.parsed === 1 ? '' : 's'} from ${data.messages} email${data.messages === 1 ? '' : 's'}.`;
-          renderGmailSection(uid);
-        } catch (e) {
-          if (msg) msg.textContent = `Error: ${e.message}`;
-          btn.disabled    = false;
-          btn.textContent = 'Sync';
-        }
-      });
-    });
-
-    // ── Per-account Disconnect ──
-    el.querySelectorAll('.gmail-disconnect-btn').forEach(btn => {
-      btn.addEventListener('click', async () => {
-        const key = btn.dataset.key;
-        if (!confirm('Disconnect this Gmail account? Synced order data will be kept.')) return;
-        const token = await auth.currentUser?.getIdToken();
-        await fetch(`${WORKER_URL}/gmail/disconnect`, {
-          method:  'POST',
-          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-          body:    JSON.stringify({ key }),
-        });
-        renderGmailSection(uid);
-      });
-    });
-
-  } catch (e) {
-    el.innerHTML = `<p style="color:var(--danger);font-size:0.85rem">Failed to load Gmail status: ${e.message}</p>`;
-  }
 }
 
 function renderHouseholdSection(uid, hid) {

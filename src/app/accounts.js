@@ -4,6 +4,24 @@ import { CHANGELOG } from '../shared/changelog.js';
 
 const WORKER_URL = import.meta.env.VITE_WORKER_URL ?? 'http://localhost:8787';
 
+const GMAIL_CLIENT_ID = '479821033709-4rk9nvhqf5affdtbb72irh0mg7r090ru.apps.googleusercontent.com';
+const GMAIL_REDIRECT  = 'https://varirvarela.github.io/hearth-finance/';
+const GMAIL_SCOPE     = 'https://www.googleapis.com/auth/gmail.readonly';
+
+function buildGmailAuthUrl(key = 'main') {
+  return `https://accounts.google.com/o/oauth2/v2/auth?${new URLSearchParams({
+    client_id:     GMAIL_CLIENT_ID,
+    redirect_uri:  GMAIL_REDIRECT,
+    response_type: 'code',
+    scope:         GMAIL_SCOPE,
+    access_type:   'offline',
+    prompt:        'consent',
+    state:         `gmail-connect:${key}`,
+  })}`;
+}
+
+const AMAZON_PAT = /amazon|amzn/i;
+
 export function renderAccounts(container) {
   container.innerHTML = `
     <div class="page accounts" style="padding:0">
@@ -26,6 +44,8 @@ export function renderAccounts(container) {
       <!-- Account list -->
       <div class="acct-content">
         <div id="account-list"></div>
+
+        <div id="amazon-section"></div>
 
         <div class="acct-actions-row">
           <button class="btn-primary" id="link-account" style="flex:1">+ Link Bank</button>
@@ -99,6 +119,8 @@ export function renderAccounts(container) {
       }
     });
   }
+
+  renderAmazonSection(uid, hid).catch(() => {});
 
   container.querySelector('#link-account').addEventListener('click', () => openPlaidLink(uid));
   container.querySelector('#add-manual').addEventListener('click', () => openManualAccountForm(hid));
@@ -329,6 +351,276 @@ function syncStatusDot(account) {
   }
   return { cls: 'dot-unknown', label: 'never synced' };
 }
+
+// ── Amazon / Gmail ────────────────────────────────────────────────────────────
+
+async function renderAmazonSection(uid, hid) {
+  const el = document.getElementById('amazon-section');
+  if (!el) return;
+
+  el.innerHTML = `
+    <div class="acct-group" style="margin-top:0.5rem">
+      <div class="acct-group-hdr">
+        <div class="acct-group-left">
+          <span style="font-size:1rem;margin-right:2px">📦</span>
+          <span class="acct-inst-name">Amazon Orders</span>
+        </div>
+      </div>
+      <div id="amazon-inner"><p style="padding:0.5rem 0.75rem;color:var(--muted);font-size:0.82rem">Loading…</p></div>
+    </div>`;
+
+  const inner = el.querySelector('#amazon-inner');
+
+  try {
+    const idToken = await auth.currentUser?.getIdToken();
+    const resp    = await fetch(`${WORKER_URL}/gmail/status`, { headers: { Authorization: `Bearer ${idToken}` } });
+    if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+    const { accounts } = await resp.json();
+    const accountList  = Object.entries(accounts ?? {});
+
+    if (!accountList.length) {
+      inner.innerHTML = `
+        <div style="padding:0.6rem 0.75rem">
+          <p style="color:var(--muted);font-size:0.82rem;margin-bottom:0.5rem">Connect Gmail to import Amazon order details and match them to your transactions.</p>
+          <button class="btn-primary" id="amazon-connect-first" style="width:auto;padding:0.4rem 1rem;font-size:0.82rem">Connect Gmail</button>
+        </div>`;
+      inner.querySelector('#amazon-connect-first').addEventListener('click', () => { location.href = buildGmailAuthUrl('main'); });
+      return;
+    }
+
+    // Load orders + transactions to compute match stats (show all accounts combined)
+    const [ordersRaw, txnsRaw] = await Promise.all([
+      dbGet(`amazonOrders/${hid}`).catch(() => null),
+      dbGet(`transactions/${hid}`).catch(() => null),
+    ]);
+    const allOrders = Object.entries(ordersRaw ?? {});
+    const allTxns   = Object.entries(txnsRaw   ?? {});
+    const totalOrders    = allOrders.length;
+    const matchedCount   = countMatchedOrders(allOrders, allTxns);
+    const unmatchedCount = totalOrders - matchedCount;
+
+    const acctRows = accountList.map(([key, acct]) => {
+      const label       = acct.email ? `<strong>${acct.email}</strong>` : 'Gmail account';
+      const lastSyncStr = acct.lastSync
+        ? new Date(acct.lastSync).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+        : 'Never synced';
+      const syncCls = acct.lastSync ? 'dot-ok' : 'dot-unknown';
+      return `
+        <div class="acct-row amazon-acct-row" data-key="${key}" style="cursor:pointer">
+          <div class="acct-row-icon" style="font-size:1.25rem">📦</div>
+          <div class="acct-row-info">
+            <span class="acct-row-name">${label}</span>
+            <span class="acct-row-sync ${syncCls}">${lastSyncStr}</span>
+          </div>
+          <div style="display:flex;gap:0.35rem;align-items:center">
+            <button class="btn-ghost amazon-sync-btn" data-key="${key}" style="font-size:0.75rem;padding:2px 8px;white-space:nowrap" title="Sync this account">⟳ Sync</button>
+            <span style="color:var(--muted);font-size:0.85rem">›</span>
+          </div>
+        </div>`;
+    }).join('');
+
+    const statsBar = totalOrders > 0 ? `
+      <div style="padding:0.3rem 0.75rem 0.5rem;display:flex;gap:0.5rem;flex-wrap:wrap;font-size:0.8rem">
+        <span style="color:var(--muted)">${totalOrders} orders found</span>
+        <span style="color:#16a34a;font-weight:600">✓ ${matchedCount} matched</span>
+        ${unmatchedCount > 0 ? `<span style="color:#d97706;font-weight:600;cursor:pointer" id="amazon-view-all">⚠ ${unmatchedCount} unmatched — view →</span>` : ''}
+      </div>` : '';
+
+    inner.innerHTML = `
+      ${acctRows}
+      ${statsBar}
+      <div style="padding:0.3rem 0.75rem 0.6rem;display:flex;gap:0.5rem;align-items:center;flex-wrap:wrap">
+        <button class="btn-secondary" id="amazon-view-orders-btn" style="width:auto;padding:0.35rem 0.8rem;font-size:0.82rem">View all orders</button>
+        <button class="btn-secondary" id="amazon-sync-all-btn" style="width:auto;padding:0.35rem 0.8rem;font-size:0.82rem">Sync All</button>
+        <button class="btn-ghost"     id="amazon-add-btn"      style="width:auto;padding:0.35rem 0.8rem;font-size:0.82rem">+ Add Gmail</button>
+      </div>
+      <p id="amazon-sync-msg" style="padding:0 0.75rem;font-size:0.8rem;color:var(--muted);margin:0 0 0.5rem"></p>`;
+
+    inner.querySelector('#amazon-view-orders-btn')?.addEventListener('click', () => openAmazonOrdersSheet(uid, hid));
+    inner.querySelector('#amazon-view-all')?.addEventListener('click',        () => openAmazonOrdersSheet(uid, hid, true));
+
+    inner.querySelector('#amazon-add-btn').addEventListener('click', () => {
+      const key = Math.random().toString(36).slice(2, 10);
+      location.href = buildGmailAuthUrl(key);
+    });
+
+    // Per-account sync buttons (stop propagation so row click doesn't fire)
+    inner.querySelectorAll('.amazon-sync-btn').forEach(btn => {
+      btn.addEventListener('click', async e => {
+        e.stopPropagation();
+        const key = btn.dataset.key;
+        const msg = inner.querySelector('#amazon-sync-msg');
+        btn.disabled = true; btn.textContent = '⟳ …';
+        try {
+          const token = await auth.currentUser?.getIdToken();
+          const r = await fetch(`${WORKER_URL}/gmail/sync`, {
+            method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+            body: JSON.stringify({ key }),
+          });
+          const data = await r.json();
+          if (!r.ok) throw new Error(data.error ?? 'Sync failed');
+          if (msg) msg.textContent = `Synced ${data.parsed} order${data.parsed !== 1 ? 's' : ''} from ${data.messages} email${data.messages !== 1 ? 's' : ''}.`;
+          renderAmazonSection(uid, hid);
+        } catch (err) {
+          if (msg) msg.textContent = `Sync error: ${err.message}`;
+          btn.disabled = false; btn.textContent = '⟳ Sync';
+        }
+      });
+    });
+
+    // Row tap → full order sheet
+    inner.querySelectorAll('.amazon-acct-row').forEach(row => {
+      row.addEventListener('click', () => openAmazonOrdersSheet(uid, hid));
+    });
+
+    // Sync All
+    inner.querySelector('#amazon-sync-all-btn').addEventListener('click', async () => {
+      const btn = inner.querySelector('#amazon-sync-all-btn');
+      const msg = inner.querySelector('#amazon-sync-msg');
+      btn.disabled = true; btn.textContent = 'Syncing…';
+      try {
+        const token = await auth.currentUser?.getIdToken();
+        const r = await fetch(`${WORKER_URL}/gmail/sync`, {
+          method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+          body: '{}',
+        });
+        const data = await r.json();
+        if (!r.ok) throw new Error(data.error ?? 'Sync failed');
+        if (msg) msg.textContent = `Synced ${data.parsed} order${data.parsed !== 1 ? 's' : ''}.`;
+        renderAmazonSection(uid, hid);
+      } catch (err) {
+        if (msg) msg.textContent = `Error: ${err.message}`;
+        btn.disabled = false; btn.textContent = 'Sync All';
+      }
+    });
+
+  } catch (e) {
+    if (inner) inner.innerHTML = `<p style="padding:0.5rem 0.75rem;color:var(--danger);font-size:0.82rem">Could not load Amazon accounts: ${e.message}</p>`;
+  }
+}
+
+function countMatchedOrders(orders, txns) {
+  return orders.filter(([, order]) => {
+    if (!order.shipDate || !order.total) return false;
+    const orderTime = new Date(order.shipDate).getTime();
+    return txns.some(([, t]) => {
+      if (!AMAZON_PAT.test(t.merchantName ?? t.description ?? '')) return false;
+      if (Math.abs(t.amount - order.total) > 1.00) return false;
+      return Math.abs(new Date(t.date).getTime() - orderTime) / 86_400_000 <= 5;
+    });
+  }).length;
+}
+
+async function openAmazonOrdersSheet(uid, hid, unmatchedOnly = false) {
+  const overlay = document.createElement('div');
+  overlay.className = 'sheet-overlay';
+  overlay.innerHTML = `
+    <div class="sheet" style="max-height:90vh">
+      <div class="sheet-handle"></div>
+      <div class="sheet-hdr">
+        <span class="sheet-title">📦 Amazon Orders${unmatchedOnly ? ' — Unmatched' : ''}</span>
+        <button class="sheet-close" id="amazon-sheet-close">✕</button>
+      </div>
+      <div id="amazon-sheet-body" style="padding:0.75rem;overflow-y:auto;flex:1">
+        <p style="color:var(--muted);font-size:0.85rem;text-align:center;padding:1rem">Loading orders…</p>
+      </div>
+    </div>`;
+  document.body.appendChild(overlay);
+  requestAnimationFrame(() => overlay.classList.add('open'));
+  const close = () => { overlay.classList.remove('open'); setTimeout(() => overlay.remove(), 260); };
+  overlay.querySelector('#amazon-sheet-close').addEventListener('click', close);
+  overlay.addEventListener('click', e => { if (e.target === overlay) close(); });
+
+  const body = overlay.querySelector('#amazon-sheet-body');
+
+  try {
+    const [ordersRaw, txnsRaw] = await Promise.all([
+      dbGet(`amazonOrders/${hid}`).catch(() => null),
+      dbGet(`transactions/${hid}`).catch(() => null),
+    ]);
+    const allOrders = Object.entries(ordersRaw ?? {});
+    const allTxns   = Object.entries(txnsRaw   ?? {});
+
+    if (!allOrders.length) {
+      body.innerHTML = `<p style="color:var(--muted);text-align:center;padding:2rem">No orders synced yet. Hit Sync All to import from Gmail.</p>`;
+      return;
+    }
+
+    // Match each order to a transaction
+    const matched = new Map(); // orderId → [txnId, txn]
+    for (const [orderId, order] of allOrders) {
+      if (!order.shipDate || !order.total) continue;
+      const orderTime = new Date(order.shipDate).getTime();
+      const hit = allTxns.find(([, t]) => {
+        if (!AMAZON_PAT.test(t.merchantName ?? t.description ?? '')) return false;
+        if (Math.abs(t.amount - order.total) > 1.00) return false;
+        return Math.abs(new Date(t.date).getTime() - orderTime) / 86_400_000 <= 5;
+      });
+      if (hit) matched.set(orderId, hit);
+    }
+
+    // Sort newest first
+    const sorted = [...allOrders].sort((a, b) =>
+      (b[1].shipDate ?? '').localeCompare(a[1].shipDate ?? ''));
+    const toShow  = unmatchedOnly ? sorted.filter(([id]) => !matched.has(id)) : sorted;
+
+    const totalOrders    = allOrders.length;
+    const matchedCount   = matched.size;
+    const unmatchedCount = totalOrders - matchedCount;
+
+    const summaryHtml = `
+      <div style="display:flex;gap:0.75rem;flex-wrap:wrap;margin-bottom:0.75rem;font-size:0.82rem">
+        <span style="color:var(--muted)">${totalOrders} total</span>
+        <span style="color:#16a34a;font-weight:600">✓ ${matchedCount} matched</span>
+        ${unmatchedCount > 0 ? `<span style="color:#d97706;font-weight:600">⚠ ${unmatchedCount} unmatched</span>` : ''}
+        ${unmatchedOnly && unmatchedCount === 0 ? `<span style="color:#16a34a">All orders matched!</span>` : ''}
+      </div>`;
+
+    const orderCards = toShow.map(([orderId, order]) => {
+      const isMatched = matched.has(orderId);
+      const txnEntry  = matched.get(orderId);
+      const statusBar = isMatched
+        ? `<div style="color:#16a34a;font-size:0.78rem;font-weight:600;margin-bottom:0.3rem">
+             ✓ Matched: ${txnEntry[1].description ?? txnEntry[1].merchantName ?? 'Amazon'} · ${fmtCurrency(txnEntry[1].amount)}
+           </div>`
+        : `<div style="color:#d97706;font-size:0.78rem;font-weight:600;margin-bottom:0.3rem">
+             ⚠ No transaction matched — check Transactions tab for ${order.shipDate ? new Date(order.shipDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : ''}
+           </div>`;
+
+      const itemsHtml = order.items?.length
+        ? order.items.slice(0, 5).map(i =>
+            `<div style="display:flex;justify-content:space-between;font-size:0.78rem;color:var(--muted);padding:1px 0">
+               <span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${i.name}</span>
+               <span style="margin-left:0.5rem;white-space:nowrap">${fmtCurrency(i.price)}</span>
+             </div>`).join('') +
+          (order.items.length > 5 ? `<p style="font-size:0.75rem;color:var(--muted);margin:2px 0 0">+${order.items.length - 5} more items</p>` : '')
+        : '<p style="font-size:0.75rem;color:var(--muted);margin:0">No items extracted</p>';
+
+      const orderLabel = order.orderNumber ? `Order #${order.orderNumber}` : 'Amazon order';
+      const borderColor = isMatched ? '#bbf7d0' : '#fde68a';
+
+      return `
+        <div style="border:1.5px solid ${borderColor};border-radius:10px;padding:0.6rem 0.75rem;margin-bottom:0.6rem">
+          <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:0.25rem">
+            <div>
+              <span style="font-size:0.72rem;color:var(--muted)">${order.shipDate ?? '—'}</span>
+              <span style="font-size:0.72rem;color:var(--muted);margin-left:0.5rem">${orderLabel}</span>
+            </div>
+            <span style="font-weight:700;font-size:0.9rem">${fmtCurrency(order.total)}</span>
+          </div>
+          ${statusBar}
+          <div style="border-top:1px solid var(--border);padding-top:0.3rem;margin-top:0.1rem">${itemsHtml}</div>
+        </div>`;
+    }).join('');
+
+    body.innerHTML = summaryHtml + (toShow.length ? orderCards : `<p style="color:var(--muted);text-align:center;padding:1rem">Nothing to show.</p>`);
+
+  } catch (e) {
+    body.innerHTML = `<p style="color:var(--danger);font-size:0.85rem">Error loading orders: ${e.message}</p>`;
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 
 function renderAccountList(accounts, uid, partnerUid) {
   const el = document.getElementById('account-list');
