@@ -459,7 +459,7 @@ async function renderAmazonSection(uid, hid) {
           });
           const data = await r.json();
           if (!r.ok) throw new Error(data.error ?? 'Sync failed');
-          if (msg) msg.textContent = `Synced ${data.parsed} order${data.parsed !== 1 ? 's' : ''} from ${data.messages} email${data.messages !== 1 ? 's' : ''}.`;
+          if (msg) msg.textContent = `Found ${data.messages} email${data.messages !== 1 ? 's' : ''}, parsed ${data.parsed} order${data.parsed !== 1 ? 's' : ''}.${data.messages === 0 ? ' (query: ' + (data.query ?? '?') + ')' : ''}`;
           renderAmazonSection(uid, hid);
         } catch (err) {
           if (msg) msg.textContent = `Sync error: ${err.message}`;
@@ -486,7 +486,7 @@ async function renderAmazonSection(uid, hid) {
         });
         const data = await r.json();
         if (!r.ok) throw new Error(data.error ?? 'Sync failed');
-        if (msg) msg.textContent = `Synced ${data.parsed} order${data.parsed !== 1 ? 's' : ''}.`;
+        if (msg) msg.textContent = `Found ${data.messages} email${data.messages !== 1 ? 's' : ''}, parsed ${data.parsed} order${data.parsed !== 1 ? 's' : ''}.`;
         renderAmazonSection(uid, hid);
       } catch (err) {
         if (msg) msg.textContent = `Error: ${err.message}`;

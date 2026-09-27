@@ -191,14 +191,23 @@ async function syncGmail(env, uid, specificKey = null) {
     const accessToken = await getAccessTokenFromRefresh(env, acctData.refreshToken);
 
     let query = 'from:ship-confirm@amazon.com';
-    if (acctData.lastSync) {
-      const after = new Date(acctData.lastSync);
-      after.setDate(after.getDate() - 1);
-      query += ` after:${Math.floor(after.getTime() / 1000)}`;
+    // Always look back at least 90 days so a failed/empty prior sync doesn't
+    // permanently hide older emails. On first sync go back 2 years.
+    const ninetyDaysAgo = new Date();
+    ninetyDaysAgo.setDate(ninetyDaysAgo.getDate() - 90);
+    let afterDate = ninetyDaysAgo;
+    if (!acctData.lastSync) {
+      afterDate = new Date();
+      afterDate.setFullYear(afterDate.getFullYear() - 2);
+    } else {
+      const fromLastSync = new Date(acctData.lastSync);
+      fromLastSync.setDate(fromLastSync.getDate() - 1);
+      if (fromLastSync < afterDate) afterDate = fromLastSync;
     }
+    query += ` after:${Math.floor(afterDate.getTime() / 1000)}`;
 
     const searchResp = await fetch(
-      `https://gmail.googleapis.com/gmail/v1/users/me/messages?q=${encodeURIComponent(query)}&maxResults=100`,
+      `https://gmail.googleapis.com/gmail/v1/users/me/messages?q=${encodeURIComponent(query)}&maxResults=25`,
       { headers: { Authorization: `Bearer ${accessToken}` } },
     );
     const searchData = await searchResp.json();
@@ -223,7 +232,7 @@ async function syncGmail(env, uid, specificKey = null) {
   }
 
   if (Object.keys(patch).length) await fbPatch(env, '', patch);
-  return { messages, parsed };
+  return { messages, parsed, query };
 }
 
 // ── Email parsing ─────────────────────────────────────────────────────────────
@@ -232,8 +241,6 @@ function parseAmazonEmail(msgData) {
   const headers = msgData.payload?.headers ?? [];
   const subject = headers.find(h => h.name === 'Subject')?.value ?? '';
   const dateStr = headers.find(h => h.name === 'Date')?.value   ?? '';
-
-  if (!/ship/i.test(subject)) return null;
 
   const body = extractBody(msgData.payload);
   if (!body) return null;
@@ -295,6 +302,15 @@ function stripHtml(html) {
     .trim();
 }
 
+// Normalize amount strings from both US ("1,234.56") and European ("1.234,56") formats
+function normalizeAmount(s) {
+  const t = s.trim();
+  // European: ends with comma + 2 digits (e.g. "25,99" or "1.234,56")
+  if (/,\d{2}$/.test(t)) return parseFloat(t.replace(/\./g, '').replace(',', '.'));
+  // US: remove thousands commas
+  return parseFloat(t.replace(/,/g, ''));
+}
+
 function parseAmazonBody(text) {
   let total       = null;
   let orderNumber = null;
@@ -303,24 +319,32 @@ function parseAmazonBody(text) {
   const orderMatch = text.match(/\b(\d{3}-\d{7}-\d{7})\b/);
   if (orderMatch) orderNumber = orderMatch[1];
 
+  // Amount pattern covers $1,234.56 / €1.234,56 / bare 25,99 / 25.99
+  const AMT = /(?:[\$€£])?\s*([\d.,]+)/;
   const totalPatterns = [
-    /[Ss]hipment\s+[Tt]otal\s*:?\s*\$?([\d,]+\.\d{2})/,
-    /[Oo]rder\s+[Tt]otal\s*:?\s*\$?([\d,]+\.\d{2})/,
-    /[Gg]rand\s+[Tt]otal\s*:?\s*\$?([\d,]+\.\d{2})/,
-    /[Tt]otal\s+[Cc]harged\s*:?\s*\$?([\d,]+\.\d{2})/,
-    /[Tt]otal\s*:?\s*\$?([\d,]+\.\d{2})/,
+    /[Ss]hipment\s+[Tt]otal\s*:?\s*(?:[\$€£])?\s*([\d.,]+)/,
+    /[Oo]rder\s+[Tt]otal\s*:?\s*(?:[\$€£])?\s*([\d.,]+)/,
+    /[Gg]rand\s+[Tt]otal\s*:?\s*(?:[\$€£])?\s*([\d.,]+)/,
+    /[Tt]otal\s+[Cc]harged\s*:?\s*(?:[\$€£])?\s*([\d.,]+)/,
+    // Spanish
+    /[Tt]otal\s+del\s+pedido\s*:?\s*(?:[\$€£])?\s*([\d.,]+)/,
+    /[Ii]mporte\s+total\s*:?\s*(?:[\$€£])?\s*([\d.,]+)/,
+    /[Tt]otal\s+a\s+pagar\s*:?\s*(?:[\$€£])?\s*([\d.,]+)/,
+    /[Tt]otal\s+del\s+env[íi]o\s*:?\s*(?:[\$€£])?\s*([\d.,]+)/,
+    // Generic fallback — "Total: €25,99" or "Total: $25.99"
+    /[Tt]otal\s*:?\s*(?:[\$€£])\s*([\d.,]+)/,
   ];
   for (const pat of totalPatterns) {
     const m = text.match(pat);
-    if (m) { total = parseFloat(m[1].replace(/,/g, '')); break; }
+    if (m) { total = normalizeAmount(m[1]); break; }
   }
 
-  const skip    = /total|shipping|handling|\btax\b|subtotal|discount|coupon|savings|gift\s*card|fee|delivery/i;
-  const itemPat = /(.{4,80}?)\s+\$([\d,]+\.?\d{0,2})/g;
+  const skip    = /total|shipping|handling|\btax\b|subtotal|discount|coupon|savings|gift\s*card|fee|delivery|gastos|impuesto|env[íi]o/i;
+  const itemPat = /(.{4,80}?)\s+(?:[\$€£])\s*([\d.,]+)/g;
   let m;
   while ((m = itemPat.exec(text)) !== null) {
     const name  = m[1].trim();
-    const price = parseFloat(m[2].replace(/,/g, ''));
+    const price = normalizeAmount(m[2]);
     if (!skip.test(name) && price > 0 && price < 5000 && name.length > 3) {
       items.push({ name, price });
     }
