@@ -191,21 +191,7 @@ async function syncGmail(env, uid, specificKey = null) {
 
     const accessToken = await getAccessTokenFromRefresh(env, acctData.refreshToken);
 
-    let query = 'from:ship-confirm@amazon.com';
-    // Always look back at least 90 days so a failed/empty prior sync doesn't
-    // permanently hide older emails. On first sync go back 2 years.
-    const ninetyDaysAgo = new Date();
-    ninetyDaysAgo.setDate(ninetyDaysAgo.getDate() - 90);
-    let afterDate = ninetyDaysAgo;
-    if (!acctData.lastSync) {
-      afterDate = new Date();
-      afterDate.setFullYear(afterDate.getFullYear() - 2);
-    } else {
-      const fromLastSync = new Date(acctData.lastSync);
-      fromLastSync.setDate(fromLastSync.getDate() - 1);
-      if (fromLastSync < afterDate) afterDate = fromLastSync;
-    }
-    query += ` after:${Math.floor(afterDate.getTime() / 1000)}`;
+    const query = 'from:ship-confirm@amazon.com';
     lastQuery = query;
 
     const searchResp = await fetch(
