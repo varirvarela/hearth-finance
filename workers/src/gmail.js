@@ -220,7 +220,7 @@ async function syncGmail(env, uid, specificKey = null) {
   }
 
   if (Object.keys(patch).length) await fbPatch(env, '', patch);
-  return { messages, parsed, query: lastQuery };
+  return { messages, parsed, query: lastQuery, householdId };
 }
 
 // ── Email parsing ─────────────────────────────────────────────────────────────

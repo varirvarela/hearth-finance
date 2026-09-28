@@ -460,7 +460,7 @@ async function renderAmazonSection(uid, hid) {
           const data = await r.json();
           if (!r.ok) throw new Error(data.error ?? 'Sync failed');
           const resultText = `Found ${data.messages} email${data.messages !== 1 ? 's' : ''}, parsed ${data.parsed} order${data.parsed !== 1 ? 's' : ''}.`
-            + (data.messages === 0 ? ` Query used: ${data.query ?? '?'}` : '');
+            + ` [worker hid: ${data.householdId ?? '?'}, client hid: ${hid}]`;
           await renderAmazonSection(uid, hid);
           const newMsg = document.getElementById('amazon-section')?.querySelector('#amazon-sync-msg');
           if (newMsg) newMsg.textContent = resultText;
