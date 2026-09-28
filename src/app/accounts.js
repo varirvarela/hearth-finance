@@ -431,8 +431,9 @@ async function renderAmazonSection(uid, hid) {
       ${statsBar}
       <div style="padding:0.3rem 0.75rem 0.6rem;display:flex;gap:0.5rem;align-items:center;flex-wrap:wrap">
         <button class="btn-secondary" id="amazon-view-orders-btn" style="width:auto;padding:0.35rem 0.8rem;font-size:0.82rem">View all orders</button>
-        <button class="btn-secondary" id="amazon-sync-all-btn" style="width:auto;padding:0.35rem 0.8rem;font-size:0.82rem">Sync All</button>
-        <button class="btn-ghost"     id="amazon-add-btn"      style="width:auto;padding:0.35rem 0.8rem;font-size:0.82rem">+ Add Gmail</button>
+        <button class="btn-secondary" id="amazon-sync-all-btn"    style="width:auto;padding:0.35rem 0.8rem;font-size:0.82rem">Sync (7d)</button>
+        <button class="btn-secondary" id="amazon-history-btn"     style="width:auto;padding:0.35rem 0.8rem;font-size:0.82rem">Get history…</button>
+        <button class="btn-ghost"     id="amazon-add-btn"         style="width:auto;padding:0.35rem 0.8rem;font-size:0.82rem">+ Add Gmail</button>
       </div>
       <p id="amazon-sync-msg" style="padding:0 0.75rem;font-size:0.8rem;color:var(--muted);margin:0 0 0.5rem"></p>`;
 
@@ -444,29 +445,33 @@ async function renderAmazonSection(uid, hid) {
       location.href = buildGmailAuthUrl(key);
     });
 
-    // Per-account sync buttons (stop propagation so row click doesn't fire)
+    // Helper: run a sync call and update the section + message
+    async function doSync(body, labelLoading, labelDone) {
+      const msg = document.getElementById('amazon-section')?.querySelector('#amazon-sync-msg');
+      if (msg) msg.textContent = labelLoading;
+      const token = await auth.currentUser?.getIdToken();
+      const r = await fetch(`${WORKER_URL}/gmail/sync`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify(body),
+      });
+      const data = await r.json();
+      if (!r.ok) throw new Error(data.error ?? 'Sync failed');
+      await renderAmazonSection(uid, hid);
+      const newMsg = document.getElementById('amazon-section')?.querySelector('#amazon-sync-msg');
+      if (newMsg) newMsg.textContent = `${labelDone} — found ${data.messages} email${data.messages !== 1 ? 's' : ''}, parsed ${data.parsed} order${data.parsed !== 1 ? 's' : ''}.`;
+    }
+
+    // Per-account sync (7 days)
     inner.querySelectorAll('.amazon-sync-btn').forEach(btn => {
       btn.addEventListener('click', async e => {
         e.stopPropagation();
         const key = btn.dataset.key;
-        const msg = inner.querySelector('#amazon-sync-msg');
         btn.disabled = true; btn.textContent = '⟳ …';
         try {
-          const token = await auth.currentUser?.getIdToken();
-          const r = await fetch(`${WORKER_URL}/gmail/sync`, {
-            method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-            body: JSON.stringify({ key }),
-          });
-          const data = await r.json();
-          if (!r.ok) throw new Error(data.error ?? 'Sync failed');
-          const resultText = `Found ${data.messages} email${data.messages !== 1 ? 's' : ''}, parsed ${data.parsed} order${data.parsed !== 1 ? 's' : ''}.`
-            + ` [worker hid: ${data.householdId ?? '?'}, client hid: ${hid}]`;
-          await renderAmazonSection(uid, hid);
-          const newMsg = document.getElementById('amazon-section')?.querySelector('#amazon-sync-msg');
-          if (newMsg) newMsg.textContent = resultText;
+          await doSync({ key, days: 7 }, 'Syncing last 7 days…', 'Synced (7d)');
         } catch (err) {
+          const msg = document.getElementById('amazon-section')?.querySelector('#amazon-sync-msg');
           if (msg) msg.textContent = `Sync error: ${err.message}`;
-          btn.disabled = false; btn.textContent = '⟳ Sync';
         }
       });
     });
@@ -476,29 +481,20 @@ async function renderAmazonSection(uid, hid) {
       row.addEventListener('click', () => openAmazonOrdersSheet(uid, hid));
     });
 
-    // Sync All
+    // Sync All (7 days)
     inner.querySelector('#amazon-sync-all-btn').addEventListener('click', async () => {
       const btn = inner.querySelector('#amazon-sync-all-btn');
-      const msg = inner.querySelector('#amazon-sync-msg');
       btn.disabled = true; btn.textContent = 'Syncing…';
       try {
-        const token = await auth.currentUser?.getIdToken();
-        const r = await fetch(`${WORKER_URL}/gmail/sync`, {
-          method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-          body: '{}',
-        });
-        const data = await r.json();
-        if (!r.ok) throw new Error(data.error ?? 'Sync failed');
-        const resultText = `Found ${data.messages} email${data.messages !== 1 ? 's' : ''}, parsed ${data.parsed} order${data.parsed !== 1 ? 's' : ''}.`
-          + (data.messages === 0 ? ` Query used: ${data.query ?? '?'}` : '');
-        await renderAmazonSection(uid, hid);
-        const newMsg2 = document.getElementById('amazon-section')?.querySelector('#amazon-sync-msg');
-        if (newMsg2) newMsg2.textContent = resultText;
+        await doSync({ days: 7 }, 'Syncing last 7 days…', 'Synced (7d)');
       } catch (err) {
+        const msg = document.getElementById('amazon-section')?.querySelector('#amazon-sync-msg');
         if (msg) msg.textContent = `Error: ${err.message}`;
-        btn.disabled = false; btn.textContent = 'Sync All';
       }
     });
+
+    // Get history — opens date range sheet
+    inner.querySelector('#amazon-history-btn').addEventListener('click', () => openHistorySheet(uid, hid));
 
   } catch (e) {
     if (inner) inner.innerHTML = `<p style="padding:0.5rem 0.75rem;color:var(--danger);font-size:0.82rem">Could not load Amazon accounts: ${e.message}</p>`;
@@ -527,6 +523,65 @@ function matchOrder(order, txns) {
   return hit ?? null;
 }
 
+function openHistorySheet(uid, hid) {
+  const today  = new Date().toISOString().slice(0, 10);
+  const oneYrAgo = new Date(); oneYrAgo.setFullYear(oneYrAgo.getFullYear() - 1);
+  const sinceDefault = oneYrAgo.toISOString().slice(0, 10);
+
+  const overlay = document.createElement('div');
+  overlay.className = 'sheet-overlay';
+  overlay.innerHTML = `
+    <div class="sheet">
+      <div class="sheet-handle"></div>
+      <div class="sheet-hdr">
+        <span class="sheet-title">Get order history</span>
+        <button class="sheet-close" id="hist-close">✕</button>
+      </div>
+      <div style="padding:1.2rem;display:flex;flex-direction:column;gap:1rem">
+        <div>
+          <label style="font-size:0.82rem;color:var(--muted);display:block;margin-bottom:0.3rem">From</label>
+          <input type="date" id="hist-since" value="${sinceDefault}" max="${today}" style="width:100%;padding:0.5rem;border:1px solid var(--border);border-radius:6px;background:var(--surface);color:var(--text)">
+        </div>
+        <div>
+          <label style="font-size:0.82rem;color:var(--muted);display:block;margin-bottom:0.3rem">To</label>
+          <input type="date" id="hist-until" value="${today}" max="${today}" style="width:100%;padding:0.5rem;border:1px solid var(--border);border-radius:6px;background:var(--surface);color:var(--text)">
+        </div>
+        <p style="font-size:0.8rem;color:var(--muted);margin:0">Fetches all shipment emails in this range and adds them to your orders. Existing orders are not removed.</p>
+        <button class="btn-primary" id="hist-fetch">Fetch orders</button>
+        <p id="hist-msg" style="font-size:0.82rem;color:var(--muted);text-align:center;margin:0"></p>
+      </div>
+    </div>`;
+  document.body.appendChild(overlay);
+  requestAnimationFrame(() => overlay.classList.add('open'));
+  const close = () => { overlay.classList.remove('open'); setTimeout(() => overlay.remove(), 260); };
+  overlay.querySelector('#hist-close').addEventListener('click', close);
+  overlay.addEventListener('click', e => { if (e.target === overlay) close(); });
+
+  overlay.querySelector('#hist-fetch').addEventListener('click', async () => {
+    const since = overlay.querySelector('#hist-since').value;
+    const until = overlay.querySelector('#hist-until').value;
+    const btn   = overlay.querySelector('#hist-fetch');
+    const msg   = overlay.querySelector('#hist-msg');
+    if (!since || !until) { msg.textContent = 'Please set both dates.'; return; }
+    btn.disabled = true; btn.textContent = 'Fetching…';
+    msg.textContent = '';
+    try {
+      const token = await auth.currentUser?.getIdToken();
+      const r = await fetch(`${WORKER_URL}/gmail/sync`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ since, until }),
+      });
+      const data = await r.json();
+      if (!r.ok) throw new Error(data.error ?? 'Fetch failed');
+      msg.textContent = `Done — found ${data.messages} email${data.messages !== 1 ? 's' : ''}, added ${data.parsed} order${data.parsed !== 1 ? 's' : ''}.`;
+      renderAmazonSection(uid, hid).catch(() => {});
+    } catch (err) {
+      msg.textContent = `Error: ${err.message}`;
+      btn.disabled = false; btn.textContent = 'Fetch orders';
+    }
+  });
+}
+
 function countMatchedOrders(orders, txns) {
   return orders.filter(([, order]) => matchOrder(order, txns) !== null).length;
 }
@@ -544,12 +599,23 @@ async function openAmazonOrdersSheet(uid, hid, unmatchedOnly = false) {
       <div id="amazon-sheet-body" style="padding:0.75rem;overflow-y:auto;flex:1">
         <p style="color:var(--muted);font-size:0.85rem;text-align:center;padding:1rem">Loading orders…</p>
       </div>
+      <div style="padding:0.5rem 0.75rem;border-top:1px solid var(--border)">
+        <button id="amazon-reset-btn" class="btn-ghost" style="width:100%;color:var(--danger);font-size:0.8rem">Reset all orders</button>
+      </div>
     </div>`;
   document.body.appendChild(overlay);
   requestAnimationFrame(() => overlay.classList.add('open'));
   const close = () => { overlay.classList.remove('open'); setTimeout(() => overlay.remove(), 260); };
   overlay.querySelector('#amazon-sheet-close').addEventListener('click', close);
   overlay.addEventListener('click', e => { if (e.target === overlay) close(); });
+
+  overlay.querySelector('#amazon-reset-btn').addEventListener('click', async () => {
+    if (!confirm('Delete all synced Amazon orders? This cannot be undone.')) return;
+    const token = await auth.currentUser?.getIdToken();
+    await fetch(`${WORKER_URL}/gmail/purge`, { method: 'POST', headers: { Authorization: `Bearer ${token}` } });
+    close();
+    renderAmazonSection(uid, hid).catch(() => {});
+  });
 
   const body = overlay.querySelector('#amazon-sheet-body');
 

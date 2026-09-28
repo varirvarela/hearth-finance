@@ -28,7 +28,14 @@ export async function handleGmail(request, env, pathname, uid) {
   }
   if (pathname === '/gmail/sync' && request.method === 'POST') {
     const body = await request.json().catch(() => ({}));
-    return json(await syncGmail(env, uid, body.key ?? null));
+    return json(await syncGmail(env, uid, body.key ?? null, {
+      since: body.since ?? null,
+      until: body.until ?? null,
+      days:  body.days  ?? 7,
+    }));
+  }
+  if (pathname === '/gmail/purge' && request.method === 'POST') {
+    return json(await purgeOrders(env, uid));
   }
   if (pathname === '/gmail/disconnect' && request.method === 'POST') {
     const { key = 'main' } = await request.json();
@@ -166,10 +173,9 @@ async function disconnectGmail(env, uid, key = 'main') {
 
 // ── Sync ──────────────────────────────────────────────────────────────────────
 
-async function syncGmail(env, uid, specificKey = null) {
+async function syncGmail(env, uid, specificKey = null, { since = null, until = null, days = 7 } = {}) {
   const { fbGet, fbPatch } = await import('./firebase.js');
 
-  // Resolve household so orders land under the shared namespace
   const profile     = await fbGet(env, `users/${uid}`).catch(() => null);
   const householdId = (typeof profile === 'object' && profile?.householdId) ? profile.householdId : uid;
 
@@ -179,6 +185,10 @@ async function syncGmail(env, uid, specificKey = null) {
     : Object.entries(status.accounts);
 
   if (!toSync.length) throw new Error('No Gmail accounts connected');
+
+  // Compute date window
+  const afterDate  = since ? new Date(since) : (() => { const d = new Date(); d.setDate(d.getDate() - days); return d; })();
+  const beforeDate = until ? new Date(until) : null;
 
   const patch  = {};
   let messages = 0;
@@ -191,36 +201,80 @@ async function syncGmail(env, uid, specificKey = null) {
 
     const accessToken = await getAccessTokenFromRefresh(env, acctData.refreshToken);
 
-    const query = 'from:ship-confirm@amazon.com';
+    let query = `from:ship-confirm@amazon.com after:${Math.floor(afterDate.getTime() / 1000)}`;
+    if (beforeDate) query += ` before:${Math.floor(beforeDate.getTime() / 1000)}`;
     lastQuery = query;
 
-    const searchResp = await fetch(
-      `https://gmail.googleapis.com/gmail/v1/users/me/messages?q=${encodeURIComponent(query)}&maxResults=25`,
-      { headers: { Authorization: `Bearer ${accessToken}` } },
-    );
-    const searchData = await searchResp.json();
-    const msgs = searchData.messages ?? [];
-    messages  += msgs.length;
+    // Paginate through all matching messages
+    let pageToken = null;
+    do {
+      let searchUrl = `https://gmail.googleapis.com/gmail/v1/users/me/messages?q=${encodeURIComponent(query)}&maxResults=100`;
+      if (pageToken) searchUrl += `&pageToken=${encodeURIComponent(pageToken)}`;
 
-    for (const msg of msgs) {
-      const msgResp = await fetch(
-        `https://gmail.googleapis.com/gmail/v1/users/me/messages/${msg.id}?format=full`,
-        { headers: { Authorization: `Bearer ${accessToken}` } },
-      );
-      const msgData = await msgResp.json();
-      const order   = parseAmazonEmail(msgData);
-      if (order) {
-        // Prefix msg id with account key so orders from different accounts never collide
-        patch[`amazonOrders/${householdId}/${key}_${msg.id}`] = order;
-        parsed++;
+      const searchData = await fetch(searchUrl, { headers: { Authorization: `Bearer ${accessToken}` } }).then(r => r.json());
+      const msgs = searchData.messages ?? [];
+      messages  += msgs.length;
+      pageToken  = searchData.nextPageToken ?? null;
+
+      if (msgs.length > 0) {
+        // Fetch all message bodies in a single batch request (1 subrequest regardless of count)
+        const msgDataList = await fetchMessagesBatch(accessToken, msgs.map(m => m.id));
+        for (const msgData of msgDataList) {
+          const order = parseAmazonEmail(msgData);
+          if (order) {
+            patch[`amazonOrders/${householdId}/${key}_${msgData.id}`] = order;
+            parsed++;
+          }
+        }
       }
-    }
+    } while (pageToken);
 
     patch[`gmail/${uid}/accounts/${key}/lastSync`] = new Date().toISOString();
   }
 
   if (Object.keys(patch).length) await fbPatch(env, '', patch);
   return { messages, parsed, query: lastQuery, householdId };
+}
+
+async function purgeOrders(env, uid) {
+  const { fbGet, fbSet } = await import('./firebase.js');
+  const profile     = await fbGet(env, `users/${uid}`).catch(() => null);
+  const householdId = (typeof profile === 'object' && profile?.householdId) ? profile.householdId : uid;
+  await fbSet(env, `amazonOrders/${householdId}`, null);
+  return { ok: true };
+}
+
+// Fetch multiple Gmail message bodies in a single batch HTTP request
+async function fetchMessagesBatch(accessToken, messageIds) {
+  if (!messageIds.length) return [];
+
+  const boundary = 'hearth_' + Date.now();
+  const reqBody  = messageIds.map(id =>
+    `--${boundary}\r\nContent-Type: application/http\r\n\r\nGET /gmail/v1/users/me/messages/${id}?format=full\r\n`,
+  ).join('') + `--${boundary}--`;
+
+  const resp = await fetch('https://gmail.googleapis.com/batch/gmail/v1', {
+    method:  'POST',
+    headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': `multipart/mixed; boundary="${boundary}"` },
+    body:    reqBody,
+  });
+
+  const text     = await resp.text();
+  const bndMatch = (resp.headers.get('Content-Type') ?? '').match(/boundary="?([^";,]+)"?/i);
+  if (!bndMatch) return [];
+
+  const results = [];
+  for (const part of text.split(`--${bndMatch[1]}`).slice(1)) {
+    if (part.trimStart().startsWith('--')) break;
+    // Each part: multipart headers \r\n\r\n HTTP-response-status+headers \r\n\r\n JSON-body
+    const mpEnd   = part.indexOf('\r\n\r\n');
+    if (mpEnd   === -1) continue;
+    const httpEnd = part.indexOf('\r\n\r\n', mpEnd + 4);
+    if (httpEnd === -1) continue;
+    const jsonStr = part.slice(httpEnd + 4).trim();
+    try { const d = JSON.parse(jsonStr); if (d?.id) results.push(d); } catch { /* skip */ }
+  }
+  return results;
 }
 
 // ── Email parsing ─────────────────────────────────────────────────────────────
