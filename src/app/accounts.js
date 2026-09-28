@@ -459,8 +459,11 @@ async function renderAmazonSection(uid, hid) {
           });
           const data = await r.json();
           if (!r.ok) throw new Error(data.error ?? 'Sync failed');
-          if (msg) msg.textContent = `Found ${data.messages} email${data.messages !== 1 ? 's' : ''}, parsed ${data.parsed} order${data.parsed !== 1 ? 's' : ''}.${data.messages === 0 ? ' (query: ' + (data.query ?? '?') + ')' : ''}`;
-          renderAmazonSection(uid, hid);
+          const resultText = `Found ${data.messages} email${data.messages !== 1 ? 's' : ''}, parsed ${data.parsed} order${data.parsed !== 1 ? 's' : ''}.`
+            + (data.messages === 0 ? ` Query used: ${data.query ?? '?'}` : '');
+          await renderAmazonSection(uid, hid);
+          const newMsg = document.getElementById('amazon-section')?.querySelector('#amazon-sync-msg');
+          if (newMsg) newMsg.textContent = resultText;
         } catch (err) {
           if (msg) msg.textContent = `Sync error: ${err.message}`;
           btn.disabled = false; btn.textContent = '⟳ Sync';
@@ -486,8 +489,11 @@ async function renderAmazonSection(uid, hid) {
         });
         const data = await r.json();
         if (!r.ok) throw new Error(data.error ?? 'Sync failed');
-        if (msg) msg.textContent = `Found ${data.messages} email${data.messages !== 1 ? 's' : ''}, parsed ${data.parsed} order${data.parsed !== 1 ? 's' : ''}.`;
-        renderAmazonSection(uid, hid);
+        const resultText = `Found ${data.messages} email${data.messages !== 1 ? 's' : ''}, parsed ${data.parsed} order${data.parsed !== 1 ? 's' : ''}.`
+          + (data.messages === 0 ? ` Query used: ${data.query ?? '?'}` : '');
+        await renderAmazonSection(uid, hid);
+        const newMsg2 = document.getElementById('amazon-section')?.querySelector('#amazon-sync-msg');
+        if (newMsg2) newMsg2.textContent = resultText;
       } catch (err) {
         if (msg) msg.textContent = `Error: ${err.message}`;
         btn.disabled = false; btn.textContent = 'Sync All';
