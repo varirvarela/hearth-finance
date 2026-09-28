@@ -68,6 +68,18 @@
         }
       }
     },
+    "amazonOrders": {
+      "$uid": {
+        ".read":  "auth != null && (auth.uid === $uid || root.child('users').child(auth.uid).child('partnerUid').val() === $uid || root.child('users').child(auth.uid).child('householdId').val() === $uid)",
+        ".write": false
+      }
+    },
+    "gmail": {
+      "$uid": {
+        ".read":  "auth != null && auth.uid === $uid",
+        ".write": false
+      }
+    },
     "categoryDescriptions": {
       "$uid": {
         ".read":  "auth != null && auth.uid === $uid",
