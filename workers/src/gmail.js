@@ -183,6 +183,7 @@ async function syncGmail(env, uid, specificKey = null) {
   const patch  = {};
   let messages = 0;
   let parsed   = 0;
+  let lastQuery = '';
 
   for (const [key] of toSync) {
     const acctData = await fbGet(env, `gmail/${uid}/accounts/${key}`).catch(() => null);
@@ -205,6 +206,7 @@ async function syncGmail(env, uid, specificKey = null) {
       if (fromLastSync < afterDate) afterDate = fromLastSync;
     }
     query += ` after:${Math.floor(afterDate.getTime() / 1000)}`;
+    lastQuery = query;
 
     const searchResp = await fetch(
       `https://gmail.googleapis.com/gmail/v1/users/me/messages?q=${encodeURIComponent(query)}&maxResults=25`,
@@ -232,7 +234,7 @@ async function syncGmail(env, uid, specificKey = null) {
   }
 
   if (Object.keys(patch).length) await fbPatch(env, '', patch);
-  return { messages, parsed, query };
+  return { messages, parsed, query: lastQuery };
 }
 
 // ── Email parsing ─────────────────────────────────────────────────────────────
