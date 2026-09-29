@@ -201,7 +201,7 @@ async function syncGmail(env, uid, specificKey = null, { since = null, until = n
 
     const accessToken = await getAccessTokenFromRefresh(env, acctData.refreshToken);
 
-    let query = `from:ship-confirm@amazon.com after:${Math.floor(afterDate.getTime() / 1000)}`;
+    let query = `{from:auto-confirm@amazon.com from:ship-confirm@amazon.com} after:${Math.floor(afterDate.getTime() / 1000)}`;
     if (beforeDate) query += ` before:${Math.floor(beforeDate.getTime() / 1000)}`;
     lastQuery = query;
 
@@ -283,6 +283,10 @@ function parseAmazonEmail(msgData) {
   const headers = msgData.payload?.headers ?? [];
   const subject = headers.find(h => h.name === 'Subject')?.value ?? '';
   const dateStr = headers.find(h => h.name === 'Date')?.value   ?? '';
+
+  // Keep only shipment emails — skip order confirmations, return receipts, etc.
+  const SHIP_SUBJECT = /ship|dispatch|enviado|env[íi]o|expedido|exp[eé]di|versandt|spedito|consegna|shipped/i;
+  if (!SHIP_SUBJECT.test(subject)) return null;
 
   const body = extractBody(msgData.payload);
   if (!body) return null;
