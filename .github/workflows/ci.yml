@@ -20,7 +20,7 @@ jobs:
 
       - run: npm ci
 
-      - name: Run Vitest
+      - name: Run Vitest (src + workers)
         run: npm test
 
   build:

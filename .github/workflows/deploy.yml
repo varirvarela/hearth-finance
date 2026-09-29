@@ -28,7 +28,7 @@ jobs:
 
       - run: npm ci
 
-      - name: Unit tests (vitest)
+      - name: Unit tests (vitest — src + workers)
         run: npm run test
 
       - name: Vite build (needed for E2E preview server)
