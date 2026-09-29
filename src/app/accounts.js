@@ -553,8 +553,9 @@ async function openAmazonOrdersSheet(uid, hid, unmatchedOnly = false) {
       <div id="amazon-sheet-body" style="padding:0.75rem;overflow-y:auto;flex:1">
         <p style="color:var(--muted);font-size:0.85rem;text-align:center;padding:1rem">Loading orders…</p>
       </div>
-      <div style="padding:0.5rem 0.75rem;border-top:1px solid var(--border)">
-        <button id="amazon-reset-btn" class="btn-ghost" style="width:100%;color:var(--danger);font-size:0.8rem">Reset all orders</button>
+      <div style="padding:0.5rem 0.75rem;border-top:1px solid var(--border);display:flex;gap:0.5rem">
+        <button id="amazon-reset-btn" class="btn-ghost" style="flex:1;color:var(--danger);font-size:0.8rem">Reset all orders</button>
+        <button id="amazon-debug-btn" class="btn-ghost" style="flex:1;font-size:0.8rem" title="Copy raw email body for debugging">Debug email</button>
       </div>
     </div>`;
   document.body.appendChild(overlay);
@@ -569,6 +570,27 @@ async function openAmazonOrdersSheet(uid, hid, unmatchedOnly = false) {
     await fetch(`${WORKER_URL}/gmail/purge`, { method: 'POST', headers: { Authorization: `Bearer ${token}` } });
     close();
     renderAmazonSection(uid, hid).catch(() => {});
+  });
+
+  overlay.querySelector('#amazon-debug-btn').addEventListener('click', async () => {
+    const btn = overlay.querySelector('#amazon-debug-btn');
+    btn.textContent = 'Fetching…';
+    btn.disabled = true;
+    try {
+      const token = await auth.currentUser?.getIdToken();
+      const res   = await fetch(`${WORKER_URL}/gmail/debug-body`, {
+        method: 'POST', headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({}),
+      });
+      const data = JSON.stringify(await res.json(), null, 2);
+      await navigator.clipboard.writeText(data);
+      btn.textContent = 'Copied!';
+      setTimeout(() => { btn.textContent = 'Debug email'; btn.disabled = false; }, 2000);
+    } catch (err) {
+      btn.textContent = 'Error';
+      btn.disabled = false;
+      console.error('debug-body error', err);
+    }
   });
 
   const body = overlay.querySelector('#amazon-sheet-body');
