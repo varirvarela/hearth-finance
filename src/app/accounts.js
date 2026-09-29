@@ -513,22 +513,22 @@ function matchAllOrders(orders, txns) {
   for (const [orderId, order] of sorted) {
     if (!order.shipDate || !order.total) continue;
     const orderTime = new Date(order.shipDate).getTime();
-    const amtTol    = Math.max(order.total * 0.07, 2.00); // 7% or 2 EUR
+    const EXACT = 0.01; // floating-point tolerance only
 
-    // Pass 1: Amazon merchant name, 7% amount tolerance, 7-day window
+    // Pass 1: Amazon merchant name + exact amount, 7-day window
     let hit = txns.find(([id, t]) => {
       if (claimed.has(id)) return false;
       if (!AMAZON_PAT.test(t.merchantName ?? t.description ?? '')) return false;
-      if (Math.abs(t.amount - order.total) > amtTol) return false;
+      if (Math.abs(t.amount - order.total) > EXACT) return false;
       return Math.abs(new Date(t.date).getTime() - orderTime) / 86_400_000 <= 7;
     });
 
-    // Pass 2: any merchant, within 1 EUR, 10-day window
+    // Pass 2: any merchant + exact amount, 5-day window
     if (!hit) hit = txns.find(([id, t]) => {
       if (claimed.has(id)) return false;
       if (t.isTransfer || t.amount < 0) return false;
-      if (Math.abs(t.amount - order.total) > 1.00) return false;
-      return Math.abs(new Date(t.date).getTime() - orderTime) / 86_400_000 <= 10;
+      if (Math.abs(t.amount - order.total) > EXACT) return false;
+      return Math.abs(new Date(t.date).getTime() - orderTime) / 86_400_000 <= 5;
     });
 
     if (hit) { result.set(orderId, hit); claimed.add(hit[0]); }

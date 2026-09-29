@@ -770,35 +770,85 @@ async function appendAmazonItems(t, detail, hid) {
     const orders = Object.values(_amazonOrders);
     if (!orders.length) return;
 
-    // Match: amount within $0.10 and ship date within 5 days of transaction date
+    // Exact amount match (±€0.01), ship date within 7 days
     const txnTime = new Date(t.date).getTime();
     const match   = orders.find(o => {
       if (!o.total || !o.shipDate) return false;
-      const amtTol   = Math.max(o.total * 0.10, 5.00);
-      if (Math.abs(o.total - t.amount) > amtTol) return false;
-      const daysDiff = Math.abs(new Date(o.shipDate).getTime() - txnTime) / 86_400_000;
-      return daysDiff <= 10;
+      if (Math.abs(o.total - t.amount) > 0.01) return false;
+      return Math.abs(new Date(o.shipDate).getTime() - txnTime) / 86_400_000 <= 7;
     });
     if (!match) return;
 
-    const itemsHtml = match.items?.length
+    const hasItems = match.items?.length > 0;
+    const itemsHtml = hasItems
       ? match.items.map(i => `
-          <div style="display:flex;justify-content:space-between;gap:0.5rem;padding:0.25rem 0;border-bottom:1px solid var(--border)">
+          <div class="amazon-item-row" style="display:flex;justify-content:space-between;gap:0.5rem;padding:0.25rem 0;border-bottom:1px solid var(--border)">
             <span style="font-size:0.82rem;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${i.name}</span>
-            <span style="font-size:0.82rem;white-space:nowrap;color:var(--muted)">$${i.price.toFixed(2)}</span>
+            ${i.price != null ? `<span style="font-size:0.82rem;white-space:nowrap;color:var(--muted)">€${i.price.toFixed(2)}</span>` : ''}
           </div>`).join('')
-      : '<p style="color:var(--muted);font-size:0.82rem;margin:0">No items extracted</p>';
+      : '<p style="color:var(--muted);font-size:0.82rem;margin:0 0 0.5rem">Items not extracted from this email.</p>';
 
-    const orderLabel = match.orderNumber ? ` · Order ${match.orderNumber}` : '';
+    const orderLabel = match.orderNumber ? ` · ${match.orderNumber}` : '';
     const section    = document.createElement('div');
     section.style.cssText = 'padding:0.6rem 0.8rem 0.4rem;border-top:1px solid var(--border)';
     section.innerHTML = `
       <p style="font-size:0.75rem;font-weight:600;color:var(--muted);margin:0 0 0.3rem;text-transform:uppercase;letter-spacing:0.05em">
-        Amazon Items${orderLabel}
+        Amazon Order${orderLabel}
       </p>
-      ${itemsHtml}`;
+      ${itemsHtml}
+      ${hasItems ? `<button class="btn-secondary" id="amazon-suggest-cat-btn" style="margin-top:0.4rem;width:100%;font-size:0.8rem;padding:0.3rem 0">✨ Suggest categories</button>
+      <div id="amazon-cat-suggestions" style="margin-top:0.4rem"></div>` : ''}`;
     detail.appendChild(section);
+
+    if (hasItems) {
+      section.querySelector('#amazon-suggest-cat-btn')?.addEventListener('click', async () => {
+        const btn = section.querySelector('#amazon-suggest-cat-btn');
+        const sugBox = section.querySelector('#amazon-cat-suggestions');
+        btn.disabled = true; btn.textContent = 'Thinking…';
+        try {
+          const token = await auth.currentUser?.getIdToken();
+          const r = await fetch(`${WORKER_URL}/gmail/suggest-categories`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+            body: JSON.stringify({ items: match.items }),
+          });
+          const data = await r.json();
+          if (!r.ok) throw new Error(data.error ?? 'Failed');
+          btn.remove();
+          renderCategorySuggestions(sugBox, data.suggestions, t, hid);
+        } catch (err) {
+          btn.textContent = `Error: ${err.message}`;
+          btn.disabled = false;
+        }
+      });
+    }
   } catch { /* non-fatal */ }
+}
+
+// Renders AI category suggestions for Amazon order items, with Apply/Dismiss per item.
+function renderCategorySuggestions(container, suggestions, t, hid) {
+  import('../shared/categories.js').then(({ getCategoryById }) => {
+    container.innerHTML = suggestions.map((s, i) => {
+      const cat = getCategoryById(s.category);
+      const conf = Math.round((s.confidence ?? 0.5) * 100);
+      return `
+        <div style="display:flex;align-items:center;gap:0.4rem;padding:0.3rem 0;border-bottom:1px solid var(--border);flex-wrap:wrap" data-sug-idx="${i}">
+          <span style="font-size:0.78rem;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${s.item}</span>
+          <span style="font-size:0.75rem;background:var(--surface-alt,#f1f5f9);padding:0.1rem 0.4rem;border-radius:4px;white-space:nowrap">${cat?.label ?? s.category} · ${conf}%</span>
+          <button class="btn-secondary sug-apply-btn" data-catid="${s.category}" style="font-size:0.72rem;padding:0.15rem 0.5rem">Apply</button>
+        </div>`;
+    }).join('') + `
+      <p style="font-size:0.75rem;color:var(--muted);margin:0.4rem 0 0">Applying re-categorizes the whole transaction.</p>`;
+
+    container.querySelectorAll('.sug-apply-btn').forEach(btn => {
+      btn.addEventListener('click', async () => {
+        const catId = btn.dataset.catid;
+        btn.disabled = true; btn.textContent = '✓';
+        await dbUpdate(`transactions/${hid}/${t.id ?? t.txnId}`, { category: catId, categorizedBy: 'amazon-items' });
+        container.querySelectorAll('.sug-apply-btn').forEach(b => { b.disabled = true; });
+      });
+    });
+  });
 }
 
 // Writes a merchant → category mapping to Firebase so future transactions are auto-matched.

@@ -37,6 +37,11 @@ export async function handleGmail(request, env, pathname, uid) {
   if (pathname === '/gmail/purge' && request.method === 'POST') {
     return json(await purgeOrders(env, uid));
   }
+  if (pathname === '/gmail/suggest-categories' && request.method === 'POST') {
+    const { items } = await request.json().catch(() => ({}));
+    if (!items?.length) return json({ error: 'Missing items' }, 400);
+    return json(await suggestItemCategories(env, items));
+  }
   if (pathname === '/gmail/disconnect' && request.method === 'POST') {
     const { key = 'main' } = await request.json();
     await disconnectGmail(env, uid, key);
@@ -381,16 +386,69 @@ function parseAmazonBody(text) {
     if (m) { total = normalizeAmount(m[1]); break; }
   }
 
-  const skip    = /total|shipping|handling|\btax\b|subtotal|discount|coupon|savings|gift\s*card|fee|delivery|gastos|impuesto|env[íi]o/i;
+  const skip = /total|shipping|handling|\btax\b|subtotal|discount|coupon|savings|gift\s*card|fee|delivery|gastos|impuesto|env[íi]o|amazon|hola|estimad|pedido|enviado|confirma|direcci|address|order\s*#|art[íi]culo|qty|cantidad|units?|unidad/i;
+
+  // Phase 1: items with explicit price (currency symbol present)
   const itemPat = /(.{4,80}?)\s+(?:[\$€£])\s*([\d.,]+)/g;
   let m;
   while ((m = itemPat.exec(text)) !== null) {
     const name  = m[1].trim();
     const price = normalizeAmount(m[2]);
-    if (!skip.test(name) && price > 0 && price < 5000 && name.length > 3) {
+    if (!skip.test(name) && price > 0 && price < 5000 && name.length > 5) {
       items.push({ name, price });
     }
   }
 
+  // Phase 2: if no priced items found, extract names from the shipped-items section
+  // Amazon shipment emails list item names without prices in the notification body
+  if (!items.length) {
+    const sectionPat = /(?:art[íi]culo|item|producto|shipped|enviado)[^:\n]*:?\s*\n([\s\S]*?)(?=\n\s*(?:total|subtotal|precio|price|importe|tracking|seguimiento|deliver|direcci|address))/i;
+    const sec = text.match(sectionPat);
+    if (sec) {
+      for (const line of sec[1].split('\n')) {
+        const name = line.trim().replace(/^[\d×x\-\*\.\s]+/, '').trim();
+        if (name.length > 8 && name.length < 200 && !skip.test(name) && !/^\d+$/.test(name)) {
+          items.push({ name, price: null });
+        }
+      }
+    }
+  }
+
   return { items, total, orderNumber };
+}
+
+// ── AI category suggestions for order items ───────────────────────────────────
+
+async function suggestItemCategories(env, items) {
+  const { CATEGORIES } = await import('../../src/shared/categories.js');
+  const expenseCats = CATEGORIES.filter(c => c.parent && !c.hide && !c.isIncome && c.parent !== 'transfer');
+  const catList = expenseCats.map(c => `${c.id}: ${c.label}`).join('\n');
+
+  const prompt = `You are categorizing Amazon order items for a household budget app.
+Given each item name, pick the most appropriate expense category from this list:
+${catList}
+
+Items to categorize:
+${items.map((it, i) => `${i + 1}. ${it.name}${it.price != null ? ` (€${it.price})` : ''}`).join('\n')}
+
+Respond with JSON only — an array with one entry per item:
+[{"item": "<name>", "category": "<category_id>", "confidence": <0.0-1.0>}]`;
+
+  const resp = await fetch(
+    `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${env.GOOGLE_AI_API_KEY}`,
+    {
+      method:  'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body:    JSON.stringify({ contents: [{ parts: [{ text: prompt }] }] }),
+    },
+  );
+
+  const data = await resp.json();
+  const raw  = data.candidates?.[0]?.content?.parts?.[0]?.text ?? '[]';
+  const jsonStr = raw.match(/\[[\s\S]*\]/)?.[0] ?? '[]';
+  try {
+    return { suggestions: JSON.parse(jsonStr) };
+  } catch {
+    return { suggestions: items.map(it => ({ item: it.name, category: 'shopping_otros', confidence: 0.5 })) };
+  }
 }
