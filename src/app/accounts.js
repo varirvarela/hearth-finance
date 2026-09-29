@@ -1,4 +1,4 @@
-import { dbGet, dbSet, dbListen, auth, getPartnerUid, getHouseholdId } from '../shared/firebase.js';
+﻿import { dbGet, dbSet, dbListen, auth, getPartnerUid, getHouseholdId } from '../shared/firebase.js';
 import { fmtCurrency, fmtDate } from '../shared/format.js';
 import { CHANGELOG } from '../shared/changelog.js';
 
@@ -501,89 +501,43 @@ async function renderAmazonSection(uid, hid) {
   }
 }
 
-function matchOrder(order, txns) {
-  if (!order.shipDate || !order.total) return null;
-  const orderTime = new Date(order.shipDate).getTime();
-  const amtTol    = Math.max(order.total * 0.10, 5.00); // 10% or $5, whichever is larger
+// Global matching -- each transaction can only be claimed by one order.
+// Returns Map<orderId, [txnId, txn]>.
+function matchAllOrders(orders, txns) {
+  const claimed = new Set();
+  const result  = new Map();
 
-  // Pass 1: Amazon merchant, 10% amount, 10 days
-  let hit = txns.find(([, t]) => {
-    if (!AMAZON_PAT.test(t.merchantName ?? t.description ?? '')) return false;
-    if (Math.abs(t.amount - order.total) > amtTol) return false;
-    return Math.abs(new Date(t.date).getTime() - orderTime) / 86_400_000 <= 10;
-  });
-  if (hit) return hit;
+  // Newest orders get first pick on disputed transactions
+  const sorted = [...orders].sort((a, b) => (b[1].shipDate ?? '').localeCompare(a[1].shipDate ?? ''));
 
-  // Pass 2: any merchant, tight amount (within $1), 14 days — catches unusual merchant names
-  hit = txns.find(([, t]) => {
-    if (t.isTransfer || t.amount < 0) return false;
-    if (Math.abs(t.amount - order.total) > 1.00) return false;
-    return Math.abs(new Date(t.date).getTime() - orderTime) / 86_400_000 <= 14;
-  });
-  return hit ?? null;
-}
+  for (const [orderId, order] of sorted) {
+    if (!order.shipDate || !order.total) continue;
+    const orderTime = new Date(order.shipDate).getTime();
+    const amtTol    = Math.max(order.total * 0.07, 2.00); // 7% or 2 EUR
 
-function openHistorySheet(uid, hid) {
-  const today  = new Date().toISOString().slice(0, 10);
-  const oneYrAgo = new Date(); oneYrAgo.setFullYear(oneYrAgo.getFullYear() - 1);
-  const sinceDefault = oneYrAgo.toISOString().slice(0, 10);
+    // Pass 1: Amazon merchant name, 7% amount tolerance, 7-day window
+    let hit = txns.find(([id, t]) => {
+      if (claimed.has(id)) return false;
+      if (!AMAZON_PAT.test(t.merchantName ?? t.description ?? '')) return false;
+      if (Math.abs(t.amount - order.total) > amtTol) return false;
+      return Math.abs(new Date(t.date).getTime() - orderTime) / 86_400_000 <= 7;
+    });
 
-  const overlay = document.createElement('div');
-  overlay.className = 'sheet-overlay';
-  overlay.innerHTML = `
-    <div class="sheet">
-      <div class="sheet-handle"></div>
-      <div class="sheet-hdr">
-        <span class="sheet-title">Get order history</span>
-        <button class="sheet-close" id="hist-close">✕</button>
-      </div>
-      <div style="padding:1.2rem;display:flex;flex-direction:column;gap:1rem">
-        <div>
-          <label style="font-size:0.82rem;color:var(--muted);display:block;margin-bottom:0.3rem">From</label>
-          <input type="date" id="hist-since" value="${sinceDefault}" max="${today}" style="width:100%;padding:0.5rem;border:1px solid var(--border);border-radius:6px;background:var(--surface);color:var(--text)">
-        </div>
-        <div>
-          <label style="font-size:0.82rem;color:var(--muted);display:block;margin-bottom:0.3rem">To</label>
-          <input type="date" id="hist-until" value="${today}" max="${today}" style="width:100%;padding:0.5rem;border:1px solid var(--border);border-radius:6px;background:var(--surface);color:var(--text)">
-        </div>
-        <p style="font-size:0.8rem;color:var(--muted);margin:0">Fetches all shipment emails in this range and adds them to your orders. Existing orders are not removed.</p>
-        <button class="btn-primary" id="hist-fetch">Fetch orders</button>
-        <p id="hist-msg" style="font-size:0.82rem;color:var(--muted);text-align:center;margin:0"></p>
-      </div>
-    </div>`;
-  document.body.appendChild(overlay);
-  requestAnimationFrame(() => overlay.classList.add('open'));
-  const close = () => { overlay.classList.remove('open'); setTimeout(() => overlay.remove(), 260); };
-  overlay.querySelector('#hist-close').addEventListener('click', close);
-  overlay.addEventListener('click', e => { if (e.target === overlay) close(); });
+    // Pass 2: any merchant, within 1 EUR, 10-day window
+    if (!hit) hit = txns.find(([id, t]) => {
+      if (claimed.has(id)) return false;
+      if (t.isTransfer || t.amount < 0) return false;
+      if (Math.abs(t.amount - order.total) > 1.00) return false;
+      return Math.abs(new Date(t.date).getTime() - orderTime) / 86_400_000 <= 10;
+    });
 
-  overlay.querySelector('#hist-fetch').addEventListener('click', async () => {
-    const since = overlay.querySelector('#hist-since').value;
-    const until = overlay.querySelector('#hist-until').value;
-    const btn   = overlay.querySelector('#hist-fetch');
-    const msg   = overlay.querySelector('#hist-msg');
-    if (!since || !until) { msg.textContent = 'Please set both dates.'; return; }
-    btn.disabled = true; btn.textContent = 'Fetching…';
-    msg.textContent = '';
-    try {
-      const token = await auth.currentUser?.getIdToken();
-      const r = await fetch(`${WORKER_URL}/gmail/sync`, {
-        method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ since, until }),
-      });
-      const data = await r.json();
-      if (!r.ok) throw new Error(data.error ?? 'Fetch failed');
-      msg.textContent = `Done — found ${data.messages} email${data.messages !== 1 ? 's' : ''}, added ${data.parsed} order${data.parsed !== 1 ? 's' : ''}.`;
-      renderAmazonSection(uid, hid).catch(() => {});
-    } catch (err) {
-      msg.textContent = `Error: ${err.message}`;
-      btn.disabled = false; btn.textContent = 'Fetch orders';
-    }
-  });
+    if (hit) { result.set(orderId, hit); claimed.add(hit[0]); }
+  }
+  return result;
 }
 
 function countMatchedOrders(orders, txns) {
-  return orders.filter(([, order]) => matchOrder(order, txns) !== null).length;
+  return matchAllOrders(orders, txns).size;
 }
 
 async function openAmazonOrdersSheet(uid, hid, unmatchedOnly = false) {
@@ -632,12 +586,12 @@ async function openAmazonOrdersSheet(uid, hid, unmatchedOnly = false) {
       return;
     }
 
-    // Match each order to a transaction using two-pass logic
-    const matched = new Map(); // orderId → [txnId, txn]
-    for (const [orderId, order] of allOrders) {
-      const hit = matchOrder(order, allTxns);
-      if (hit) matched.set(orderId, hit);
-    }
+    // Match orders globally — each transaction claimed by at most one order
+    const matched = matchAllOrders(allOrders, allTxns);
+
+
+
+
 
     // For diagnostics: find nearest Amazon txns (within 30 days) for each unmatched order
     const nearbyAmazonTxns = allTxns.filter(([, t]) => AMAZON_PAT.test(t.merchantName ?? t.description ?? '') && t.amount > 0);
