@@ -1,5 +1,12 @@
 export const CHANGELOG = [
   {
+    version: '1.23.1',
+    date:    '2026-09-29',
+    changes: [
+      'Amazon Orders: fix item extraction — longer product names (>80 chars) now captured; "N of:" quantity prefixes stripped from item names; tracking/URL lines filtered out.',
+    ],
+  },
+  {
     version: '1.23.0',
     date:    '2026-09-26',
     changes: [

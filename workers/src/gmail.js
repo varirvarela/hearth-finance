@@ -42,6 +42,10 @@ export async function handleGmail(request, env, pathname, uid) {
     if (!items?.length) return json({ error: 'Missing items' }, 400);
     return json(await suggestItemCategories(env, items));
   }
+  if (pathname === '/gmail/debug-body' && request.method === 'POST') {
+    const body = await request.json().catch(() => ({}));
+    return json(await debugEmailBody(env, uid, body.key ?? null, body.messageId ?? null));
+  }
   if (pathname === '/gmail/disconnect' && request.method === 'POST') {
     const { key = 'main' } = await request.json();
     await disconnectGmail(env, uid, key);
@@ -394,7 +398,8 @@ function parseAmazonBody(text) {
   const skip = /total|shipping|handling|\btax\b|subtotal|discount|coupon|savings|gift\s*card|fee|delivery|gastos|impuesto|env[íi]o|amazon|hola|estimad|pedido|enviado|confirma|direcci|address|order\s*#|art[íi]culo|qty|cantidad|units?|unidad/i;
 
   // Phase 1: items with explicit price (currency symbol present)
-  const itemPat = /(.{4,80}?)\s+(?:[\$€£])\s*([\d.,]+)/g;
+  // Allow up to 150 chars for item names (long product titles are common)
+  const itemPat = /(.{4,150}?)\s+(?:[\$€£])\s*([\d.,]+)/g;
   let m;
   while ((m = itemPat.exec(text)) !== null) {
     const name  = m[1].trim();
@@ -407,13 +412,23 @@ function parseAmazonBody(text) {
   // Phase 2: if no priced items found, extract names from the shipped-items section.
   // Amazon shipment notifications list item names without per-item prices.
   if (!items.length) {
-    const sectionPat = /(?:art[íi]culo|items?\s+(?:in\s+this\s+shipment|ordered|enviados?)|producto|shipped|enviado)[^:\n]*:?\s*\n([\s\S]*?)(?=\n\s*(?:total|subtotal|precio|price|importe|tracking|seguimiento|deliver|direcci|address|return\s+by|devoluci))/i;
+    const sectionPat = /(?:art[íi]culo|items?\s+(?:in\s+this\s+shipment|ordered|enviados?)|producto|shipped|enviado)[^:\n]*:?\s*\n([\s\S]*?)(?=\n\s*(?:order|total|subtotal|precio|price|importe|tracking|seguimiento|deliver|direcci|address|return\s+by|devoluci))/i;
     const sec = text.match(sectionPat);
     if (sec) {
-      const skip2 = /total|shipping|handling|\btax\b|subtotal|fee|delivery|tracking|return\s+by|qty|sold\s+by|fulfilled|amazon\.com|condition:|prime|visit/i;
+      const skip2 = /total|shipping|handling|\btax\b|subtotal|fee|delivery|tracking|track\s+your|package|return\s+by|qty|sold\s+by|fulfilled|amazon\.com|condition:|prime|visit/i;
       for (const line of sec[1].split('\n')) {
-        const name = line.trim().replace(/^[\d×x\-\*\.\s]+/, '').trim();
-        if (name.length > 8 && name.length < 200 && !skip2.test(name) && !/^\d+$/.test(name) && !/^\d{1,2}\/\d{1,2}/.test(name)) {
+        // Remove leading quantity patterns: "1 of: ", "2x ", "3 × ", etc.
+        const name = line.trim()
+          .replace(/^\d+\s*(?:of\s*:?\s*|[×x]\s*)/i, '')
+          .replace(/^[\-\*\.\s]+/, '')
+          .trim();
+        if (
+          name.length > 8 && name.length < 200
+          && !skip2.test(name)
+          && !/^\d+$/.test(name)
+          && !/^\d{1,2}\/\d{1,2}/.test(name)
+          && !/^https?:/i.test(name)
+        ) {
           items.push({ name, price: null });
         }
       }
@@ -421,6 +436,60 @@ function parseAmazonBody(text) {
   }
 
   return { items, total, orderNumber };
+}
+
+// ── Debug: inspect raw email body ────────────────────────────────────────────
+
+async function debugEmailBody(env, uid, specificKey = null, specificMessageId = null) {
+  const { fbGet } = await import('./firebase.js');
+
+  const status = await getGmailStatus(env, uid);
+  const key = specificKey ?? Object.keys(status.accounts ?? {})[0];
+  if (!key) throw new Error('No Gmail accounts connected');
+
+  const acctData = await fbGet(env, `gmail/${uid}/accounts/${key}`).catch(() => null);
+  if (!acctData?.refreshToken) throw new Error('No refresh token for account: ' + key);
+
+  const accessToken = await getAccessTokenFromRefresh(env, acctData.refreshToken);
+
+  let messageId = specificMessageId;
+  if (!messageId) {
+    const query = '{from:auto-confirm@amazon.com from:ship-confirm@amazon.com}';
+    const searchUrl = `https://gmail.googleapis.com/gmail/v1/users/me/messages?q=${encodeURIComponent(query)}&maxResults=1`;
+    const searchData = await fetch(searchUrl, { headers: { Authorization: `Bearer ${accessToken}` } }).then(r => r.json());
+    messageId = searchData.messages?.[0]?.id;
+    if (!messageId) return { error: 'No Amazon emails found' };
+  }
+
+  const msgData = await fetch(
+    `https://gmail.googleapis.com/gmail/v1/users/me/messages/${messageId}?format=full`,
+    { headers: { Authorization: `Bearer ${accessToken}` } },
+  ).then(r => r.json());
+
+  const headers = msgData.payload?.headers ?? [];
+  const subject = headers.find(h => h.name === 'Subject')?.value ?? '';
+  const dateStr = headers.find(h => h.name === 'Date')?.value ?? '';
+
+  const mimeStructure = describeMime(msgData.payload);
+  const bodyText = extractBody(msgData.payload);
+  const parsed = parseAmazonBody(bodyText);
+
+  return {
+    messageId,
+    subject,
+    date: dateStr,
+    mimeStructure,
+    bodyLength: bodyText.length,
+    bodyText,   // full text for debugging
+    parsed,
+  };
+}
+
+function describeMime(payload, depth = 0) {
+  if (!payload) return null;
+  const info = { mimeType: payload.mimeType, hasData: !!(payload.body?.data), size: payload.body?.size ?? 0 };
+  if (payload.parts?.length) info.parts = payload.parts.map(p => describeMime(p, depth + 1));
+  return info;
 }
 
 // ── AI category suggestions for order items ───────────────────────────────────
