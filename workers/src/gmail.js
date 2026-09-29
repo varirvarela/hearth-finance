@@ -284,10 +284,6 @@ function parseAmazonEmail(msgData) {
   const subject = headers.find(h => h.name === 'Subject')?.value ?? '';
   const dateStr = headers.find(h => h.name === 'Date')?.value   ?? '';
 
-  // Keep only shipment emails — skip order confirmations, return receipts, etc.
-  const SHIP_SUBJECT = /ship|dispatch|enviado|env[íi]o|expedido|exp[eé]di|versandt|spedito|consegna|shipped/i;
-  if (!SHIP_SUBJECT.test(subject)) return null;
-
   const body = extractBody(msgData.payload);
   if (!body) return null;
 
