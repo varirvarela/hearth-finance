@@ -340,12 +340,17 @@ function stripHtml(html) {
   return html
     .replace(/<style[^>]*>[\s\S]*?<\/style>/gi, '')
     .replace(/<script[^>]*>[\s\S]*?<\/script>/gi, '')
-    .replace(/<[^>]+>/g, ' ')
+    // Preserve line breaks at block/cell boundaries so item sections stay parseable
+    .replace(/<\/?(br|p|div|tr|li|h[1-6]|table|section|article)[^>]*>/gi, '\n')
+    .replace(/<\/td[^>]*>/gi, ' ')
+    .replace(/<[^>]+>/g, '')
     .replace(/&nbsp;/g, ' ')
     .replace(/&amp;/g, '&')
     .replace(/&lt;/g, '<')
     .replace(/&gt;/g, '>')
-    .replace(/\s+/g, ' ')
+    .replace(/[ \t]+/g, ' ')           // collapse horizontal whitespace only
+    .replace(/\n[ \t]+/g, '\n')        // trim leading spaces on each line
+    .replace(/\n{3,}/g, '\n\n')        // max two consecutive blank lines
     .trim();
 }
 
@@ -399,15 +404,16 @@ function parseAmazonBody(text) {
     }
   }
 
-  // Phase 2: if no priced items found, extract names from the shipped-items section
-  // Amazon shipment emails list item names without prices in the notification body
+  // Phase 2: if no priced items found, extract names from the shipped-items section.
+  // Amazon shipment notifications list item names without per-item prices.
   if (!items.length) {
-    const sectionPat = /(?:art[íi]culo|item|producto|shipped|enviado)[^:\n]*:?\s*\n([\s\S]*?)(?=\n\s*(?:total|subtotal|precio|price|importe|tracking|seguimiento|deliver|direcci|address))/i;
+    const sectionPat = /(?:art[íi]culo|items?\s+(?:in\s+this\s+shipment|ordered|enviados?)|producto|shipped|enviado)[^:\n]*:?\s*\n([\s\S]*?)(?=\n\s*(?:total|subtotal|precio|price|importe|tracking|seguimiento|deliver|direcci|address|return\s+by|devoluci))/i;
     const sec = text.match(sectionPat);
     if (sec) {
+      const skip2 = /total|shipping|handling|\btax\b|subtotal|fee|delivery|tracking|return\s+by|qty|sold\s+by|fulfilled|amazon\.com|condition:|prime|visit/i;
       for (const line of sec[1].split('\n')) {
         const name = line.trim().replace(/^[\d×x\-\*\.\s]+/, '').trim();
-        if (name.length > 8 && name.length < 200 && !skip.test(name) && !/^\d+$/.test(name)) {
+        if (name.length > 8 && name.length < 200 && !skip2.test(name) && !/^\d+$/.test(name) && !/^\d{1,2}\/\d{1,2}/.test(name)) {
           items.push({ name, price: null });
         }
       }
