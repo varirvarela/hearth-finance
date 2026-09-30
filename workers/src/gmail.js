@@ -293,11 +293,24 @@ function parseAmazonEmail(msgData) {
   const subject = headers.find(h => h.name === 'Subject')?.value ?? '';
   const dateStr = headers.find(h => h.name === 'Date')?.value   ?? '';
 
-  const body = extractBody(msgData.payload);
-  if (!body) return null;
-
-  const { items, total, orderNumber } = parseAmazonBody(body);
+  // Normalize \r\n to \n before parsing — Amazon emails use Windows line endings
+  const textBody = extractTextBody(msgData.payload).replace(/\r\n/g, '\n');
+  const { items, total, orderNumber } = parseAmazonBody(textBody);
   if (!total) return null;
+
+  let finalItems = items;
+
+  // Amazon order confirmation text/plain has NO item names — try subject then HTML
+  if (!finalItems.length) {
+    finalItems = extractItemsFromSubject(subject);
+  }
+  if (!finalItems.length) {
+    const htmlText = extractHtmlBody(msgData.payload).replace(/\r\n/g, '\n');
+    if (htmlText) {
+      const { items: htmlItems } = parseAmazonBody(htmlText);
+      finalItems = htmlItems;
+    }
+  }
 
   let shipDate = '';
   try { shipDate = new Date(dateStr).toISOString().slice(0, 10); } catch { shipDate = ''; }
@@ -307,10 +320,55 @@ function parseAmazonEmail(msgData) {
     shipDate,
     total,
     orderNumber: orderNumber ?? null,
-    items,
+    items: finalItems,
     gmailMessageId: msgData.id,
     parsedAt: new Date().toISOString(),
   };
+}
+
+// Extract item name(s) from the email subject when the body has none
+function extractItemsFromSubject(subject) {
+  // "Ordered 1 item: Acer Chromebook 315..." (Amazon.com)
+  const m = subject.match(/[Oo]rdered\s+1\s+items?\s*:\s*(.+)/);
+  if (m) return [{ name: m[1].trim(), price: null }];
+  // Spanish: "Has pedido 1 artículo: Nombre del producto"
+  const m2 = subject.match(/[Hh]as\s+pedido\s+1\s+art[íi]culos?\s*:\s*(.+)/);
+  if (m2) return [{ name: m2[1].trim(), price: null }];
+  return [];
+}
+
+// Extract text/plain body only (no HTML fallback)
+function extractTextBody(payload) {
+  if (!payload) return '';
+  if (payload.mimeType === 'text/plain' && payload.body?.data) return b64decode(payload.body.data);
+  if (payload.parts) {
+    for (const part of payload.parts) {
+      if (part.mimeType === 'text/plain' && part.body?.data) return b64decode(part.body.data);
+    }
+    for (const part of payload.parts) {
+      if (part.mimeType?.startsWith('multipart/')) {
+        const sub = extractTextBody(part);
+        if (sub) return sub;
+      }
+    }
+  }
+  return '';
+}
+
+// Extract and strip HTML body only
+function extractHtmlBody(payload) {
+  if (!payload) return '';
+  if (payload.mimeType === 'text/html' && payload.body?.data) return stripHtml(b64decode(payload.body.data));
+  if (payload.parts) {
+    for (const part of payload.parts) {
+      if (part.mimeType === 'text/html' && part.body?.data) return stripHtml(b64decode(part.body.data));
+      if (part.mimeType?.startsWith('multipart/')) {
+        const sub = extractHtmlBody(part);
+        if (sub) return sub;
+      }
+    }
+  }
+  return '';
 }
 
 function extractBody(payload) {
@@ -412,7 +470,8 @@ function parseAmazonBody(text) {
   // Phase 2: if no priced items found, extract names from the shipped-items section.
   // Amazon shipment notifications list item names without per-item prices.
   if (!items.length) {
-    const sectionPat = /(?:art[íi]culo|items?\s+(?:in\s+this\s+shipment|ordered|enviados?)|producto|shipped|enviado)[^:\n]*:?\s*\n([\s\S]*?)(?=\n\s*(?:order|total|subtotal|precio|price|importe|tracking|seguimiento|deliver|direcci|address|return\s+by|devoluci))/i;
+    // Colon is required — avoids false matches on navigation words like "Shipped", "Ordered"
+    const sectionPat = /(?:art[íi]culo|items?\s+(?:in\s+this\s+shipment|ordered|enviados?)|producto)[^:\n]*:\s*\n([\s\S]*?)(?=\n\s*(?:order|total|subtotal|precio|price|importe|tracking|seguimiento|deliver|direcci|address|return\s+by|devoluci))/i;
     const sec = text.match(sectionPat);
     if (sec) {
       const skip2 = /total|shipping|handling|\btax\b|subtotal|fee|delivery|tracking|track\s+your|package|return\s+by|qty|sold\s+by|fulfilled|amazon\.com|condition:|prime|visit/i;

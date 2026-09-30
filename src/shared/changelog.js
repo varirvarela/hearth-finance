@@ -1,5 +1,12 @@
 export const CHANGELOG = [
   {
+    version: '1.23.2',
+    date:    '2026-09-30',
+    changes: [
+      'Amazon Orders: item names now correctly extracted from order confirmation emails — product names come from the email subject ("Ordered 1 item: ...") for single-item orders, or the HTML body for multi-item orders.',
+    ],
+  },
+  {
     version: '1.23.1',
     date:    '2026-09-29',
     changes: [

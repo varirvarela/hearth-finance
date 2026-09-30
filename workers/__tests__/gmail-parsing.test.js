@@ -101,7 +101,8 @@ function parseAmazonBody(text) {
   // Phase 2: if no priced items found, extract names from the shipped-items section.
   // Amazon shipment notifications list item names without per-item prices.
   if (!items.length) {
-    const sectionPat = /(?:art[íi]culo|items?\s+(?:in\s+this\s+shipment|ordered|enviados?)|producto|shipped|enviado)[^:\n]*:?\s*\n([\s\S]*?)(?=\n\s*(?:order|total|subtotal|precio|price|importe|tracking|seguimiento|deliver|direcci|address|return\s+by|devoluci))/i;
+    // Colon is required — avoids false matches on navigation words like "Shipped", "Ordered"
+    const sectionPat = /(?:art[íi]culo|items?\s+(?:in\s+this\s+shipment|ordered|enviados?)|producto)[^:\n]*:\s*\n([\s\S]*?)(?=\n\s*(?:order|total|subtotal|precio|price|importe|tracking|seguimiento|deliver|direcci|address|return\s+by|devoluci))/i;
     const sec = text.match(sectionPat);
     if (sec) {
       const skip2 = /total|shipping|handling|\btax\b|subtotal|fee|delivery|tracking|track\s+your|package|return\s+by|qty|sold\s+by|fulfilled|amazon\.com|condition:|prime|visit/i;
@@ -125,6 +126,65 @@ function parseAmazonBody(text) {
   }
 
   return { items, total, orderNumber };
+}
+
+// Extract item name(s) from the email subject when the body has none
+function extractItemsFromSubject(subject) {
+  const m = subject.match(/[Oo]rdered\s+1\s+items?\s*:\s*(.+)/);
+  if (m) return [{ name: m[1].trim(), price: null }];
+  const m2 = subject.match(/[Hh]as\s+pedido\s+1\s+art[íi]culos?\s*:\s*(.+)/);
+  if (m2) return [{ name: m2[1].trim(), price: null }];
+  return [];
+}
+
+// Extract text/plain body only (no HTML fallback)
+function extractTextBody(payload) {
+  if (!payload) return '';
+  if (payload.mimeType === 'text/plain' && payload.body?.data) return b64decode(payload.body.data);
+  if (payload.parts) {
+    for (const part of payload.parts) {
+      if (part.mimeType === 'text/plain' && part.body?.data) return b64decode(part.body.data);
+    }
+    for (const part of payload.parts) {
+      if (part.mimeType?.startsWith('multipart/')) {
+        const sub = extractTextBody(part);
+        if (sub) return sub;
+      }
+    }
+  }
+  return '';
+}
+
+// Extract and strip HTML body only
+function extractHtmlBody(payload) {
+  if (!payload) return '';
+  if (payload.mimeType === 'text/html' && payload.body?.data) return stripHtml(b64decode(payload.body.data));
+  if (payload.parts) {
+    for (const part of payload.parts) {
+      if (part.mimeType === 'text/html' && part.body?.data) return stripHtml(b64decode(part.body.data));
+      if (part.mimeType?.startsWith('multipart/')) {
+        const sub = extractHtmlBody(part);
+        if (sub) return sub;
+      }
+    }
+  }
+  return '';
+}
+
+// Simulate parseAmazonEmail logic (without Firebase or network calls)
+function parseAmazonEmailLocal(subject, textPlain, htmlBody) {
+  const textBody = (textPlain ?? '').replace(/\r\n/g, '\n');
+  const { items, total, orderNumber } = parseAmazonBody(textBody);
+  if (!total) return null;
+
+  let finalItems = items;
+  if (!finalItems.length) finalItems = extractItemsFromSubject(subject);
+  if (!finalItems.length && htmlBody) {
+    const htmlText = stripHtml(htmlBody).replace(/\r\n/g, '\n');
+    const { items: htmlItems } = parseAmazonBody(htmlText);
+    finalItems = htmlItems;
+  }
+  return { items: finalItems, total, orderNumber };
 }
 
 // ── normalizeAmount ───────────────────────────────────────────────────────────
@@ -530,5 +590,142 @@ describe('extractBody', () => {
 
   it('returns empty string when parts array is empty', () => {
     expect(extractBody({ mimeType: 'multipart/mixed', parts: [] })).toBe('');
+  });
+});
+
+// ── extractItemsFromSubject ───────────────────────────────────────────────────
+
+describe('extractItemsFromSubject', () => {
+  it('extracts single-item name from "Ordered 1 item: ..." subject', () => {
+    const items = extractItemsFromSubject('Ordered 1 item: Skin Care');
+    expect(items).toHaveLength(1);
+    expect(items[0].name).toBe('Skin Care');
+    expect(items[0].price).toBeNull();
+  });
+
+  it('extracts long product name from subject', () => {
+    const items = extractItemsFromSubject('Ordered 1 item: Acer Chromebook 315 (CB315-4HT-C0SP) 15.6" FHD IPS');
+    expect(items).toHaveLength(1);
+    expect(items[0].name).toContain('Acer Chromebook');
+  });
+
+  it('returns empty array for multi-item subjects', () => {
+    expect(extractItemsFromSubject('Ordered 3 items')).toHaveLength(0);
+  });
+
+  it('returns empty array for unrelated subjects', () => {
+    expect(extractItemsFromSubject('Your Amazon.com order has shipped')).toHaveLength(0);
+  });
+
+  it('handles "items" (plural) as well as "item"', () => {
+    const items = extractItemsFromSubject('Ordered 1 items: USB Hub');
+    expect(items).toHaveLength(1);
+    expect(items[0].name).toBe('USB Hub');
+  });
+
+  it('extracts Spanish subject: "Has pedido 1 artículo: ..."', () => {
+    const items = extractItemsFromSubject('Has pedido 1 artículo: Samsung Galaxy Tab A9');
+    expect(items).toHaveLength(1);
+    expect(items[0].name).toBe('Samsung Galaxy Tab A9');
+  });
+});
+
+// ── Real Amazon email format (from debug output) ──────────────────────────────
+// Confirmed via POST /gmail/debug-body: Amazon order confirmation text/plain
+// bodies do NOT contain item names. Items appear only in the subject (single
+// orders) or in the HTML body (multi-item orders). The body uses \r\n line endings.
+
+describe('Real Amazon email format', () => {
+  const enc = (text) => Buffer.from(text).toString('base64');
+
+  // Reproduces the actual text/plain body structure observed via debug-body
+  const skinCareBody = [
+    '',
+    'Your Orders',
+    '',
+    'https://www.amazon.com/gp/css/order-history',
+    '',
+    '    Thanks for your order!',
+    'Ordered',
+    '',
+    'Shipped',
+    '',
+    'Arriving Monday',
+    '',
+    'Agustina - COS COB, CT',
+    '',
+    'Order #',
+    '114-3696037-2757041',
+    '',
+    'View or edit order',
+    'https://www.amazon.com/your-orders/order-details?orderID=114-3696037-2757041',
+    '',
+    '',
+    'Grand Total:',
+    '20.15 USD',
+    '',
+    '©2026 Amazon.com, Inc.',
+  ].join('\r\n');
+
+  it('parses Grand Total from body even when amount is on next line', () => {
+    const { total } = parseAmazonBody(skinCareBody.replace(/\r\n/g, '\n'));
+    expect(total).toBe(20.15);
+  });
+
+  it('parses order number from body', () => {
+    const { orderNumber } = parseAmazonBody(skinCareBody.replace(/\r\n/g, '\n'));
+    expect(orderNumber).toBe('114-3696037-2757041');
+  });
+
+  it('body alone has NO item names (items array is empty)', () => {
+    const { items } = parseAmazonBody(skinCareBody.replace(/\r\n/g, '\n'));
+    expect(items).toHaveLength(0);
+  });
+
+  it('full pipeline: extracts item name from subject when body has none', () => {
+    const result = parseAmazonEmailLocal('Ordered 1 item: Skin Care', skinCareBody, null);
+    expect(result).not.toBeNull();
+    expect(result.total).toBe(20.15);
+    expect(result.items).toHaveLength(1);
+    expect(result.items[0].name).toBe('Skin Care');
+  });
+
+  it('full pipeline: extracts Chromebook from subject (long name)', () => {
+    const chromebookBody = skinCareBody.replace('20.15 USD', '338.25 USD').replace('114-3696037-2757041', '114-1234567-8901234');
+    const result = parseAmazonEmailLocal(
+      'Ordered 1 item: Acer Chromebook 315 (CB315-4HT-C0SP) 15.6" FHD IPS',
+      chromebookBody,
+      null,
+    );
+    expect(result).not.toBeNull();
+    expect(result.total).toBe(338.25);
+    expect(result.items).toHaveLength(1);
+    expect(result.items[0].name).toContain('Acer Chromebook');
+  });
+
+  it('full pipeline: HTML body fallback when text/plain has no items and no single-item subject', () => {
+    const html = '<table><tr><td>Acer Chromebook 315</td><td>$338.25</td></tr><tr><td>Order Total:</td><td>$338.25</td></tr></table>';
+    const multiItemSubject = 'Ordered 2 items';
+    const bodyWithTotal = skinCareBody.replace('20.15 USD', '338.25 USD');
+    const result = parseAmazonEmailLocal(multiItemSubject, bodyWithTotal, html);
+    expect(result).not.toBeNull();
+    expect(result.items.length).toBeGreaterThan(0);
+    expect(result.items[0].name).toContain('Acer Chromebook');
+  });
+
+  it('multipart/alternative payload: prefers text/plain for total, subject for items', () => {
+    const payload = {
+      mimeType: 'multipart/alternative',
+      parts: [
+        { mimeType: 'text/plain', body: { data: enc(skinCareBody) } },
+        { mimeType: 'text/html',  body: { data: enc('<p>HTML version</p>') } },
+      ],
+    };
+    const textBody = extractTextBody(payload).replace(/\r\n/g, '\n');
+    const { total } = parseAmazonBody(textBody);
+    expect(total).toBe(20.15);
+
+    const items = extractItemsFromSubject('Ordered 1 item: Skin Care');
+    expect(items[0].name).toBe('Skin Care');
   });
 });
