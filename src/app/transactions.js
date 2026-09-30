@@ -1179,7 +1179,7 @@ function renderPage(filtered, state, uid, refresh, accountMap) {
       `;
 
       item.insertAdjacentElement('afterend', detail);
-      appendAmazonItems(t, detail, hid); // async, non-blocking
+      appendAmazonItems(t, detail, uid); // async, non-blocking (uid = hid inside renderPage)
 
       if (!isPartner) {
         const originalNotes = t.notes ?? '';

@@ -1,5 +1,12 @@
 export const CHANGELOG = [
   {
+    version: '1.23.3',
+    date:    '2026-09-30',
+    changes: [
+      'Transactions: fix crash in transaction detail panel — buttons (Edit, Delete, AI, Split) were unresponsive due to a scoping error introduced with the Amazon items feature.',
+    ],
+  },
+  {
     version: '1.23.2',
     date:    '2026-09-30',
     changes: [
