@@ -1,9 +1,14 @@
-import { fbGet, fbPush, fbPatch } from './firebase.js';
-import { transactionsSync } from './plaid.js';
+import { fbGet, fbPatch } from './firebase.js';
+import { transactionsSync, getAccounts } from './plaid.js';
 import { categorizeTransaction } from './categorize.js';
 import { evaluateRules } from '../../src/shared/rules.js';
 
 const EXAMPLE_STOP = new Set(['payment', 'purchase', 'debit', 'credit', 'charge', 'transfer', 'from', 'received', 'sent', 'with', 'using']);
+
+// Maximum AI categorization calls per worker invocation — each is a subrequest.
+// Cloudflare free tier allows 50 subrequests per invocation. We budget 15 for AI,
+// leaving headroom for Plaid pages + Firebase reads/writes.
+const MAX_AI_CALLS = 15;
 
 function buildExamples(txn, confirmedTxns, max = 10) {
   const words = ((txn.merchantName ?? '') + ' ' + (txn.description ?? ''))
@@ -26,6 +31,11 @@ function buildExamples(txn, confirmedTxns, max = 10) {
     amount:       t.amount,
     date:         t.date,
   }));
+}
+
+// Generate a Firebase-push-compatible key (timestamp-based, sortable).
+function genKey() {
+  return `-${Date.now().toString(36)}${Math.random().toString(36).slice(2, 10)}`;
 }
 
 export async function handleSync(env) {
@@ -52,7 +62,7 @@ export async function handleUserSync(env, uid) {
       const slot  = account.plaidSlot ?? 1;
       const token = await env.PLAID_TOKENS.get(`s${slot}:${uid}:${account.plaidItemId}`);
       if (!token) {
-        console.warn(`[sync] uid=${uid} item=${account.plaidItemId} slot=${slot}: no token in KV`);
+        console.warn(`[sync] uid=${uid} item=${account.plaidItemId}: no token in KV`);
         await fbPatch(env, '', {
           [`accounts/${uid}/${key}/lastSyncStatus`]: 'error',
           [`accounts/${uid}/${key}/lastSyncError`]:  'Access token missing — please reconnect',
@@ -87,24 +97,27 @@ export async function handleUserSync(env, uid) {
   for (const [fbKey, txn] of Object.entries(existing)) {
     if (txn.plaidId) plaidIdToEntry.set(txn.plaidId, { fbKey, txn });
   }
-
   const existingPlaidIds = new Set(plaidIdToEntry.keys());
 
   const confirmedTxns = Object.values(existing)
     .filter(t => t.category && t.category !== 'uncategorized' && t.categorySource !== 'ai')
     .sort((a, b) => (b.date ?? '').localeCompare(a.date ?? ''));
 
-  let syncedCount = 0;
+  let syncedCount  = 0;
   let removedCount = 0;
   let modifiedCount = 0;
-  let errors = 0;
+  let errors       = 0;
+  let aiCalls      = 0; // tracked across all items this invocation
 
   const today = new Date().toISOString().slice(0, 10);
 
-  for (const [itemId, { token, slot, accountKeys }] of itemsSeen) {
-    let cursor = cursors[itemId] ?? null;
+  // Collect ALL transaction writes across items to flush in one batch at the end.
+  // This replaces one fbPush per transaction (N subrequests) with a single fbPatch (1 subrequest).
+  const txnBatch = {};
 
-    // Collect all pages of changes for this item
+  for (const [itemId, { token, slot, accountKeys }] of itemsSeen) {
+    const cursor = cursors[itemId] ?? null;
+
     const allAdded    = [];
     const allModified = [];
     const allRemoved  = [];
@@ -117,21 +130,27 @@ export async function handleUserSync(env, uid) {
         const result = await transactionsSync(env, token, newCursor, slot);
 
         if (result.error_code) {
-          // If cursor is stale/invalid, reset and do a full re-sync
           if (result.error_code === 'TRANSACTIONS_SYNC_MUTATION_DURING_PAGINATION' ||
               result.error_code === 'INVALID_FIELD' ||
               result.error_code === 'INVALID_REQUEST') {
-            console.warn(`[sync] uid=${uid} item=${itemId}: cursor error ${result.error_code}, resetting`);
+            console.warn(`[sync] item=${itemId}: cursor error ${result.error_code}, resetting`);
             newCursor = null;
             break;
           }
           throw new Error(result.error_message ?? result.error_code ?? 'Plaid sync error');
         }
 
+        // Some account types (investment, brokerage) return empty cursor — skip them
+        if (!result.next_cursor && !result.has_more) {
+          console.log(`[sync] item=${itemId}: no cursor returned (account type may not support transaction sync)`);
+          newCursor = null;
+          break;
+        }
+
         allAdded.push(...(result.added ?? []));
         allModified.push(...(result.modified ?? []));
         allRemoved.push(...(result.removed ?? []));
-        newCursor = result.next_cursor;
+        newCursor = result.next_cursor || null;
         hasMore   = result.has_more ?? false;
       }
     } catch (err) {
@@ -150,16 +169,12 @@ export async function handleUserSync(env, uid) {
     }
 
     // --- Process removed[] ---
-    // Track manual categories from removed pending txns so we can transfer
-    // them to their settled counterpart in added[].
-    const removedCategories = new Map(); // pendingPlaidId → category info
+    const removedCategories = new Map();
     const deletePatch = {};
 
     for (const removed of allRemoved) {
       const entry = plaidIdToEntry.get(removed.transaction_id);
       if (!entry) continue;
-
-      // Preserve manual categorization so settled transaction inherits it
       if (entry.txn.categorySource === 'manual') {
         removedCategories.set(removed.transaction_id, {
           category:       entry.txn.category,
@@ -170,41 +185,34 @@ export async function handleUserSync(env, uid) {
           needsReview:    false,
         });
       }
-
       deletePatch[`transactions/${uid}/${entry.fbKey}`] = null;
       plaidIdToEntry.delete(removed.transaction_id);
       existingPlaidIds.delete(removed.transaction_id);
       removedCount++;
     }
-
     if (Object.keys(deletePatch).length) await fbPatch(env, '', deletePatch);
 
     // --- Process modified[] ---
     const modifyPatch = {};
-
     for (const modified of allModified) {
       const entry = plaidIdToEntry.get(modified.transaction_id);
-      if (!entry) continue;
-      if (entry.txn.isEdited) continue; // user-edited, don't overwrite
-
-      modifyPatch[`transactions/${uid}/${entry.fbKey}/date`]           = modified.date;
-      modifyPatch[`transactions/${uid}/${entry.fbKey}/amount`]         = modified.amount;
-      modifyPatch[`transactions/${uid}/${entry.fbKey}/pending`]        = modified.pending;
-      modifyPatch[`transactions/${uid}/${entry.fbKey}/merchantName`]   = modified.merchant_name ?? null;
-      modifyPatch[`transactions/${uid}/${entry.fbKey}/description`]    = modified.name;
+      if (!entry || entry.txn.isEdited) continue;
+      modifyPatch[`transactions/${uid}/${entry.fbKey}/date`]         = modified.date;
+      modifyPatch[`transactions/${uid}/${entry.fbKey}/amount`]       = modified.amount;
+      modifyPatch[`transactions/${uid}/${entry.fbKey}/pending`]      = modified.pending;
+      modifyPatch[`transactions/${uid}/${entry.fbKey}/merchantName`] = modified.merchant_name ?? null;
+      modifyPatch[`transactions/${uid}/${entry.fbKey}/description`]  = modified.name;
       modifiedCount++;
     }
-
     if (Object.keys(modifyPatch).length) await fbPatch(env, '', modifyPatch);
 
-    // --- Process added[] ---
+    // --- Process added[] --- (batched, no per-transaction subrequest)
     for (const plaidTxn of allAdded) {
       if (existingPlaidIds.has(plaidTxn.transaction_id)) continue;
 
       const txn = normalizePlaidTransaction(plaidTxn, itemId);
       txn.accountName = accountNameMap[plaidTxn.account_id] ?? '';
 
-      // Transfer category from settled pending transaction if user had set it manually
       const inheritedCat = plaidTxn.pending_transaction_id
         ? removedCategories.get(plaidTxn.pending_transaction_id)
         : null;
@@ -221,25 +229,31 @@ export async function handleUserSync(env, uid) {
           txn.isAnnual       = fields.isAnnual;
           txn.categorySource = 'rule';
           txn.needsReview    = false;
-        } else {
-          const examples     = buildExamples(txn, confirmedTxns);
-          const ai           = await categorizeTransaction(txn, env, { merchantRules, categoryDescriptions, examples });
-          txn.category       = ai.category;
-          txn.group          = ai.group;
-          txn.isFixed        = ai.isFixed;
-          txn.isAnnual       = ai.isAnnual;
-          txn.aiConfidence   = ai.confidence;
+        } else if (aiCalls < MAX_AI_CALLS) {
+          // AI call counts as a subrequest — cap to stay within free tier limit
+          const examples   = buildExamples(txn, confirmedTxns);
+          const ai         = await categorizeTransaction(txn, env, { merchantRules, categoryDescriptions, examples });
+          txn.category     = ai.category;
+          txn.group        = ai.group;
+          txn.isFixed      = ai.isFixed;
+          txn.isAnnual     = ai.isAnnual;
+          txn.aiConfidence = ai.confidence;
           txn.categorySource = 'ai';
-          txn.needsReview    = ai.needsReview;
+          txn.needsReview  = ai.needsReview;
+          aiCalls++;
+        } else {
+          // AI budget exhausted for this invocation — mark for review; next sync will retry
+          txn.categorySource = 'plaid';
+          txn.needsReview    = true;
         }
       }
 
-      await fbPush(env, `transactions/${uid}`, txn);
+      txnBatch[`transactions/${uid}/${genKey()}`] = txn;
       existingPlaidIds.add(plaidTxn.transaction_id);
       syncedCount++;
     }
 
-    // --- Store new cursor and update account status ---
+    // --- Store cursor, refresh balances, and update account status (1 fbPatch per item) ---
     const patch = {};
     if (newCursor) patch[`plaidCursors/${uid}/${itemId}`] = newCursor;
     for (const key of accountKeys) {
@@ -247,10 +261,28 @@ export async function handleUserSync(env, uid) {
       patch[`accounts/${uid}/${key}/lastSyncStatus`] = 'ok';
       patch[`accounts/${uid}/${key}/lastSyncError`]  = null;
     }
+    // Refresh account balances — Plaid /accounts/get returns current balances for this item.
+    // We do this after the transaction sync so one fbPatch covers both status + balances.
+    try {
+      const balResult = await getAccounts(env, token, slot);
+      for (const a of balResult.accounts ?? []) {
+        if (accounts[a.account_id] !== undefined) {
+          patch[`accounts/${uid}/${a.account_id}/currentBalance`]   = a.balances.current   ?? 0;
+          patch[`accounts/${uid}/${a.account_id}/availableBalance`] = a.balances.available ?? 0;
+        }
+      }
+    } catch (e) {
+      console.warn(`[sync] item=${itemId}: balance refresh failed — ${e.message}`);
+    }
     await fbPatch(env, '', patch);
+
+    console.log(`[sync] item=${itemId} cursor=${newCursor ? '✓' : 'none'} added=${allAdded.length} new=${syncedCount} removed=${removedCount} aiCalls=${aiCalls}`);
   }
 
-  return { synced: syncedCount, removed: removedCount, modified: modifiedCount, errors };
+  // Flush all new transactions in a single Firebase write
+  if (Object.keys(txnBatch).length) await fbPatch(env, '', txnBatch);
+
+  return { synced: syncedCount, removed: removedCount, modified: modifiedCount, errors, aiCalls };
 }
 
 function normalizePlaidTransaction(plaidTxn, plaidItemId) {

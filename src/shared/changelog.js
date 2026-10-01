@@ -1,5 +1,12 @@
 export const CHANGELOG = [
   {
+    version: '1.24.1',
+    date:    '2026-10-01',
+    changes: [
+      'Accounts: balance now updates on every sync — previously balances were frozen at the time the account was first linked.',
+    ],
+  },
+  {
     version: '1.24.0',
     date:    '2026-10-01',
     changes: [
