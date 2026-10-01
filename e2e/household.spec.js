@@ -151,6 +151,10 @@ test('member leaves household from Settings', async ({ page }) => {
   page.on('dialog', d => d.accept());
   await page.click('#leave-household');
 
+  // Wait for the UI to reflect the leave (owner email disappears from household section)
+  // before reading Firebase — the writes are async and may not have landed yet.
+  await expect(page.locator('#household-section')).not.toContainText(ownerEmail, { timeout: 10_000 });
+
   // Verify Firebase: householdId removed, member deleted
   const profile = await dbRead(`users/${guestUid}`);
   expect(profile?.householdId ?? null).toBeNull();
