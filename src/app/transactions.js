@@ -35,6 +35,7 @@ let allRulesSnapshot = {};
 let _merchantRules   = {}; // normalizedName → { catId, confirmedAt }
 let _catDescriptions = {};
 const _aiSugCache    = new Map();
+let _updateSugStripCb = null; // set by renderPage so appendAmazonItems can trigger strip updates
 let _txnState        = null; // persists filter/sort/search state across navigation // txnId → { catId, source }
 let _amazonOrders    = null; // cached amazonOrders for current household
 
@@ -419,6 +420,9 @@ function renderFilterPanel(state, accountMap, refresh) {
         <label class="f-check">
           <input type="checkbox" id="f-transfers" ${state.hideTransfers ? 'checked' : ''}> Hide transfers
         </label>
+        <label class="f-check">
+          <input type="checkbox" id="f-amazon-matched" ${state.amazonMatched ? 'checked' : ''}> Amazon matched
+        </label>
       </div>
     </div>
 
@@ -494,6 +498,9 @@ function renderFilterPanel(state, accountMap, refresh) {
   });
   document.getElementById('f-transfers').addEventListener('change', e => {
     state.hideTransfers = e.target.checked; state.page = 0; refresh();
+  });
+  document.getElementById('f-amazon-matched').addEventListener('change', e => {
+    state.amazonMatched = e.target.checked; state.page = 0; refresh();
   });
 
   // ── Category groups ──
@@ -779,6 +786,15 @@ async function appendAmazonItems(t, detail, hid) {
     });
     if (!match) return;
 
+    // First time a match is found — persist the key on the transaction so the badge appears
+    const orderKey = Object.keys(_amazonOrders ?? {}).find(k => {
+      const o = _amazonOrders[k];
+      return o === match || (o.total === match.total && o.shipDate === match.shipDate && o.orderNumber === match.orderNumber);
+    });
+    if (orderKey && !t.amazonOrderKey) {
+      dbUpdate(`transactions/${uid}/${t.id ?? t.txnId}`, { amazonOrderKey: orderKey });
+    }
+
     const hasItems = match.items?.length > 0;
     const itemsHtml = hasItems
       ? match.items.map(i => `
@@ -821,6 +837,47 @@ async function appendAmazonItems(t, detail, hid) {
           btn.disabled = false;
         }
       });
+    }
+
+    // Auto-suggest category if: items exist, transaction is uncategorized or generic shopping, no suggestion yet
+    const GENERIC_CATS = new Set(['uncategorized', 'shopping_general', 'shopping', '', undefined, null]);
+    if (GENERIC_CATS.has(t.category) && !_aiSugCache.has(t.id ?? t.txnId)) {
+      const txnId = t.id ?? t.txnId;
+      // CSV-imported orders already have an AI-computed category — use it immediately
+      if (match.suggestedCategory && match.suggestedConf >= 0.65) {
+        const sug = { catId: match.suggestedCategory, conf: match.suggestedConf, source: 'amazon-csv' };
+        _aiSugCache.set(txnId, sug);
+        (async () => {
+          await dbUpdate(`suggestions/${uid}/${txnId}`, sug);
+          _updateSugStripCb?.(txnId, sug);
+        })();
+      } else if (hasItems) {
+        // Fall back to live AI call for email-sourced orders
+        _aiSugCache.set(txnId, null); // mark in-flight so we don't double-call
+        (async () => {
+          try {
+            const token = await auth.currentUser?.getIdToken();
+            const r = await fetch(`${WORKER_URL}/gmail/suggest-categories`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+              body: JSON.stringify({ items: match.items }),
+            });
+            const data = await r.json();
+            if (!r.ok || !data.suggestions?.length) { _aiSugCache.set(txnId, false); return; }
+            const best = [...data.suggestions]
+              .filter(s => s.category && !['shopping_general', 'shopping', 'uncategorized'].includes(s.category))
+              .sort((a, b) => (b.confidence ?? 0) - (a.confidence ?? 0))[0];
+            if (best && (best.confidence ?? 0) >= 0.65) {
+              const sug = { catId: best.category, conf: best.confidence, source: 'amazon-items' };
+              _aiSugCache.set(txnId, sug);
+              await dbUpdate(`suggestions/${uid}/${txnId}`, sug);
+              _updateSugStripCb?.(txnId, sug);
+            } else {
+              _aiSugCache.set(txnId, false);
+            }
+          } catch { _aiSugCache.set(t.id ?? t.txnId, false); }
+        })();
+      }
     }
   } catch { /* non-fatal */ }
 }
@@ -902,6 +959,7 @@ function updateSugStrip(txnId, sug) {
 }
 
 function renderPage(filtered, state, uid, refresh, accountMap) {
+  _updateSugStripCb = updateSugStrip;
   const el = document.getElementById('txn-list');
   if (!el) return;
 
@@ -992,7 +1050,7 @@ function renderPage(filtered, state, uid, refresh, accountMap) {
           <button class="txn-icon cat-btn" title="Change category" data-id="${id}" data-cat="${t.category}"
                   style="--cat-bg:${catBg}"${isPartner ? ' disabled' : ''}>${cat.icon}</button>
           <div class="txn-meta">
-            <span class="txn-desc">${t.merchantName ?? t.description}</span>
+            <span class="txn-desc">${t.merchantName ?? t.description}</span>${t.amazonOrderKey ? '<span class="txn-amazon-badge" title="Matched Amazon order" style="font-size:0.7rem;background:#f97316;color:#fff;border-radius:3px;padding:0.05rem 0.3rem;margin-left:0.3rem;vertical-align:middle">📦</span>' : ''}
             ${subHTML}
           </div>
           <div class="txn-right">

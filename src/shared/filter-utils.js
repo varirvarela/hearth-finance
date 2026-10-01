@@ -17,8 +17,9 @@ export function blankState() {
     sources:       [],
     review:        false,
     pending:       false,
-    hideTransfers: false,
-    page:          0,
+    hideTransfers:  false,
+    amazonMatched:  false,
+    page:           0,
   };
 }
 
@@ -38,7 +39,7 @@ export function normalizeSource(t) {
 }
 
 export function applyFilters(txns, state) {
-  return txns.filter(([, t]) => {
+  let out = txns.filter(([, t]) => {
     if (t.ignored) return false;
     if (state.hideTransfers && (t.isTransfer || t.group === 'transfer')) return false;
 
@@ -84,6 +85,8 @@ export function applyFilters(txns, state) {
 
     return true;
   });
+  if (state.amazonMatched) out = out.filter(([, t]) => !!t.amazonOrderKey);
+  return out;
 }
 
 // Returns [[idA, txnA, idB, txnB], ...] pairs of potential duplicates.

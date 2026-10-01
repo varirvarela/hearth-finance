@@ -1,5 +1,15 @@
 export const CHANGELOG = [
   {
+    version: '1.24.0',
+    date:    '2026-10-01',
+    changes: [
+      'Amazon Orders: matched transactions now show an orange 📦 badge in the transaction list.',
+      'Transactions: when an Amazon transaction is matched to an order with items, the app automatically suggests a more specific category (replaces "Shopping" with the best AI-inferred category).',
+      'Transactions: new "Amazon matched" filter to quickly view all transactions linked to an Amazon order.',
+      'Amazon Orders: Import CSV — upload your Amazon order history CSV to add historical orders with AI-assigned categories. Supports the "Items" and "Orders and Shipments" report formats.',
+    ],
+  },
+  {
     version: '1.23.3',
     date:    '2026-09-30',
     changes: [

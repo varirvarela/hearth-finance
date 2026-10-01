@@ -46,6 +46,11 @@ export async function handleGmail(request, env, pathname, uid) {
     const body = await request.json().catch(() => ({}));
     return json(await debugEmailBody(env, uid, body.key ?? null, body.messageId ?? null));
   }
+  if (pathname === '/gmail/import-orders' && request.method === 'POST') {
+    const { orders = [] } = await request.json().catch(() => ({}));
+    if (!orders.length) return json({ error: 'No orders provided' }, 400);
+    return json(await importOrders(env, uid, orders));
+  }
   if (pathname === '/gmail/disconnect' && request.method === 'POST') {
     const { key = 'main' } = await request.json();
     await disconnectGmail(env, uid, key);
@@ -584,5 +589,88 @@ Respond with JSON only — an array with one entry per item:
     return { suggestions: JSON.parse(jsonStr) };
   } catch {
     return { suggestions: items.map(it => ({ item: it.name, category: 'shopping_otros', confidence: 0.5 })) };
+  }
+}
+
+// ── CSV order import ──────────────────────────────────────────────────────────
+
+async function importOrders(env, uid, orders) {
+  const { fbGet, fbPatch } = await import('./firebase.js');
+  const profile = await fbGet(env, `users/${uid}`).catch(() => null);
+  const hid = profile?.householdId ?? uid;
+
+  const existing = await fbGet(env, `amazonOrders/${hid}`).catch(() => null) ?? {};
+  const existingNums = new Set(Object.values(existing).map(o => o.orderNumber).filter(Boolean));
+
+  const newOrders = orders.filter(o => o.orderNumber && !existingNums.has(o.orderNumber));
+  if (!newOrders.length) return { imported: 0, skipped: orders.length, errors: 0 };
+
+  let categorized;
+  try {
+    categorized = await batchCategorizeOrders(env, newOrders);
+  } catch {
+    categorized = newOrders.map(() => ({ category: 'shopping_otros', confidence: 0.5 }));
+  }
+
+  const writes = {};
+  for (let i = 0; i < newOrders.length; i++) {
+    const o = newOrders[i];
+    const cat = categorized[i] ?? { category: 'shopping_otros', confidence: 0.5 };
+    const key = `csv_${o.orderNumber.replace(/[^a-zA-Z0-9]/g, '_')}`;
+    writes[key] = {
+      orderNumber:       o.orderNumber,
+      shipDate:          o.shipDate ?? null,
+      total:             o.total,
+      items:             o.items ?? [],
+      suggestedCategory: cat.category ?? null,
+      suggestedConf:     cat.confidence ?? null,
+      source:            'csv',
+      parsedAt:          new Date().toISOString(),
+    };
+  }
+
+  await fbPatch(env, `amazonOrders/${hid}`, writes);
+  return { imported: newOrders.length, skipped: orders.length - newOrders.length, errors: 0 };
+}
+
+async function batchCategorizeOrders(env, orders) {
+  const { CATEGORIES } = await import('../../src/shared/categories.js');
+  const expenseCats = CATEGORIES.filter(c => c.parent && !c.hide && !c.isIncome && c.parent !== 'transfer');
+  const catList = expenseCats.map(c => `${c.id}: ${c.label}`).join('\n');
+
+  const prompt = `You are categorizing Amazon orders for a household budget app.
+For each order, consider all items together and pick the single most appropriate expense category.
+
+Categories:
+${catList}
+
+Orders:
+${orders.map((o, i) => {
+    const itemsStr = (o.items ?? []).map(it => it.name).filter(Boolean).join(', ') || '(no items)';
+    return `${i + 1}. Items: ${itemsStr}${o.total ? ` | Total: $${o.total}` : ''}`;
+  }).join('\n')}
+
+Respond with JSON only — one entry per order in the same order:
+[{"orderIndex": 1, "category": "<category_id>", "confidence": <0.0-1.0>}]`;
+
+  const resp = await fetch(
+    `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${env.GOOGLE_AI_API_KEY}`,
+    {
+      method:  'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body:    JSON.stringify({ contents: [{ parts: [{ text: prompt }] }] }),
+    },
+  );
+
+  const data = await resp.json();
+  const raw  = data.candidates?.[0]?.content?.parts?.[0]?.text ?? '[]';
+  const jsonStr = raw.match(/\[[\s\S]*\]/)?.[0] ?? '[]';
+  try {
+    const parsed = JSON.parse(jsonStr);
+    return orders.map((_, i) =>
+      parsed.find(p => p.orderIndex === i + 1) ?? { category: 'shopping_otros', confidence: 0.5 },
+    );
+  } catch {
+    return orders.map(() => ({ category: 'shopping_otros', confidence: 0.5 }));
   }
 }

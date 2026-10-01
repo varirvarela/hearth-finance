@@ -352,6 +352,109 @@ function syncStatusDot(account) {
   return { cls: 'dot-unknown', label: 'never synced' };
 }
 
+// ── Amazon CSV parsing helpers ────────────────────────────────────────────────
+
+function parseFriendlyDate(str) {
+  if (!str) return null;
+  // "January 15, 2025" or "January 15 2025"
+  const months = ['january','february','march','april','may','june','july','august','september','october','november','december'];
+  const mLong = str.match(/^([A-Za-z]+)\s+(\d{1,2}),?\s+(\d{4})/);
+  if (mLong) {
+    const mo = months.indexOf(mLong[1].toLowerCase()) + 1;
+    if (mo > 0) return `${mLong[3]}-${String(mo).padStart(2, '0')}-${String(mLong[2]).padStart(2, '0')}`;
+  }
+  // "01/15/2025" or "1/15/2025"
+  const mSlash = str.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})/);
+  if (mSlash) return `${mSlash[3]}-${mSlash[1].padStart(2, '0')}-${mSlash[2].padStart(2, '0')}`;
+  // Already ISO
+  if (/^\d{4}-\d{2}-\d{2}/.test(str)) return str.slice(0, 10);
+  return null;
+}
+
+function parseAmazonCsv(text) {
+  // Minimal RFC 4180 parser
+  function parseCsvRows(raw) {
+    const rows = [];
+    let i = 0;
+    while (i < raw.length) {
+      const row = [];
+      while (i < raw.length && raw[i] !== '\n' && raw[i] !== '\r') {
+        if (raw[i] === '"') {
+          let cell = ''; i++;
+          while (i < raw.length) {
+            if (raw[i] === '"' && raw[i + 1] === '"') { cell += '"'; i += 2; }
+            else if (raw[i] === '"') { i++; break; }
+            else cell += raw[i++];
+          }
+          row.push(cell);
+        } else {
+          let cell = '';
+          while (i < raw.length && raw[i] !== ',' && raw[i] !== '\n' && raw[i] !== '\r') cell += raw[i++];
+          row.push(cell.trim());
+        }
+        if (raw[i] === ',') i++;
+      }
+      if (raw[i] === '\r') i++;
+      if (raw[i] === '\n') i++;
+      if (row.length > 1 || row[0]) rows.push(row);
+    }
+    return rows;
+  }
+
+  const rows = parseCsvRows(text);
+  if (rows.length < 2) return [];
+  const headers = rows[0].map(h => h.toLowerCase().trim());
+  const col = name => headers.findIndex(h => h.includes(name));
+
+  const orderIdCol      = col('order id');
+  const orderDateCol    = col('order date');
+  const titleCol        = col('title');
+  const itemTotalCol    = col('item total');
+  const shipDateCol     = col('shipment date');
+  const totalChargedCol = col('total charged');
+
+  if (orderIdCol === -1) return [];
+
+  const orderMap = new Map();
+  for (const row of rows.slice(1)) {
+    const orderId = row[orderIdCol]?.trim();
+    if (!orderId || orderId.toLowerCase() === 'order id') continue;
+    if (!orderMap.has(orderId)) {
+      const rawDate = row[orderDateCol]?.trim() ?? '';
+      orderMap.set(orderId, {
+        orderNumber: orderId,
+        shipDate: parseFriendlyDate(rawDate) ?? rawDate,
+        total: 0,
+        items: [],
+        _charged: null,
+      });
+    }
+    const entry = orderMap.get(orderId);
+    if (titleCol !== -1) {
+      const name = row[titleCol]?.trim();
+      const priceStr = row[itemTotalCol]?.trim().replace(/[$,]/g, '');
+      const price = parseFloat(priceStr) || null;
+      if (name && name.toLowerCase() !== 'title') {
+        entry.items.push({ name, price });
+        if (price) entry.total = Math.round((entry.total + price) * 100) / 100;
+      }
+    }
+    if (totalChargedCol !== -1) {
+      const chargedStr = row[totalChargedCol]?.trim().replace(/[$,]/g, '');
+      const charged = parseFloat(chargedStr) || 0;
+      if (charged) entry._charged = charged;
+    }
+    if (shipDateCol !== -1 && row[shipDateCol]?.trim()) {
+      const sd = parseFriendlyDate(row[shipDateCol].trim());
+      if (sd) entry.shipDate = sd;
+    }
+  }
+
+  return [...orderMap.values()]
+    .map(o => ({ orderNumber: o.orderNumber, shipDate: o.shipDate, total: o._charged ?? o.total, items: o.items }))
+    .filter(o => o.total > 0);
+}
+
 // ── Amazon / Gmail ────────────────────────────────────────────────────────────
 
 async function renderAmazonSection(uid, hid) {
@@ -553,9 +656,11 @@ async function openAmazonOrdersSheet(uid, hid, unmatchedOnly = false) {
       <div id="amazon-sheet-body" style="padding:0.75rem;overflow-y:auto;flex:1">
         <p style="color:var(--muted);font-size:0.85rem;text-align:center;padding:1rem">Loading orders…</p>
       </div>
-      <div style="padding:0.5rem 0.75rem;border-top:1px solid var(--border);display:flex;gap:0.5rem">
+      <div style="padding:0.5rem 0.75rem;border-top:1px solid var(--border);display:flex;gap:0.5rem;flex-wrap:wrap">
         <button id="amazon-reset-btn" class="btn-ghost" style="flex:1;color:var(--danger);font-size:0.8rem">Reset all orders</button>
         <button id="amazon-debug-btn" class="btn-ghost" style="flex:1;font-size:0.8rem" title="Copy raw email body for debugging">Debug email</button>
+        <button id="amazon-csv-btn" class="btn-ghost" style="flex:1;font-size:0.8rem" title="Import Amazon order history CSV">Import CSV</button>
+        <input type="file" id="amazon-csv-input" accept=".csv" style="display:none">
       </div>
     </div>`;
   document.body.appendChild(overlay);
@@ -591,6 +696,50 @@ async function openAmazonOrdersSheet(uid, hid, unmatchedOnly = false) {
       btn.disabled = false;
       console.error('debug-body error', err);
     }
+  });
+
+  overlay.querySelector('#amazon-csv-btn').addEventListener('click', () => {
+    overlay.querySelector('#amazon-csv-input').click();
+  });
+
+  overlay.querySelector('#amazon-csv-input').addEventListener('change', async e => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const csvBtn = overlay.querySelector('#amazon-csv-btn');
+    csvBtn.textContent = 'Parsing…';
+    csvBtn.disabled = true;
+    try {
+      const text = await file.text();
+      const orders = parseAmazonCsv(text);
+      if (!orders.length) {
+        alert('No orders found in this CSV. Use the Amazon "Items" or "Orders and Shipments" report from your order history.');
+        csvBtn.textContent = 'Import CSV';
+        csvBtn.disabled = false;
+        return;
+      }
+      const dateRange = orders.length
+        ? ` (${orders.map(o => o.shipDate).filter(Boolean).sort()[0]} – ${orders.map(o => o.shipDate).filter(Boolean).sort().at(-1)})`
+        : '';
+      const confirmed = confirm(`Found ${orders.length} orders${dateRange}.\n\nImport with AI categorization? This will run in the cloud and may take a moment.`);
+      if (!confirmed) { csvBtn.textContent = 'Import CSV'; csvBtn.disabled = false; return; }
+      csvBtn.textContent = 'Importing…';
+      const token = await auth.currentUser?.getIdToken();
+      const res = await fetch(`${WORKER_URL}/gmail/import-orders`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ orders }),
+      });
+      const result = await res.json();
+      if (result.error) throw new Error(result.error);
+      alert(`Done! ${result.imported} orders imported, ${result.skipped} duplicates skipped.`);
+      close();
+      renderAmazonSection(uid, hid).catch(() => {});
+    } catch (err) {
+      alert('Import failed: ' + err.message);
+      csvBtn.textContent = 'Import CSV';
+      csvBtn.disabled = false;
+    }
+    e.target.value = '';
   });
 
   const body = overlay.querySelector('#amazon-sheet-body');
