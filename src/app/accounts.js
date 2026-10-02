@@ -992,17 +992,57 @@ async function openPlaidLink(uid) {
     });
   }
 
+  // Save token+slot so the OAuth redirect handler can resume the flow if Venmo/etc redirects back
+  sessionStorage.setItem('plaid-oauth-pending', JSON.stringify({ link_token, slot }));
+
   window.Plaid.create({
     token: link_token,
     onSuccess: async (publicToken) => {
+      sessionStorage.removeItem('plaid-oauth-pending');
       const idTok = await auth.currentUser.getIdToken();
       await fetch(`${WORKER_URL}/plaid/exchange-token`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${idTok}` },
         body: JSON.stringify({ public_token: publicToken, slot }),
       });
+      await renderAmazonSection(uid, uid).catch(() => {});
     },
-    onExit: (err) => { if (err) console.error('Plaid exit:', err); },
+    onExit: (err) => {
+      if (err) console.error('Plaid exit:', err);
+      // Don't clear sessionStorage on exit — user may have been redirected for OAuth
+    },
+  }).open();
+}
+
+export async function resumePlaidOAuthIfPending() {
+  const stored = sessionStorage.getItem('plaid-oauth-pending');
+  if (!stored) return;
+  const { link_token, slot } = JSON.parse(stored);
+  sessionStorage.removeItem('plaid-oauth-pending');
+
+  if (!window.Plaid) {
+    await new Promise((resolve, reject) => {
+      const s = document.createElement('script');
+      s.src = 'https://cdn.plaid.com/link/v2/stable/link-initialize.js';
+      s.onload = resolve; s.onerror = reject;
+      document.head.appendChild(s);
+    });
+  }
+
+  window.Plaid.create({
+    token: link_token,
+    receivedRedirectUri: window.location.href, // tells Plaid this is the OAuth return
+    onSuccess: async (publicToken) => {
+      const uid   = auth.currentUser?.uid;
+      const idTok = await auth.currentUser?.getIdToken();
+      await fetch(`${WORKER_URL}/plaid/exchange-token`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${idTok}` },
+        body: JSON.stringify({ public_token: publicToken, slot }),
+      });
+      if (uid) await renderAmazonSection(uid, uid).catch(() => {});
+    },
+    onExit: (err) => { if (err) console.error('Plaid OAuth resume exit:', err); },
   }).open();
 }
 

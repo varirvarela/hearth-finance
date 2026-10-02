@@ -44,6 +44,8 @@ async function resolveHouseholdId(env, uid) {
   return (typeof profile === 'object' && profile?.householdId) ? profile.householdId : uid;
 }
 
+const APP_REDIRECT_URI = 'https://varirvarela.github.io/hearth-finance/';
+
 export async function createLinkToken(env, uid, slot) {
   const isSandbox = env.PLAID_ENV === 'sandbox';
   const res = await fetch(plaidUrl(env, '/link/token/create'), {
@@ -61,6 +63,7 @@ export async function createLinkToken(env, uid, slot) {
       products:      ['transactions'],
       country_codes: ['US'],
       language:      'en',
+      redirect_uri:  isSandbox ? undefined : APP_REDIRECT_URI,
     }),
   });
   const plaidText = await res.text();
@@ -68,6 +71,7 @@ export async function createLinkToken(env, uid, slot) {
 }
 
 export async function createReconnectToken(env, uid, accessToken, slot) {
+  const isSandbox = env.PLAID_ENV === 'sandbox';
   const res = await fetch(plaidUrl(env, '/link/token/create'), {
     method: 'POST',
     headers: plaidHeaders(env, slot),
@@ -77,6 +81,7 @@ export async function createReconnectToken(env, uid, accessToken, slot) {
       access_token:  accessToken,
       country_codes: ['US'],
       language:      'en',
+      redirect_uri:  isSandbox ? undefined : APP_REDIRECT_URI,
     }),
   });
   const plaidText = await res.text();
@@ -251,5 +256,55 @@ export async function handlePlaid(request, env, path) {
     return new Response(JSON.stringify({ ok: true, removed }), { headers: CORS });
   }
 
+  if (path === '/plaid/list-connections' && request.method === 'GET') {
+    return new Response(JSON.stringify(await listAllConnections(env, hid)), { headers: { ...CORS, 'Content-Type': 'application/json' } });
+  }
+
   return new Response(JSON.stringify({ error: 'Not found' }), { status: 404, headers: CORS });
+}
+
+async function listAllConnections(env, hid) {
+  const results = [];
+  for (const slot of [1, 2]) {
+    const prefix = `s${slot}:${hid}:`;
+    let cursor;
+    const itemIds = [];
+    do {
+      const page = await env.PLAID_TOKENS.list({ prefix, cursor });
+      itemIds.push(...page.keys.map(k => k.name.slice(prefix.length)));
+      cursor = page.list_complete ? undefined : page.cursor;
+    } while (cursor);
+
+    for (const itemId of itemIds) {
+      const token = await env.PLAID_TOKENS.get(`s${slot}:${hid}:${itemId}`);
+      if (!token) continue;
+      try {
+        const itemResp = await fetch(plaidUrl(env, '/item/get'), {
+          method: 'POST', headers: plaidHeaders(env, slot),
+          body: JSON.stringify({ access_token: token }),
+        });
+        const itemData = await itemResp.json();
+        const institutionId = itemData.item?.institution_id;
+        let institutionName = institutionId ?? '(unknown)';
+        if (institutionId) {
+          const instResp = await fetch(plaidUrl(env, '/institutions/get_by_id'), {
+            method: 'POST', headers: plaidHeaders(env, slot),
+            body: JSON.stringify({ institution_id: institutionId, country_codes: ['US'] }),
+          });
+          const instData = await instResp.json();
+          institutionName = instData.institution?.name ?? institutionId;
+        }
+        results.push({
+          slot, itemId,
+          institution: institutionName,
+          institutionId,
+          error: itemData.error_code ?? null,
+          consentExpirationTime: itemData.item?.consent_expiration_time ?? null,
+        });
+      } catch (e) {
+        results.push({ slot, itemId, institution: '(fetch error)', error: e.message });
+      }
+    }
+  }
+  return { connections: results };
 }

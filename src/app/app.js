@@ -2,7 +2,7 @@ import { auth, dbGet, dbUpdate, dbRemove, setHouseholdId } from '../shared/fireb
 
 const WORKER_URL = import.meta.env.VITE_WORKER_URL ?? 'http://localhost:8787';
 
-// Detect Gmail OAuth callback (?code=...&state=gmail-connect:KEY) before anything else.
+// Detect OAuth callbacks (?code=...&state=gmail-connect:KEY or ?oauth_state_id=...) before anything else.
 // Clean the URL immediately so a refresh doesn't replay it.
 const _gmailCallbackParams = new URLSearchParams(location.search);
 const _gmailStateVal       = _gmailCallbackParams.get('state') ?? '';
@@ -13,6 +13,13 @@ const _pendingGmailCode    = _gmailStateVal.startsWith('gmail-connect')
 const _pendingGmailKey = _gmailStateVal.includes(':') ? _gmailStateVal.split(':')[1] : 'main';
 if (_pendingGmailCode) {
   history.replaceState({}, '', location.pathname + '#settings');
+}
+
+// Plaid OAuth redirect — institutions like Venmo use OAuth and redirect back here with oauth_state_id.
+// We stash the link_token+slot in sessionStorage before opening Plaid Link so we can resume here.
+const _plaidOAuthStateId = _gmailCallbackParams.get('oauth_state_id');
+if (_plaidOAuthStateId) {
+  history.replaceState({}, '', location.pathname + '#accounts');
 }
 import { hideCategory, addCustomCategory } from '../shared/categories.js';
 
@@ -31,7 +38,7 @@ import {
 import { renderDashboard }    from './dashboard.js';
 import { renderTransactions } from './transactions.js';
 import { renderBudgets }      from './budgets.js';
-import { renderAccounts }     from './accounts.js';
+import { renderAccounts, resumePlaidOAuthIfPending } from './accounts.js';
 import { renderSettings }     from './settings.js';
 import { renderAutomation }   from './automation.js';
 import { renderInsights }     from './insights.js';
@@ -212,6 +219,10 @@ onAuthStateChanged(auth, async user => {
 
     const hash = location.hash.slice(1) || 'dashboard';
     mount(hash);
+
+    // Resume a Plaid OAuth flow (e.g. Venmo) if the app was redirected back mid-link
+    if (_plaidOAuthStateId) resumePlaidOAuthIfPending().catch(console.error);
+
     const lastSeen = localStorage.getItem('hearth-seen-version-2');
     const current  = CHANGELOG[0].version;
     if (!lastSeen || lastSeen !== current) {

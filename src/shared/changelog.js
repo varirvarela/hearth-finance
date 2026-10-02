@@ -1,5 +1,12 @@
 export const CHANGELOG = [
   {
+    version: '1.24.2',
+    date:    '2026-10-02',
+    changes: [
+      'Accounts: fix Venmo (and other OAuth-based institutions) not connecting — the app now correctly resumes the Plaid Link flow after the OAuth redirect.',
+    ],
+  },
+  {
     version: '1.24.1',
     date:    '2026-10-01',
     changes: [
