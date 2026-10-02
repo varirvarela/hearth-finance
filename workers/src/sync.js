@@ -51,13 +51,16 @@ export async function handleSync(env) {
   }
 }
 
-export async function handleUserSync(env, uid) {
+export async function handleUserSync(env, uid, filterItemIds = null) {
   const accounts = await fbGet(env, `accounts/${uid}`).catch(() => null);
   if (!accounts) return { synced: 0, removed: 0, modified: 0, errors: 0 };
+
+  const filterSet = filterItemIds && filterItemIds.length > 0 ? new Set(filterItemIds) : null;
 
   const itemsSeen = new Map();
   for (const [key, account] of Object.entries(accounts)) {
     if (account.isManual || !account.plaidItemId) continue;
+    if (filterSet && !filterSet.has(account.plaidItemId)) continue;
     if (!itemsSeen.has(account.plaidItemId)) {
       const slot  = account.plaidSlot ?? 1;
       const token = await env.PLAID_TOKENS.get(`s${slot}:${uid}:${account.plaidItemId}`);

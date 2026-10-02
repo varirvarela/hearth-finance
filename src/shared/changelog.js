@@ -1,5 +1,13 @@
 export const CHANGELOG = [
   {
+    version: '1.25.0',
+    date:    '2026-10-02',
+    changes: [
+      'Accounts: sync now has a per-institution filter — tap the ▾ arrow next to Sync to pick specific banks instead of syncing all at once.',
+      'Transactions: account detail panel now shows the account alias when one is set.',
+    ],
+  },
+  {
     version: '1.24.2',
     date:    '2026-10-02',
     changes: [

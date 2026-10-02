@@ -42,7 +42,8 @@ export default {
         const { fbGet } = await import('./firebase.js');
         const userProfile = await fbGet(env, `users/${uid}`).catch(() => null);
         const syncUid = (typeof userProfile === 'object' && userProfile?.householdId) ? userProfile.householdId : uid;
-        const result = await handleUserSync(env, syncUid);
+        const body = await request.json().catch(() => ({}));
+        const result = await handleUserSync(env, syncUid, body.itemIds ?? null);
         return json(result);
       }
 

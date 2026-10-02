@@ -1191,7 +1191,7 @@ function renderPage(filtered, state, uid, refresh, accountMap) {
       }
 
       const isPartner   = !!t._owner;
-      const accountName = t.accountName || accountMap[t.accountId]?.name || '—';
+      const accountName = accountMap[t.accountId]?.alias ?? accountMap[t.accountId]?.name ?? t.accountName ?? '—';
       const srcBadge    = getSourceBadge(t.categorySource);
       const detailCat   = getCategoryById(t.category);
       const detailParent = detailCat.parent ? getCategoryById(detailCat.parent) : null;

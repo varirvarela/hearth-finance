@@ -22,6 +22,14 @@ function buildGmailAuthUrl(key = 'main') {
 
 const AMAZON_PAT = /amazon|amzn/i;
 
+let _syncFilterIds = null; // null = all, Set<string> = specific plaidItemIds
+
+function updateSyncFilterBtn() {
+  const btn = document.getElementById('sync-filter-btn');
+  if (!btn) return;
+  btn.textContent = _syncFilterIds ? `▾ ${_syncFilterIds.size}` : '▾';
+}
+
 export function renderAccounts(container) {
   container.innerHTML = `
     <div class="page accounts" style="padding:0">
@@ -66,7 +74,16 @@ export function renderAccounts(container) {
             <span style="font-size:0.75rem;color:var(--muted)">to</span>
             <input type="date" id="sync-to" style="flex:1;border:1.5px solid var(--border);border-radius:8px;padding:0.4rem 0.6rem;font-size:0.78rem;background:var(--surface);color:var(--text)" />
           </div>
-          <button class="btn-primary" id="sync-now" style="width:auto;padding:0.45rem 1rem;font-size:0.82rem">Sync</button>
+          <div style="position:relative;display:flex;gap:0">
+            <button class="btn-primary" id="sync-now" style="width:auto;padding:0.45rem 1rem;font-size:0.82rem;border-radius:8px 0 0 8px">Sync</button>
+            <button id="sync-filter-btn" class="btn-primary" style="padding:0.45rem 0.5rem;font-size:0.75rem;border-radius:0 8px 8px 0;border-left:1px solid rgba(255,255,255,0.25)" title="Filter by institution">▾</button>
+            <div id="sync-filter-panel" style="display:none;position:absolute;top:calc(100% + 4px);right:0;background:var(--surface);border:1.5px solid var(--border);border-radius:10px;padding:10px 12px;z-index:30;min-width:190px;box-shadow:0 4px 16px rgba(0,0,0,0.15)">
+              <label style="display:flex;align-items:center;gap:8px;font-size:0.8rem;padding:4px 0;cursor:pointer;font-weight:500">
+                <input type="checkbox" id="sync-all-accounts" checked style="accent-color:var(--primary)"> All accounts
+              </label>
+              <div id="sync-account-items" style="margin-top:4px;display:flex;flex-direction:column;gap:0"></div>
+            </div>
+          </div>
         </div>
 
         <button class="acct-settings-btn" id="rationalize-accounts" style="margin-bottom:12px">
@@ -98,6 +115,7 @@ export function renderAccounts(container) {
     const merged = { ...(latestOwnerAccounts ?? {}), ...(latestPartnerAccounts ?? {}) };
     refreshHero(merged);
     renderAccountList(merged, hid, resolvedPartnerUid);
+    rebuildSyncDropdown(merged);
   };
 
   dbListen(`accounts/${hid}`, accounts => {
@@ -125,6 +143,31 @@ export function renderAccounts(container) {
   container.querySelector('#link-account').addEventListener('click', () => openPlaidLink(uid));
   container.querySelector('#add-manual').addEventListener('click', () => openManualAccountForm(hid));
   container.querySelector('#sync-now').addEventListener('click', () => syncTransactions(uid));
+
+  // Sync filter dropdown
+  const _filterBtn   = container.querySelector('#sync-filter-btn');
+  const _filterPanel = container.querySelector('#sync-filter-panel');
+  _filterBtn?.addEventListener('click', e => {
+    e.stopPropagation();
+    const isOpen = _filterPanel.style.display !== 'none';
+    _filterPanel.style.display = isOpen ? 'none' : 'block';
+    if (!isOpen) {
+      const closeOnOutside = ev => {
+        if (!_filterPanel.contains(ev.target) && ev.target !== _filterBtn) {
+          _filterPanel.style.display = 'none';
+          document.removeEventListener('click', closeOnOutside);
+        }
+      };
+      setTimeout(() => document.addEventListener('click', closeOnOutside), 0);
+    }
+  });
+  container.querySelector('#sync-all-accounts')?.addEventListener('change', () => {
+    _syncFilterIds = null;
+    document.getElementById('sync-account-items')?.querySelectorAll('.sync-item-chk').forEach(c => { c.checked = true; });
+    updateSyncFilterBtn();
+    container.querySelector('#sync-all-accounts').checked = true;
+  });
+
   container.querySelector('#sync-range').addEventListener('change', e => {
     const custom = document.getElementById('sync-custom-dates');
     if (custom) custom.style.display = e.target.value === 'custom' ? 'flex' : 'none';
@@ -1046,6 +1089,45 @@ export async function resumePlaidOAuthIfPending() {
   }).open();
 }
 
+function rebuildSyncDropdown(accounts) {
+  const panel = document.getElementById('sync-account-items');
+  if (!panel) return;
+
+  const itemMap = new Map();
+  for (const [, a] of Object.entries(accounts ?? {})) {
+    if (a.isManual || !a.plaidItemId) continue;
+    if (!itemMap.has(a.plaidItemId)) {
+      itemMap.set(a.plaidItemId, { institution: a.institution ?? a.name ?? a.plaidItemId, count: 0 });
+    }
+    itemMap.get(a.plaidItemId).count++;
+  }
+
+  panel.innerHTML = [...itemMap.entries()].map(([itemId, { institution, count }]) => `
+    <label style="display:flex;align-items:center;gap:8px;font-size:0.8rem;padding:3px 0;cursor:pointer">
+      <input type="checkbox" class="sync-item-chk" data-item-id="${itemId}"
+        ${!_syncFilterIds || _syncFilterIds.has(itemId) ? 'checked' : ''}
+        style="accent-color:var(--primary)">
+      <span>${institution}<span style="color:var(--muted);font-size:0.72rem;margin-left:3px">(${count})</span></span>
+    </label>
+  `).join('');
+
+  panel.querySelectorAll('.sync-item-chk').forEach(chk => {
+    chk.addEventListener('change', () => {
+      const checkedIds = [...panel.querySelectorAll('.sync-item-chk:checked')].map(c => c.dataset.itemId);
+      const allChk = document.getElementById('sync-all-accounts');
+      if (checkedIds.length === 0 || checkedIds.length === itemMap.size) {
+        _syncFilterIds = null;
+        if (allChk) allChk.checked = true;
+        panel.querySelectorAll('.sync-item-chk').forEach(c => { c.checked = true; });
+      } else {
+        _syncFilterIds = new Set(checkedIds);
+        if (allChk) allChk.checked = false;
+      }
+      updateSyncFilterBtn();
+    });
+  });
+}
+
 async function syncTransactions(uid) {
   const btn       = document.getElementById('sync-now');
   const rangeEl   = document.getElementById('sync-range');
@@ -1062,12 +1144,16 @@ async function syncTransactions(uid) {
   }
   if (!btn) return;
   btn.textContent = 'Syncing…'; btn.disabled = true;
+  const fp = document.getElementById('sync-filter-panel');
+  if (fp) fp.style.display = 'none';
   try {
     const idToken = await auth.currentUser.getIdToken();
+    const body = { startDate, endDate };
+    if (_syncFilterIds) body.itemIds = [..._syncFilterIds];
     const res = await fetch(`${WORKER_URL}/sync`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${idToken}` },
-      body: JSON.stringify({ startDate, endDate }),
+      body: JSON.stringify(body),
     });
     const { synced } = await res.json();
     btn.textContent = `Sync (${synced} new)`;
