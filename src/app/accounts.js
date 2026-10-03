@@ -27,7 +27,7 @@ let _syncFilterIds = null; // null = all, Set<string> = specific plaidItemIds
 function updateSyncFilterBtn() {
   const btn = document.getElementById('sync-filter-btn');
   if (!btn) return;
-  btn.textContent = _syncFilterIds ? `▾ ${_syncFilterIds.size}` : '▾';
+  btn.textContent = (_syncFilterIds && _syncFilterIds.size > 0) ? `▾ ${_syncFilterIds.size}` : '▾';
 }
 
 export function renderAccounts(container) {
@@ -77,7 +77,7 @@ export function renderAccounts(container) {
           <div style="position:relative;display:flex;gap:0">
             <button class="btn-primary" id="sync-now" style="width:auto;padding:0.45rem 1rem;font-size:0.82rem;border-radius:8px 0 0 8px">Sync</button>
             <button id="sync-filter-btn" class="btn-primary" style="padding:0.45rem 0.5rem;font-size:0.75rem;border-radius:0 8px 8px 0;border-left:1px solid rgba(255,255,255,0.25)" title="Filter by institution">▾</button>
-            <div id="sync-filter-panel" style="display:none;position:absolute;top:calc(100% + 4px);right:0;background:var(--surface);border:1.5px solid var(--border);border-radius:10px;padding:10px 12px;z-index:30;min-width:190px;box-shadow:0 4px 16px rgba(0,0,0,0.15)">
+            <div id="sync-filter-panel" style="display:none;position:absolute;top:calc(100% + 4px);right:0;background:var(--surface);border:1.5px solid var(--border);border-radius:10px;padding:10px 12px;z-index:30;min-width:190px;max-height:60vh;overflow-y:auto;box-shadow:0 4px 16px rgba(0,0,0,0.15)">
               <label style="display:flex;align-items:center;gap:8px;font-size:0.8rem;padding:4px 0;cursor:pointer;font-weight:500">
                 <input type="checkbox" id="sync-all-accounts" checked style="accent-color:var(--primary)"> All accounts
               </label>
@@ -161,11 +161,11 @@ export function renderAccounts(container) {
       setTimeout(() => document.addEventListener('click', closeOnOutside), 0);
     }
   });
-  container.querySelector('#sync-all-accounts')?.addEventListener('change', () => {
-    _syncFilterIds = null;
-    document.getElementById('sync-account-items')?.querySelectorAll('.sync-item-chk').forEach(c => { c.checked = true; });
+  container.querySelector('#sync-all-accounts')?.addEventListener('change', e => {
+    const on = e.target.checked;
+    document.getElementById('sync-account-items')?.querySelectorAll('.sync-item-chk').forEach(c => { c.checked = on; });
+    _syncFilterIds = on ? null : new Set();
     updateSyncFilterBtn();
-    container.querySelector('#sync-all-accounts').checked = true;
   });
 
   container.querySelector('#sync-range').addEventListener('change', e => {
@@ -1102,6 +1102,9 @@ function rebuildSyncDropdown(accounts) {
     itemMap.get(a.plaidItemId).count++;
   }
 
+  const allChkEl = document.getElementById('sync-all-accounts');
+  if (allChkEl) allChkEl.checked = _syncFilterIds === null;
+
   panel.innerHTML = [...itemMap.entries()].map(([itemId, { institution, count }]) => `
     <label style="display:flex;align-items:center;gap:8px;font-size:0.8rem;padding:3px 0;cursor:pointer">
       <input type="checkbox" class="sync-item-chk" data-item-id="${itemId}"
@@ -1115,10 +1118,9 @@ function rebuildSyncDropdown(accounts) {
     chk.addEventListener('change', () => {
       const checkedIds = [...panel.querySelectorAll('.sync-item-chk:checked')].map(c => c.dataset.itemId);
       const allChk = document.getElementById('sync-all-accounts');
-      if (checkedIds.length === 0 || checkedIds.length === itemMap.size) {
+      if (checkedIds.length === itemMap.size) {
         _syncFilterIds = null;
         if (allChk) allChk.checked = true;
-        panel.querySelectorAll('.sync-item-chk').forEach(c => { c.checked = true; });
       } else {
         _syncFilterIds = new Set(checkedIds);
         if (allChk) allChk.checked = false;
@@ -1149,7 +1151,7 @@ async function syncTransactions(uid) {
   try {
     const idToken = await auth.currentUser.getIdToken();
     const body = { startDate, endDate };
-    if (_syncFilterIds) body.itemIds = [..._syncFilterIds];
+    if (_syncFilterIds && _syncFilterIds.size > 0) body.itemIds = [..._syncFilterIds];
     const res = await fetch(`${WORKER_URL}/sync`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${idToken}` },
