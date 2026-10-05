@@ -245,6 +245,11 @@ export function renderTransactions(container) {
       console.error('[Hearth] suggestions preload failed:', e);
     }
 
+    // Eagerly load Amazon orders so the suggestion strip can appear without opening the detail sheet.
+    try {
+      _amazonOrders = (await dbGet(`amazonOrders/${hid}`)) ?? {};
+    } catch { _amazonOrders = {}; }
+
     dbListen(`transactions/${hid}`, txns => {
       allTxns = Object.entries(txns ?? {}).sort((a, b) => b[1].date.localeCompare(a[1].date));
       refresh();
@@ -996,10 +1001,52 @@ function renderPage(filtered, state, uid, refresh, accountMap) {
     if (acctName) subParts.push(acctName);
     const subHTML = `<span class="txn-sub">${subParts.join(' · ')} ${partnerBadge}</span>`;
 
+    // Resolve matched Amazon order — direct key lookup first, then amount+date scan for new txns
+    const AMAZON_TXN_PAT = /amazon|amzn/i;
+    let _matchedOrder = null;
+    let _matchedOrderKey = null;
+    if (_amazonOrders && AMAZON_TXN_PAT.test(t.merchantName ?? t.description ?? '')) {
+      if (t.amazonOrderKey && _amazonOrders[t.amazonOrderKey]) {
+        _matchedOrder    = _amazonOrders[t.amazonOrderKey];
+        _matchedOrderKey = t.amazonOrderKey;
+      } else {
+        const txnTime = new Date(t.date).getTime();
+        const foundKey = Object.keys(_amazonOrders).find(k => {
+          const o = _amazonOrders[k];
+          if (!o.total || !o.shipDate) return false;
+          if (Math.abs(o.total - t.amount) > 0.01) return false;
+          return Math.abs(new Date(o.shipDate).getTime() - txnTime) / 86_400_000 <= 7;
+        });
+        if (foundKey) {
+          _matchedOrder    = _amazonOrders[foundKey];
+          _matchedOrderKey = foundKey;
+          // Persist the link so future renders skip the scan
+          if (!t.amazonOrderKey) dbUpdate(`transactions/${hid}/${id}`, { amazonOrderKey: foundKey });
+        }
+      }
+    }
+
     // Suggestion strip — rendered as sibling to .txn-row inside .txn-item
     let suggestionHTML = '';
     if (review && !isPartner) {
-      if (t.category !== 'uncategorized' && t.categorySource === 'ai' && (t.aiConfidence ?? 0) > 0) {
+      if (_matchedOrder?.suggestedCategory) {
+        // Amazon order suggestion — highest priority, replaces generic AI/heuristic strip
+        const aCat  = getCategoryById(_matchedOrder.suggestedCategory);
+        const aConf = _matchedOrder.suggestedConf != null ? ` · ${Math.round(_matchedOrder.suggestedConf * 100)}%` : '';
+        const hasSplit = _matchedOrder.suggestedSplits?.length >= 2;
+        const catLabel = hasSplit
+          ? `${aCat.icon} ${aCat.name} + split`
+          : `${aCat.icon} ${aCat.name}`;
+        suggestionHTML = `
+          <div class="sug-strip ai">
+            <span class="sug-lbl ai">📦${aConf}</span>
+            <span class="sug-cat">${catLabel}</span>
+            <button class="btn-quick-confirm" data-id="${id}" data-cat="${_matchedOrder.suggestedCategory}">✓ Apply</button>
+            ${hasSplit
+              ? `<button class="btn-amazon-split" data-id="${id}" data-order-key="${_matchedOrderKey}">Split →</button>`
+              : `<button class="btn-quick-change" data-id="${id}" data-cat="${_matchedOrder.suggestedCategory}">Change</button>`}
+          </div>`;
+      } else if (t.category !== 'uncategorized' && t.categorySource === 'ai' && (t.aiConfidence ?? 0) > 0) {
         const confLabel = ` · ${Math.round(t.aiConfidence * 100)}%`;
         suggestionHTML = `
           <div class="sug-strip ai">
@@ -1148,6 +1195,53 @@ function renderPage(filtered, state, uid, refresh, accountMap) {
       e.stopPropagation();
       const row = btn.closest('.txn-item')?.querySelector('.txn-row') ?? btn.closest('.txn-row');
       openCategoryPicker(btn.dataset.id, btn.dataset.cat, uid, row);
+    });
+  });
+
+  // ── Amazon split suggestion ──
+  el.querySelectorAll('.btn-amazon-split').forEach(btn => {
+    btn.addEventListener('click', async e => {
+      e.stopPropagation();
+      const txnId    = btn.dataset.id;
+      const orderKey = btn.dataset.orderKey;
+      const order    = _amazonOrders?.[orderKey];
+      const splits   = order?.suggestedSplits;
+      const entry    = slice.find(([sid]) => sid === txnId);
+      if (!splits?.length || !entry) return;
+
+      const [, txn]  = entry;
+      const total    = txn.amount;
+      const lines    = splits.map(s => {
+        const c = getCategoryById(s.category);
+        return `${c?.icon ?? ''} ${c?.name ?? s.category}: ${fmtCurrency(Math.round(total * s.fraction * 100) / 100)}`;
+      }).join('\n');
+      if (!confirm(`Split ${fmtCurrency(total)} into:\n\n${lines}\n\nThis will create ${splits.length} transactions and remove the original.`)) return;
+
+      btn.disabled = true; btn.textContent = '…';
+      try {
+        let allocated = 0;
+        for (let i = 0; i < splits.length; i++) {
+          const s   = splits[i];
+          const c   = getCategoryById(s.category);
+          const amt = i === splits.length - 1
+            ? Math.round((total - allocated) * 100) / 100
+            : Math.round(total * s.fraction * 100) / 100;
+          allocated += amt;
+          const { amazonOrderKey: _drop, needsReview: _nr, categorySource: _cs, ...base } = txn;
+          await dbPush(`transactions/${hid}`, {
+            ...base,
+            amount:         amt,
+            category:       s.category,
+            group:          c?.parent ?? null,
+            categorySource: 'manual',
+            needsReview:    false,
+          });
+        }
+        await dbRemove(`transactions/${hid}/${txnId}`);
+      } catch (err) {
+        btn.disabled = false; btn.textContent = 'Split →';
+        alert('Split failed: ' + err.message);
+      }
     });
   });
 

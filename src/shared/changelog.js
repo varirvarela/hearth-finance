@@ -1,5 +1,14 @@
 export const CHANGELOG = [
   {
+    version: '1.25.5',
+    date:    '2026-10-05',
+    changes: [
+      'Transactions: Amazon orders now show AI category and split suggestions inline in the transaction list — no need to open the detail sheet.',
+      'Transactions: new Amazon transactions are matched to orders by amount and date on first render; the link persists for future renders.',
+      'Transactions: "Split →" button on Amazon suggestion strip creates per-category transactions and removes the original.',
+    ],
+  },
+  {
     version: '1.25.4',
     date:    '2026-10-05',
     changes: [
