@@ -1,5 +1,12 @@
 export const CHANGELOG = [
   {
+    version: '1.25.2',
+    date:    '2026-10-04',
+    changes: [
+      'Rules: category picker now uses a two-level hierarchy (group → category) instead of a flat dropdown, and includes income categories.',
+    ],
+  },
+  {
     version: '1.25.1',
     date:    '2026-10-04',
     changes: [

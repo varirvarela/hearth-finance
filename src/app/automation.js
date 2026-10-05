@@ -1,5 +1,5 @@
 import { dbListen, dbSet, dbPush, dbRemove, dbUpdate, dbGet, auth, getHouseholdId } from '../shared/firebase.js';
-import { CATEGORIES, getCategoryById, getCategoryBudgetFields } from '../shared/categories.js';
+import { CATEGORIES, getCategoryById, getCategoryBudgetFields, getRootCategories, getChildCategories } from '../shared/categories.js';
 import { buildRule, evaluateRules, evaluateRulesWithMatch, matchesRule } from '../shared/rules.js';
 import { fmtCurrency } from '../shared/format.js';
 
@@ -367,7 +367,8 @@ const OP_EDITOR_LABELS = {
 
 export function openRuleEditor(uid, ruleId = null, prefill = null, prefillCatId = null) {
   const isEdit  = ruleId != null;
-  const expCats = CATEGORIES.filter(c => !c.isIncome && c.id !== 'transfer' && c.parent);
+  // All non-transfer groups, including income
+  const ruleGroups = getRootCategories().filter(g => g.id !== 'transfer');
 
   // Normalise existing rule to conditions array
   let conditions;
@@ -381,12 +382,8 @@ export function openRuleEditor(uid, ruleId = null, prefill = null, prefillCatId 
     conditions = [{ field: 'description', op: 'contains', value: '' }];
   }
 
-  const initCatId = prefill?.actionValue ?? prefillCatId ?? (expCats[0]?.id ?? '');
+  const initCatId = prefill?.actionValue ?? prefillCatId ?? '';
   const selPri    = prefill?.priority ?? 50;
-
-  const catOptions = expCats.map(c =>
-    `<option value="${c.id}" ${initCatId === c.id ? 'selected' : ''}>${c.icon} ${c.name}</option>`
-  ).join('');
 
   const modal = document.createElement('div');
   modal.className = 'modal-overlay';
@@ -399,7 +396,11 @@ export function openRuleEditor(uid, ruleId = null, prefill = null, prefillCatId 
       <button class="btn-ghost re-add-cond" type="button" style="font-size:0.8rem;margin-bottom:1rem;padding:6px 12px">+ AND condition</button>
 
       <label class="modal-label" style="margin-top:0.25rem">Then categorize as</label>
-      <select id="re-cat" class="rule-editor-sel" style="width:100%">${catOptions}</select>
+      <div id="re-cat-picker" style="margin-bottom:12px">
+        <div id="re-cat-groups" style="display:flex;flex-wrap:wrap;gap:5px;margin-bottom:8px"></div>
+        <div id="re-cat-leaves" style="display:flex;flex-wrap:wrap;gap:5px;min-height:32px"></div>
+        <input type="hidden" id="re-cat" value="${initCatId}">
+      </div>
 
       <label class="modal-label" style="margin-top:1rem">Priority</label>
       <div style="display:flex;gap:8px;margin-bottom:12px">
@@ -438,6 +439,52 @@ export function openRuleEditor(uid, ruleId = null, prefill = null, prefillCatId 
   const priCustomEl = modal.querySelector('#re-pri-custom');
   const priValEl    = modal.querySelector('#re-pri-val');
   const previewEl   = modal.querySelector('#re-preview');
+
+  // ── Hierarchical category picker ───────────────────────────────────────
+  const groupsEl = modal.querySelector('#re-cat-groups');
+  const leavesEl = modal.querySelector('#re-cat-leaves');
+
+  const GRP_STYLE  = 'border:1px solid var(--border);border-radius:20px;padding:4px 10px;font-size:0.78rem;cursor:pointer;background:var(--surface);display:inline-flex;align-items:center;gap:4px;white-space:nowrap';
+  const GRP_ACTIVE = 'border-color:var(--brand,#4f46e5);background:var(--brand,#4f46e5);color:#fff';
+  const LEAF_STYLE = 'border:1px solid var(--border);border-radius:20px;padding:5px 12px;font-size:0.82rem;cursor:pointer;background:var(--surface);display:inline-flex;align-items:center;gap:5px;white-space:nowrap';
+  const LEAF_ACTIVE= 'border-color:var(--brand,#4f46e5);background:var(--brand,#4f46e5);color:#fff';
+
+  function selectLeaf(catId) {
+    catEl.value = catId;
+    catEl.dispatchEvent(new Event('change'));
+    leavesEl.querySelectorAll('.re-leaf-btn').forEach(b =>
+      b.setAttribute('style', LEAF_STYLE + (b.dataset.cat === catId ? ';' + LEAF_ACTIVE : ''))
+    );
+  }
+
+  function showGroup(groupId) {
+    groupsEl.querySelectorAll('.re-group-btn').forEach(b =>
+      b.setAttribute('style', GRP_STYLE + (b.dataset.group === groupId ? ';' + GRP_ACTIVE : ''))
+    );
+    const leaves = getChildCategories(groupId);
+    leavesEl.innerHTML = leaves.map(c =>
+      `<button type="button" class="re-leaf-btn" data-cat="${c.id}"
+         style="${LEAF_STYLE}${catEl.value === c.id ? ';' + LEAF_ACTIVE : ''}">${c.icon ?? ''} ${c.name}</button>`
+    ).join('');
+    leavesEl.querySelectorAll('.re-leaf-btn').forEach(b =>
+      b.addEventListener('click', () => selectLeaf(b.dataset.cat))
+    );
+  }
+
+  groupsEl.innerHTML = ruleGroups.map(g =>
+    `<button type="button" class="re-group-btn" data-group="${g.id}"
+       style="${GRP_STYLE}">${g.icon ?? ''} ${g.name}</button>`
+  ).join('');
+  groupsEl.querySelectorAll('.re-group-btn').forEach(b =>
+    b.addEventListener('click', () => showGroup(b.dataset.group))
+  );
+
+  // Pre-select group and leaf from initCatId
+  if (initCatId) {
+    const initCat = getCategoryById(initCatId);
+    if (initCat?.parent) showGroup(initCat.parent);
+  }
+  // ── End category picker ────────────────────────────────────────────────
 
   function renderValueInput(idx, field, op, value) {
     const fd = RULE_FIELD_DEFS[field];
@@ -569,7 +616,10 @@ export function openRuleEditor(uid, ruleId = null, prefill = null, prefillCatId 
   }
 
   function updatePreview() {
-    const cat = getCategoryById(catEl.value);
+    const cat   = getCategoryById(catEl.value);
+    const catStr = cat?.id && cat.id !== 'uncategorized'
+      ? `<strong>${cat.icon ?? ''} ${cat.name}</strong>`
+      : '<em style="color:var(--muted)">— pick a category above —</em>';
     const parts = conditions.map(c => {
       const fd     = RULE_FIELD_DEFS[c.field];
       const valStr = Array.isArray(c.value)
@@ -583,7 +633,7 @@ export function openRuleEditor(uid, ruleId = null, prefill = null, prefillCatId 
     previewEl.innerHTML = `
       <span class="rule-preview-label">Preview</span>
       ${parts.join('<br><span style="color:var(--muted);font-size:0.7rem">AND </span>')}
-      <br>→ Set category to <strong>${cat.icon} ${cat.name}</strong>
+      <br>→ Set category to ${catStr}
     `;
   }
 
@@ -609,6 +659,7 @@ export function openRuleEditor(uid, ruleId = null, prefill = null, prefillCatId 
       Array.isArray(c.value) ? c.value.length === 0 : !String(c.value ?? '').trim()
     );
     if (invalid) { alert('Please fill in all condition values.'); return null; }
+    if (!catEl.value) { alert('Please select a category.'); return null; }
 
     const priority = priAutoEl.checked ? 30 : Math.max(1, Math.min(100, parseInt(priValEl.value, 10) || 30));
     const catId    = catEl.value;
