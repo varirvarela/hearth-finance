@@ -155,8 +155,8 @@ async function handlePendingInvite(user, invite, emailKey) {
       try {
         await dbUpdate(`users/${user.uid}`, { householdId: invite.ownerUid });
         await dbUpdate(`households/${invite.ownerUid}/members/${user.uid}`, { email: user.email, addedAt: Date.now() });
-        await dbRemove(`pendingInvites/${emailKey}`);
         setHouseholdId(invite.ownerUid);
+        await dbRemove(`pendingInvites/${emailKey}`);
       } catch (e) { console.error('Failed to join household:', e); }
       close();
     });

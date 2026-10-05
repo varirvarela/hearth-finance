@@ -1,5 +1,13 @@
 export const CHANGELOG = [
   {
+    version: '1.25.3',
+    date:    '2026-10-05',
+    changes: [
+      'Settings: household members can now see the owner\'s email (database rule fix).',
+      'Household join: in-memory household ID is now set immediately after joining, so the transaction list refreshes without a page reload.',
+    ],
+  },
+  {
     version: '1.25.2',
     date:    '2026-10-04',
     changes: [

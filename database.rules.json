@@ -41,7 +41,7 @@
     },
     "users": {
       "$uid": {
-        ".read":  "auth != null && (auth.uid === $uid || root.child('users').child(auth.uid).child('partnerUid').val() === $uid)",
+        ".read":  "auth != null && (auth.uid === $uid || root.child('users').child(auth.uid).child('partnerUid').val() === $uid || root.child('users').child(auth.uid).child('householdId').val() === $uid)",
         ".write": "auth != null && auth.uid === $uid"
       }
     },
@@ -54,7 +54,7 @@
     "pendingInvites": {
       "$emailKey": {
         ".read":  "auth != null",
-        ".write": "auth != null && (auth.uid === data.child('ownerUid').val() || !data.exists())"
+        ".write": "auth != null && (auth.uid === data.child('ownerUid').val() || !data.exists() || !newData.exists())"
       }
     },
     "households": {
