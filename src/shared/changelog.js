@@ -1,5 +1,16 @@
 export const CHANGELOG = [
   {
+    version: '1.25.4',
+    date:    '2026-10-05',
+    changes: [
+      'Amazon: orders now show extracted tax and credits per order.',
+      'Amazon: AI category suggestion displayed as a chip with confidence %; Apply button writes the category to the matched transaction.',
+      'Amazon: AI split suggestion shown when items span multiple categories; Apply Split replaces the transaction with per-category splits.',
+      'Amazon: daily auto-sync added (7 AM UTC) — new orders are categorized automatically without re-fetching existing ones.',
+      'Amazon: Sync History button opens a date-range picker to pull older orders on demand.',
+    ],
+  },
+  {
     version: '1.25.3',
     date:    '2026-10-05',
     changes: [

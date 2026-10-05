@@ -1,6 +1,7 @@
-﻿import { dbGet, dbSet, dbListen, auth, getPartnerUid, getHouseholdId } from '../shared/firebase.js';
+﻿import { dbGet, dbSet, dbUpdate, dbRemove, dbPush, dbListen, auth, getPartnerUid, getHouseholdId } from '../shared/firebase.js';
 import { fmtCurrency, fmtDate } from '../shared/format.js';
 import { CHANGELOG } from '../shared/changelog.js';
+import { getCategoryById } from '../shared/categories.js';
 
 const WORKER_URL = import.meta.env.VITE_WORKER_URL ?? 'http://localhost:8787';
 
@@ -647,6 +648,63 @@ async function renderAmazonSection(uid, hid) {
   }
 }
 
+function openHistorySheet(uid, hid) {
+  const today = new Date().toISOString().slice(0, 10);
+  const d90   = new Date(Date.now() - 90 * 86_400_000).toISOString().slice(0, 10);
+
+  const overlay = document.createElement('div');
+  overlay.className = 'sheet-overlay';
+  overlay.innerHTML = `
+    <div class="sheet" style="max-height:60vh">
+      <div class="sheet-handle"></div>
+      <div class="sheet-hdr">
+        <span class="sheet-title">📅 Sync History</span>
+        <button class="sheet-close" id="hist-close">✕</button>
+      </div>
+      <div style="padding:1rem 1rem 0.5rem">
+        <p style="font-size:0.82rem;color:var(--muted);margin:0 0 0.75rem">Pull Amazon order emails from a custom date range (up to 6 months back).</p>
+        <label style="font-size:0.8rem;display:block;margin-bottom:0.25rem">From</label>
+        <input id="hist-from" type="date" value="${d90}" max="${today}" style="width:100%;padding:0.4rem;border:1px solid var(--border);border-radius:6px;font-size:0.85rem;margin-bottom:0.75rem">
+        <label style="font-size:0.8rem;display:block;margin-bottom:0.25rem">To</label>
+        <input id="hist-to" type="date" value="${today}" max="${today}" style="width:100%;padding:0.4rem;border:1px solid var(--border);border-radius:6px;font-size:0.85rem;margin-bottom:1rem">
+        <button id="hist-sync-btn" style="width:100%;padding:0.55rem;background:var(--primary);color:#fff;border:none;border-radius:8px;font-size:0.9rem;cursor:pointer">Sync Date Range</button>
+        <p id="hist-msg" style="font-size:0.78rem;color:var(--muted);margin:0.5rem 0 0;text-align:center;min-height:1em"></p>
+      </div>
+    </div>`;
+
+  document.body.appendChild(overlay);
+  const close = () => overlay.remove();
+  overlay.querySelector('#hist-close').addEventListener('click', close);
+  overlay.addEventListener('click', e => { if (e.target === overlay) close(); });
+
+  overlay.querySelector('#hist-sync-btn').addEventListener('click', async () => {
+    const from = overlay.querySelector('#hist-from').value;
+    const to   = overlay.querySelector('#hist-to').value;
+    const msg  = overlay.querySelector('#hist-msg');
+    if (!from || !to || from > to) { msg.textContent = 'Pick a valid date range.'; msg.style.color = 'var(--danger)'; return; }
+    const btn = overlay.querySelector('#hist-sync-btn');
+    btn.disabled = true; btn.textContent = 'Syncing…'; msg.textContent = ''; msg.style.color = 'var(--muted)';
+    try {
+      const token = await auth.currentUser?.getIdToken();
+      const res   = await fetch(`${WORKER_URL}/gmail/sync`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ uid, from, to }),
+      });
+      const data = await res.json();
+      msg.textContent = data.imported != null
+        ? `Synced — ${data.imported} order${data.imported === 1 ? '' : 's'} found.`
+        : (data.error ?? 'Done.');
+      msg.style.color = data.error ? 'var(--danger)' : '#16a34a';
+      if (!data.error) { btn.textContent = '✓ Done'; }
+      else { btn.disabled = false; btn.textContent = 'Sync Date Range'; }
+    } catch (err) {
+      msg.textContent = `Error: ${err.message}`; msg.style.color = 'var(--danger)';
+      btn.disabled = false; btn.textContent = 'Sync Date Range';
+    }
+  });
+}
+
 // Global matching -- each transaction can only be claimed by one order.
 // Returns Map<orderId, [txnId, txn]>.
 function matchAllOrders(orders, txns) {
@@ -830,31 +888,26 @@ async function openAmazonOrdersSheet(uid, hid, unmatchedOnly = false) {
     const orderCards = toShow.map(([orderId, order]) => {
       const isMatched = matched.has(orderId);
       const txnEntry  = matched.get(orderId);
-      // For unmatched: find the 2 nearest Amazon transactions by date
+
+      // Nearby unmatched diagnostics
       let nearbyHtml = '';
       if (!isMatched && order.shipDate) {
         const orderTime = new Date(order.shipDate).getTime();
         const nearby = nearbyAmazonTxns
           .map(([, t]) => ({ t, diff: Math.abs(new Date(t.date).getTime() - orderTime) / 86_400_000 }))
-          .filter(x => x.diff <= 30)
-          .sort((a, b) => a.diff - b.diff)
-          .slice(0, 3);
-        if (nearby.length) {
-          nearbyHtml = `<div style="margin-top:0.3rem;font-size:0.75rem;color:var(--muted)">
-            Nearby Amazon charges:
-            ${nearby.map(({ t, diff }) =>
-              `<span style="display:inline-block;background:var(--bg);border:1px solid var(--border);border-radius:4px;padding:1px 5px;margin:2px">
-                ${t.date} · ${fmtCurrency(t.amount)} · ${t.description ?? t.merchantName} (${diff < 1 ? 'same day' : Math.round(diff) + 'd apart'})
-              </span>`).join('')}
-          </div>`;
-        } else {
-          nearbyHtml = `<div style="margin-top:0.3rem;font-size:0.75rem;color:var(--muted)">No Amazon charges found within 30 days of this order.</div>`;
-        }
+          .filter(x => x.diff <= 30).sort((a, b) => a.diff - b.diff).slice(0, 3);
+        nearbyHtml = nearby.length
+          ? `<div style="margin-top:0.3rem;font-size:0.75rem;color:var(--muted)">Nearby: ${
+              nearby.map(({ t, diff }) =>
+                `<span style="display:inline-block;background:var(--bg);border:1px solid var(--border);border-radius:4px;padding:1px 5px;margin:2px">
+                  ${t.date} · ${fmtCurrency(t.amount)} (${diff < 1 ? 'same day' : Math.round(diff) + 'd'})
+                </span>`).join('')}</div>`
+          : `<div style="margin-top:0.3rem;font-size:0.75rem;color:var(--muted)">No Amazon charges within 30 days.</div>`;
       }
 
       const statusBar = isMatched
         ? `<div style="color:#16a34a;font-size:0.78rem;font-weight:600;margin-bottom:0.3rem">
-             ✓ Matched: ${txnEntry[1].description ?? txnEntry[1].merchantName ?? 'Amazon'} · ${fmtCurrency(txnEntry[1].amount)}
+             ✓ ${txnEntry[1].description ?? txnEntry[1].merchantName ?? 'Amazon'} · ${fmtCurrency(txnEntry[1].amount)}
            </div>`
         : `<div style="color:#d97706;font-size:0.78rem;font-weight:600;margin-bottom:0.2rem">
              ⚠ No match for ${fmtCurrency(order.total)} around ${order.shipDate ? new Date(order.shipDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : '—'}
@@ -864,29 +917,142 @@ async function openAmazonOrdersSheet(uid, hid, unmatchedOnly = false) {
         ? order.items.slice(0, 5).map(i =>
             `<div style="display:flex;justify-content:space-between;font-size:0.78rem;color:var(--muted);padding:1px 0">
                <span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${i.name}</span>
-               <span style="margin-left:0.5rem;white-space:nowrap">${fmtCurrency(i.price)}</span>
+               <span style="margin-left:0.5rem;white-space:nowrap">${i.price != null ? fmtCurrency(i.price) : ''}</span>
              </div>`).join('') +
           (order.items.length > 5 ? `<p style="font-size:0.75rem;color:var(--muted);margin:2px 0 0">+${order.items.length - 5} more items</p>` : '')
         : '<p style="font-size:0.75rem;color:var(--muted);margin:0">No items extracted</p>';
 
-      const orderLabel = order.orderNumber ? `Order #${order.orderNumber}` : 'Amazon order';
+      // Tax / credits line
+      let totalsHtml = '';
+      if (order.tax || order.credits) {
+        totalsHtml = `<div style="display:flex;gap:0.75rem;font-size:0.75rem;color:var(--muted);margin-top:0.2rem">`;
+        if (order.tax)     totalsHtml += `<span>Tax: ${fmtCurrency(order.tax)}</span>`;
+        if (order.credits) totalsHtml += `<span style="color:#16a34a">Credit: −${fmtCurrency(order.credits)}</span>`;
+        totalsHtml += `</div>`;
+      }
+
+      // AI category suggestion + split chips
+      let suggestionHtml = '';
+      if (order.suggestedCategory) {
+        const cat  = getCategoryById(order.suggestedCategory);
+        const conf = order.suggestedConf != null ? Math.round(order.suggestedConf * 100) : 0;
+        const applyBtn = isMatched
+          ? `<button class="apply-cat-btn" data-order-id="${orderId}" style="border:none;background:#4f46e5;color:#fff;border-radius:10px;padding:2px 10px;font-size:0.72rem;cursor:pointer">Apply</button>`
+          : '';
+        suggestionHtml += `
+          <div style="display:flex;align-items:center;gap:0.4rem;margin-top:0.35rem;flex-wrap:wrap">
+            <span style="font-size:0.73rem;color:var(--muted)">AI:</span>
+            <span style="background:var(--faint);border:1px solid var(--border);border-radius:12px;padding:2px 9px;font-size:0.73rem">${cat?.icon ?? '📦'} ${cat?.name ?? order.suggestedCategory} ${conf ? conf + '%' : ''}</span>
+            ${applyBtn}
+          </div>`;
+
+        if (order.suggestedSplits?.length >= 2) {
+          const splitDesc = order.suggestedSplits.map(s => {
+            const c = getCategoryById(s.category);
+            return `${c?.icon ?? '•'} ${c?.name ?? s.category} ${Math.round(s.fraction * 100)}%`;
+          }).join(' + ');
+          const splitBtn = isMatched
+            ? `<button class="apply-split-btn" data-order-id="${orderId}" style="border:1px solid #8b5cf6;background:transparent;color:#8b5cf6;border-radius:10px;padding:2px 10px;font-size:0.72rem;cursor:pointer">Apply Split</button>`
+            : '';
+          suggestionHtml += `
+            <div style="display:flex;align-items:center;gap:0.4rem;margin-top:0.2rem;flex-wrap:wrap">
+              <span style="font-size:0.73rem;color:#8b5cf6">Split:</span>
+              <span style="background:#f5f3ff;border:1px solid #ddd6fe;border-radius:12px;padding:2px 9px;font-size:0.73rem">${splitDesc}</span>
+              ${splitBtn}
+            </div>`;
+        }
+      }
+
+      const orderLabel  = order.orderNumber ? `#${order.orderNumber}` : 'Amazon order';
       const borderColor = isMatched ? '#bbf7d0' : '#fde68a';
 
       return `
         <div style="border:1.5px solid ${borderColor};border-radius:10px;padding:0.6rem 0.75rem;margin-bottom:0.6rem">
-          <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:0.25rem">
+          <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:0.2rem">
             <div>
               <span style="font-size:0.72rem;color:var(--muted)">${order.shipDate ?? '—'}</span>
               <span style="font-size:0.72rem;color:var(--muted);margin-left:0.5rem">${orderLabel}</span>
             </div>
             <span style="font-weight:700;font-size:0.9rem">${fmtCurrency(order.total)}</span>
           </div>
+          ${totalsHtml}
           ${statusBar}
-          <div style="border-top:1px solid var(--border);padding-top:0.3rem;margin-top:0.1rem">${itemsHtml}</div>
+          ${suggestionHtml}
+          <div style="border-top:1px solid var(--border);padding-top:0.3rem;margin-top:0.35rem">${itemsHtml}</div>
         </div>`;
     }).join('');
 
     body.innerHTML = summaryHtml + (toShow.length ? orderCards : `<p style="color:var(--muted);text-align:center;padding:1rem">Nothing to show.</p>`);
+
+    // Event delegation for Apply / Apply Split buttons
+    body.addEventListener('click', async e => {
+      const btn = e.target.closest('.apply-cat-btn, .apply-split-btn');
+      if (!btn || btn.disabled) return;
+
+      const orderId  = btn.dataset.orderId;
+      const order    = ordersRaw?.[orderId];
+      const txnEntry = matched.get(orderId);
+      if (!order || !txnEntry) return;
+      const [txnId, txn] = txnEntry;
+
+      if (btn.classList.contains('apply-cat-btn')) {
+        btn.disabled = true; btn.textContent = '…';
+        try {
+          const cat = getCategoryById(order.suggestedCategory);
+          await dbUpdate(`transactions/${hid}/${txnId}`, {
+            category:       order.suggestedCategory,
+            group:          cat?.parent ?? null,
+            categorySource: 'ai',
+            needsReview:    false,
+          });
+          btn.textContent = '✓ Applied';
+          btn.style.background = '#16a34a';
+        } catch (err) {
+          btn.disabled = false; btn.textContent = 'Apply';
+          alert('Could not apply: ' + err.message);
+        }
+
+      } else if (btn.classList.contains('apply-split-btn')) {
+        const splits = order.suggestedSplits;
+        if (!splits?.length) return;
+        const totalAmount = txn.amount;
+        const lines = splits.map(s => {
+          const c = getCategoryById(s.category);
+          return `${c?.icon ?? ''} ${c?.name ?? s.category}: ${fmtCurrency(Math.round(totalAmount * s.fraction * 100) / 100)}`;
+        }).join('\n');
+        if (!confirm(`Split ${fmtCurrency(totalAmount)} into:\n\n${lines}\n\nThis will create ${splits.length} new transactions and delete the original.`)) return;
+
+        btn.disabled = true; btn.textContent = 'Splitting…';
+        try {
+          let allocated = 0;
+          for (let i = 0; i < splits.length; i++) {
+            const s   = splits[i];
+            const cat = getCategoryById(s.category);
+            const amt = i === splits.length - 1
+              ? Math.round((totalAmount - allocated) * 100) / 100
+              : Math.round(totalAmount * s.fraction * 100) / 100;
+            allocated += amt;
+            const { amazonOrderKey: _drop, ...baseTxn } = txn;
+            await dbPush(`transactions/${hid}`, {
+              ...baseTxn,
+              amount:         amt,
+              category:       s.category,
+              group:          cat?.parent ?? null,
+              categorySource: 'ai',
+              needsReview:    false,
+              notes:          (txn.notes ? txn.notes + ' | ' : '') + `Split ${i + 1}/${splits.length}`,
+            });
+          }
+          await dbRemove(`transactions/${hid}/${txnId}`);
+          btn.textContent = '✓ Split!';
+          btn.style.color = '#16a34a';
+          btn.style.borderColor = '#16a34a';
+        } catch (err) {
+          btn.disabled = false; btn.textContent = 'Apply Split';
+          alert('Split failed: ' + err.message);
+        }
+      }
+    });
 
   } catch (e) {
     body.innerHTML = `<p style="color:var(--danger);font-size:0.85rem">Error loading orders: ${e.message}</p>`;

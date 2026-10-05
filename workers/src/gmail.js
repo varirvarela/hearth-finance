@@ -204,10 +204,14 @@ async function syncGmail(env, uid, specificKey = null, { since = null, until = n
   const afterDate  = since ? new Date(since) : (() => { const d = new Date(); d.setDate(d.getDate() - days); return d; })();
   const beforeDate = until ? new Date(until) : null;
 
-  const patch  = {};
-  let messages = 0;
-  let parsed   = 0;
-  let lastQuery = '';
+  // Fetch existing orders once so we can (a) preserve AI suggestions on re-sync and (b) skip re-categorizing
+  const existingOrders = await fbGet(env, `amazonOrders/${householdId}`).catch(() => null) ?? {};
+
+  const patch    = {};
+  const needsCat = []; // { patchKey, order } for new orders that need AI categorization
+  let messages   = 0;
+  let parsed     = 0;
+  let lastQuery  = '';
 
   for (const [key] of toSync) {
     const acctData = await fbGet(env, `gmail/${uid}/accounts/${key}`).catch(() => null);
@@ -231,14 +235,25 @@ async function syncGmail(env, uid, specificKey = null, { since = null, until = n
       pageToken  = searchData.nextPageToken ?? null;
 
       if (msgs.length > 0) {
-        // Fetch all message bodies in a single batch request (1 subrequest regardless of count)
         const msgDataList = await fetchMessagesBatch(accessToken, msgs.map(m => m.id));
         for (const msgData of msgDataList) {
           const order = parseAmazonEmail(msgData);
-          if (order) {
-            patch[`amazonOrders/${householdId}/${key}_${msgData.id}`] = order;
-            parsed++;
-          }
+          if (!order) continue;
+
+          const shortKey = `${key}_${msgData.id}`;
+          const patchKey = `amazonOrders/${householdId}/${shortKey}`;
+          const existing = existingOrders[shortKey];
+
+          // Preserve existing AI suggestions so a re-sync doesn't wipe them
+          const withExisting = existing?.suggestedCategory
+            ? { ...order, suggestedCategory: existing.suggestedCategory, suggestedConf: existing.suggestedConf, suggestedSplits: existing.suggestedSplits ?? null }
+            : order;
+
+          patch[patchKey] = withExisting;
+          parsed++;
+
+          // Queue new orders (no AI suggestion yet) for batch categorization
+          if (!existing?.suggestedCategory) needsCat.push({ patchKey, order });
         }
       }
     } while (pageToken);
@@ -246,8 +261,26 @@ async function syncGmail(env, uid, specificKey = null, { since = null, until = n
     patch[`gmail/${uid}/accounts/${key}/lastSync`] = new Date().toISOString();
   }
 
+  // Auto-categorize new orders (category + split suggestions) via Gemini
+  if (needsCat.length) {
+    try {
+      const cats = await batchCategorizeOrders(env, needsCat.map(x => x.order));
+      for (let i = 0; i < needsCat.length; i++) {
+        const { patchKey } = needsCat[i];
+        const cat = cats[i] ?? { category: 'shopping_otros', confidence: 0.5, splits: null };
+        if (patch[patchKey]) {
+          patch[patchKey].suggestedCategory = cat.category   ?? null;
+          patch[patchKey].suggestedConf     = cat.confidence ?? null;
+          patch[patchKey].suggestedSplits   = cat.splits     ?? null;
+        }
+      }
+    } catch (e) {
+      console.error('Auto-categorization failed:', e);
+    }
+  }
+
   if (Object.keys(patch).length) await fbPatch(env, '', patch);
-  return { messages, parsed, query: lastQuery, householdId };
+  return { messages, parsed, query: lastQuery, householdId, categorized: needsCat.length };
 }
 
 async function purgeOrders(env, uid) {
@@ -300,7 +333,7 @@ function parseAmazonEmail(msgData) {
 
   // Normalize \r\n to \n before parsing — Amazon emails use Windows line endings
   const textBody = extractTextBody(msgData.payload).replace(/\r\n/g, '\n');
-  const { items, total, orderNumber } = parseAmazonBody(textBody);
+  const { items, total, orderNumber, tax, credits } = parseAmazonBody(textBody);
   if (!total) return null;
 
   let finalItems = items;
@@ -325,7 +358,9 @@ function parseAmazonEmail(msgData) {
     shipDate,
     total,
     orderNumber: orderNumber ?? null,
-    items: finalItems,
+    items:       finalItems,
+    tax:         tax     ?? null,
+    credits:     credits ?? null,
     gmailMessageId: msgData.id,
     parsedAt: new Date().toISOString(),
   };
@@ -499,7 +534,27 @@ function parseAmazonBody(text) {
     }
   }
 
-  return { items, total, orderNumber };
+  // Tax extraction
+  let tax = null;
+  const taxPats = [
+    /[Ee]stimated\s+[Tt]ax\s*:?\s*(?:[\$€£])?\s*([\d.,]+)/,
+    /[Ss]ales\s+[Tt]ax\s*:?\s*(?:[\$€£])?\s*([\d.,]+)/,
+    /\b[Tt]ax\s*:?\s*(?:[\$€£])\s*([\d.,]+)/,
+    /[Ii]mpuesto\s*:?\s*(?:[\$€£])?\s*([\d.,]+)/,
+  ];
+  for (const p of taxPats) { const m = text.match(p); if (m) { tax = normalizeAmount(m[1]); break; } }
+
+  // Gift card / promo credits
+  let credits = null;
+  const creditPats = [
+    /[Gg]ift\s+[Cc]ard\s+[Aa]pplied\s*:?\s*-?\s*(?:[\$€£])?\s*([\d.,]+)/,
+    /[Pp]romotional\s+[Cc]redit\s*:?\s*-?\s*(?:[\$€£])?\s*([\d.,]+)/,
+    /[Aa]mazon\s+[Cc]redit\s*:?\s*-?\s*(?:[\$€£])?\s*([\d.,]+)/,
+    /[Tt]arjeta\s+[Rr]egalo\s*:?\s*-?\s*(?:[\$€£])?\s*([\d.,]+)/,
+  ];
+  for (const p of creditPats) { const m = text.match(p); if (m) { credits = normalizeAmount(m[1]); break; } }
+
+  return { items, total, orderNumber, tax, credits };
 }
 
 // ── Debug: inspect raw email body ────────────────────────────────────────────
@@ -622,8 +677,9 @@ async function importOrders(env, uid, orders) {
       shipDate:          o.shipDate ?? null,
       total:             o.total,
       items:             o.items ?? [],
-      suggestedCategory: cat.category ?? null,
+      suggestedCategory: cat.category   ?? null,
       suggestedConf:     cat.confidence ?? null,
+      suggestedSplits:   cat.splits     ?? null,
       source:            'csv',
       parsedAt:          new Date().toISOString(),
     };
@@ -636,22 +692,25 @@ async function importOrders(env, uid, orders) {
 async function batchCategorizeOrders(env, orders) {
   const { CATEGORIES } = await import('../../src/shared/categories.js');
   const expenseCats = CATEGORIES.filter(c => c.parent && !c.hide && !c.isIncome && c.parent !== 'transfer');
-  const catList = expenseCats.map(c => `${c.id}: ${c.label}`).join('\n');
+  const catList = expenseCats.map(c => `${c.id}: ${c.label ?? c.name}`).join('\n');
 
   const prompt = `You are categorizing Amazon orders for a household budget app.
-For each order, consider all items together and pick the single most appropriate expense category.
+
+For each order, pick the best expense category. If items clearly fall into 2-3 DISTINCT spending areas (e.g. electronics + food, or clothing + health products), include split fractions. Only suggest splits when genuinely different — not subcategories of the same thing. Each split fraction must be ≥ 0.15.
 
 Categories:
 ${catList}
 
 Orders:
 ${orders.map((o, i) => {
-    const itemsStr = (o.items ?? []).map(it => it.name).filter(Boolean).join(', ') || '(no items)';
+    const itemsStr = (o.items ?? []).map(it => it.name + (it.price != null ? ` ($${it.price})` : '')).filter(Boolean).join(', ') || '(no items listed)';
     return `${i + 1}. Items: ${itemsStr}${o.total ? ` | Total: $${o.total}` : ''}`;
   }).join('\n')}
 
-Respond with JSON only — one entry per order in the same order:
-[{"orderIndex": 1, "category": "<category_id>", "confidence": <0.0-1.0>}]`;
+Respond with JSON only — one object per order, same order:
+[{"orderIndex":1,"category":"cat_id","confidence":0.9,"splits":null}]
+
+When splits apply: {"orderIndex":2,"category":"dominant_cat","confidence":0.8,"splits":[{"category":"cat1","fraction":0.6},{"category":"cat2","fraction":0.4}]}`;
 
   const resp = await fetch(
     `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${env.GOOGLE_AI_API_KEY}`,
@@ -667,10 +726,30 @@ Respond with JSON only — one entry per order in the same order:
   const jsonStr = raw.match(/\[[\s\S]*\]/)?.[0] ?? '[]';
   try {
     const parsed = JSON.parse(jsonStr);
-    return orders.map((_, i) =>
-      parsed.find(p => p.orderIndex === i + 1) ?? { category: 'shopping_otros', confidence: 0.5 },
-    );
+    return orders.map((_, i) => {
+      const p = parsed.find(x => x.orderIndex === i + 1) ?? {};
+      return {
+        category:   p.category   ?? 'shopping_otros',
+        confidence: p.confidence ?? 0.5,
+        splits:     Array.isArray(p.splits) && p.splits.length > 1 ? p.splits : null,
+      };
+    });
   } catch {
-    return orders.map(() => ({ category: 'shopping_otros', confidence: 0.5 }));
+    return orders.map(() => ({ category: 'shopping_otros', confidence: 0.5, splits: null }));
+  }
+}
+
+// ── Daily cron: sync all Gmail-connected households ───────────────────────────
+
+export async function handleAmazonDailySync(env) {
+  const { fbGet } = await import('./firebase.js');
+  const allGmail = await fbGet(env, 'gmail').catch(() => null);
+  if (!allGmail || typeof allGmail !== 'object') return;
+  for (const uid of Object.keys(allGmail)) {
+    try {
+      await syncGmail(env, uid, null, { days: 1 });
+    } catch (e) {
+      console.error(`Amazon daily sync failed for ${uid}:`, e.message);
+    }
   }
 }

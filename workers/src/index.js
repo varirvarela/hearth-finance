@@ -1,7 +1,7 @@
 import { handlePlaid }                    from './plaid.js';
 import { handleSync, handleUserSync }     from './sync.js';
 import { categorizeTransaction }          from './categorize.js';
-import { handleGmail }                    from './gmail.js';
+import { handleGmail, handleAmazonDailySync } from './gmail.js';
 
 const CORS = {
   'Access-Control-Allow-Origin':  '*',
@@ -91,6 +91,7 @@ export default {
   async scheduled(event, env, ctx) {
     if (event.cron === '0 6 * * *')  ctx.waitUntil(handleSync(env));
     if (event.cron === '0 20 * * *') ctx.waitUntil(handleBudgetAlerts(env));
+    if (event.cron === '0 7 * * *')  ctx.waitUntil(handleAmazonDailySync(env));
   },
 };
 

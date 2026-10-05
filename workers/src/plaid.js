@@ -260,6 +260,37 @@ export async function handlePlaid(request, env, path) {
     return new Response(JSON.stringify(await listAllConnections(env, hid)), { headers: { ...CORS, 'Content-Type': 'application/json' } });
   }
 
+  if (path === '/plaid/recover-item') {
+    const url    = new URL(request.url);
+    const itemId = url.searchParams.get('itemId');
+    const slot   = parseInt(url.searchParams.get('slot') ?? '1', 10);
+    if (!itemId) return new Response(JSON.stringify({ error: 'Missing itemId' }), { status: 400, headers: CORS });
+    const token = await env.PLAID_TOKENS.get(`s${slot}:${hid}:${itemId}`);
+    if (!token) return new Response(JSON.stringify({ error: 'No access token found for this item' }), { status: 404, headers: CORS });
+    const { accounts } = await getAccounts(env, token, slot);
+    const { fbPatch } = await import('./firebase.js');
+    const updates = {};
+    for (const a of accounts) {
+      updates[`accounts/${hid}/${a.account_id}`] = {
+        name:             a.name,
+        type:             a.type,
+        subtype:          a.subtype,
+        institution:      a.official_name ?? a.name,
+        plaidItemId:      itemId,
+        plaidSlot:        slot,
+        currentBalance:   a.balances.current   ?? 0,
+        availableBalance: a.balances.available ?? 0,
+        currency:         a.balances.iso_currency_code ?? 'USD',
+        lastSyncStatus:   'ok',
+        lastSyncError:    null,
+        isManual:         false,
+        isHidden:         false,
+      };
+    }
+    await fbPatch(env, '', updates);
+    return new Response(JSON.stringify({ ok: true, accounts: accounts.map(a => ({ name: a.name, type: a.type, subtype: a.subtype, balance: a.balances.current })) }), { headers: { ...CORS, 'Content-Type': 'application/json' } });
+  }
+
   return new Response(JSON.stringify({ error: 'Not found' }), { status: 404, headers: CORS });
 }
 
