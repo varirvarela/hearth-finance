@@ -1,5 +1,14 @@
 export const CHANGELOG = [
   {
+    version: '1.25.1',
+    date:    '2026-10-04',
+    changes: [
+      'Settings: added "Check for invite" button so household invites can be accepted without logging out and back in.',
+      'Transactions: fixed category group filter — transactions in Travel, Casa, and other groups now show up correctly when filtering.',
+      'Security: Firebase database rules now properly restrict access to authenticated users only.',
+    ],
+  },
+  {
     version: '1.25.0',
     date:    '2026-10-02',
     changes: [

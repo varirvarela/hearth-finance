@@ -53,7 +53,7 @@
     },
     "pendingInvites": {
       "$emailKey": {
-        ".read":  "auth != null && auth.uid === data.child('ownerUid').val()",
+        ".read":  "auth != null",
         ".write": "auth != null && (auth.uid === data.child('ownerUid').val() || !data.exists())"
       }
     },

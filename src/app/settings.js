@@ -1,4 +1,5 @@
 import { dbGet, dbSet, dbPush, dbRemove, dbUpdate, auth, getHouseholdId, setHouseholdId } from '../shared/firebase.js';
+import { checkPendingInvite } from './app.js';
 
 import {
   getCategoryById, CATEGORIES, CATEGORY_MAP,
@@ -83,6 +84,11 @@ function renderHouseholdSection(uid, hid) {
         <button class="btn-primary" id="send-invite" style="width:auto;padding:0.5rem 1rem">Send Invite</button>
         <p id="invite-status" style="font-size:0.82rem;margin-top:0.5rem;min-height:1rem"></p>
       </div>
+      <div style="margin-top:1rem;padding-top:1rem;border-top:1px solid var(--border)">
+        <p style="color:var(--muted);font-size:0.82rem;margin-bottom:0.5rem">Received an invite from someone else?</p>
+        <button class="btn-secondary" id="check-invite" style="width:auto;padding:0.5rem 1rem">Check for invite</button>
+        <p id="check-invite-status" style="font-size:0.82rem;margin-top:0.5rem;min-height:1rem"></p>
+      </div>
     `;
 
     el.querySelectorAll('.remove-member-btn').forEach(btn => {
@@ -109,6 +115,16 @@ function renderHouseholdSection(uid, hid) {
       el.querySelector('#invite-email').value = '';
       status.textContent = `Invite saved for ${rawEmail}. Ask them to sign in to Hearth Finance.`;
       status.style.color = 'var(--brand, #4f46e5)';
+    });
+
+    el.querySelector('#check-invite').addEventListener('click', async () => {
+      const status = el.querySelector('#check-invite-status');
+      status.textContent = 'Checking…';
+      const found = await checkPendingInvite(auth.currentUser);
+      if (!found) {
+        status.textContent = 'No pending invite found for your email.';
+        status.style.color = 'var(--muted)';
+      }
     });
   });
 }

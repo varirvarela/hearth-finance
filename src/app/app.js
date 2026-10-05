@@ -163,6 +163,15 @@ async function handlePendingInvite(user, invite, emailKey) {
   });
 }
 
+export async function checkPendingInvite(user) {
+  if (!user?.email) return false;
+  const emailKey = user.email.toLowerCase().replace(/\./g, ',');
+  const invite   = await dbGet(`pendingInvites/${emailKey}`).catch(() => null);
+  if (!invite) return false;
+  await handlePendingInvite(user, invite, emailKey);
+  return true;
+}
+
 bindAuth();
 
 onAuthStateChanged(auth, async user => {
@@ -178,11 +187,9 @@ onAuthStateChanged(auth, async user => {
     const householdId = profile.householdId ?? user.uid;
     setHouseholdId(householdId);
 
-    // If not yet in a household, check for a pending invite.
+    // If not yet in a household, check for a pending invite (every load, not just first login).
     if (!profile.householdId && user.email) {
-      const emailKey = user.email.replace(/\./g, ',');
-      const invite   = await dbGet(`pendingInvites/${emailKey}`).catch(() => null);
-      if (invite) await handlePendingInvite(user, invite, emailKey);
+      await checkPendingInvite(user);
     }
 
     // Apply household-wide category overrides before first render.

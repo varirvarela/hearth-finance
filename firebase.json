@@ -1,6 +1,6 @@
 {
   "database": {
-    "rules": "database.rules.test.json"
+    "rules": "database.rules.json"
   },
   "emulators": {
     "auth":     { "port": 9099 },
