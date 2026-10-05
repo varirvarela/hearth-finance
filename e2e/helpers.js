@@ -31,13 +31,16 @@ export async function clearAuth() {
 }
 
 // ── RTDB emulator ────────────────────────────────────────────
-// database.rules.test.json uses ".read/.write: true" so no auth token needed.
+// "Authorization: Bearer owner" is the emulator's admin bypass — equivalent to
+// Admin SDK access, skips security rules. Required now that firebase.json points
+// to the real (auth-gated) database.rules.json instead of the open test rules.
+const ADMIN_HDRS = { 'Content-Type': 'application/json', Authorization: 'Bearer owner' };
 
 /** Write data at a RTDB path (PUT — overwrites). */
 export async function dbWrite(path, data) {
   const res = await fetch(`${DB_URL}/${path}.json?ns=${DB_NS}`, {
     method:  'PUT',
-    headers: { 'Content-Type': 'application/json' },
+    headers: ADMIN_HDRS,
     body:    JSON.stringify(data),
   });
   if (!res.ok) throw new Error(`dbWrite(${path}) failed: ${await res.text()}`);
@@ -45,14 +48,14 @@ export async function dbWrite(path, data) {
 
 /** Read data at a RTDB path. Returns parsed JSON (null if missing). */
 export async function dbRead(path) {
-  const res = await fetch(`${DB_URL}/${path}.json?ns=${DB_NS}`);
+  const res = await fetch(`${DB_URL}/${path}.json?ns=${DB_NS}`, { headers: ADMIN_HDRS });
   if (!res.ok) throw new Error(`dbRead(${path}) failed: ${await res.text()}`);
   return res.json();
 }
 
 /** Delete all RTDB data (call in afterEach for isolation). */
 export async function clearDb() {
-  await fetch(`${DB_URL}/.json?ns=${DB_NS}`, { method: 'DELETE' });
+  await fetch(`${DB_URL}/.json?ns=${DB_NS}`, { method: 'DELETE', headers: ADMIN_HDRS });
 }
 
 // ── Playwright sign-in helper ────────────────────────────────
