@@ -265,10 +265,13 @@ export function renderTransactions(container) {
     });
 
     // Load Amazon orders in the background — doesn't block the transaction listener.
-    // Re-renders once when ready so strips appear without requiring a detail-sheet open.
+    // After loading, proactively link unmatched orders to transactions using the same
+    // two-pass matching logic used in the Accounts tab, so the badge and strip appear
+    // even when the transaction merchant name doesn't contain "amazon".
     dbGet(`amazonOrders/${hid}`)
       .then(orders => {
         _amazonOrders = orders ?? {};
+        proactiveLinkOrders(hid);
         if (allTxns.length) refresh();
       })
       .catch(() => { _amazonOrders = {}; });
@@ -967,6 +970,55 @@ function updateSugStrip(txnId, sug) {
     const catBtn = row.querySelector('.cat-btn');
     if (catBtn) catBtn.click();
   });
+}
+
+// When amazonOrders first loads, proactively write amazonOrderKey onto any transaction
+// that matches an order but hasn't been linked yet. Uses two-pass matching identical to
+// matchAllOrders in accounts.js so merchant-name mismatches don't block the badge/strip.
+function proactiveLinkOrders(hid) {
+  if (!_amazonOrders || !allTxns.length) return;
+  const claimed  = new Set();
+  const AMZN_PAT = /amazon|amzn/i;
+  const EXACT    = 0.01;
+
+  // Mark already-linked transactions as claimed
+  for (const [id, t] of allTxns) {
+    if (t.amazonOrderKey) claimed.add(id);
+  }
+
+  const sorted = Object.entries(_amazonOrders)
+    .filter(([, o]) => o.shipDate && o.total)
+    .sort((a, b) => (b[1].shipDate ?? '').localeCompare(a[1].shipDate ?? ''));
+
+  for (const [orderId, order] of sorted) {
+    if (claimed.has('__order__' + orderId)) continue; // already linked from a prior iteration
+    const orderTime = new Date(order.shipDate).getTime();
+
+    // Pass 1: Amazon merchant + exact amount, 7-day window
+    let hit = allTxns.find(([id, t]) => {
+      if (claimed.has(id)) return false;
+      if (!AMZN_PAT.test(t.merchantName ?? t.description ?? '')) return false;
+      if (Math.abs(t.amount - order.total) > EXACT) return false;
+      return Math.abs(new Date(t.date).getTime() - orderTime) / 86_400_000 <= 7;
+    });
+
+    // Pass 2: any merchant + exact amount, 5-day window (catches misnamed merchants)
+    if (!hit) hit = allTxns.find(([id, t]) => {
+      if (claimed.has(id)) return false;
+      if (t.isTransfer || t.amount < 0) return false;
+      if (Math.abs(t.amount - order.total) > EXACT) return false;
+      return Math.abs(new Date(t.date).getTime() - orderTime) / 86_400_000 <= 5;
+    });
+
+    if (hit) {
+      const [txnId] = hit;
+      claimed.add(txnId);
+      if (!_writtenOrderKeys.has(txnId)) {
+        _writtenOrderKeys.add(txnId);
+        dbUpdate(`transactions/${hid}/${txnId}`, { amazonOrderKey: orderId });
+      }
+    }
+  }
 }
 
 function renderPage(filtered, state, uid, refresh, accountMap) {

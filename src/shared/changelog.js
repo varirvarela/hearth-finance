@@ -1,5 +1,12 @@
 export const CHANGELOG = [
   {
+    version: '1.25.7',
+    date:    '2026-10-06',
+    changes: [
+      'Transactions: Amazon badge and suggestion strip now appear even when the bank merchant name does not contain "Amazon" — proactive two-pass matching runs when orders load.',
+    ],
+  },
+  {
     version: '1.25.6',
     date:    '2026-10-06',
     changes: [
