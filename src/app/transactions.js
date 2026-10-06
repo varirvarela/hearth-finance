@@ -38,6 +38,7 @@ const _aiSugCache    = new Map();
 let _updateSugStripCb = null; // set by renderPage so appendAmazonItems can trigger strip updates
 let _txnState        = null; // persists filter/sort/search state across navigation // txnId → { catId, source }
 let _amazonOrders    = null; // cached amazonOrders for current household
+const _writtenOrderKeys = new Set(); // txnIds whose amazonOrderKey was already written this session
 
 function getSourceBadge(source) {
   const map = {
@@ -183,6 +184,7 @@ export function renderTransactions(container) {
   partnerAllTxns = [];
   partnerInitial = 'P';
   _amazonOrders  = null; // reset cache on page mount
+  _writtenOrderKeys.clear();
 
   if (!_txnState) _txnState = blankState();
   const state = _txnState;
@@ -245,11 +247,6 @@ export function renderTransactions(container) {
       console.error('[Hearth] suggestions preload failed:', e);
     }
 
-    // Eagerly load Amazon orders so the suggestion strip can appear without opening the detail sheet.
-    try {
-      _amazonOrders = (await dbGet(`amazonOrders/${hid}`)) ?? {};
-    } catch { _amazonOrders = {}; }
-
     dbListen(`transactions/${hid}`, txns => {
       allTxns = Object.entries(txns ?? {}).sort((a, b) => b[1].date.localeCompare(a[1].date));
       refresh();
@@ -266,6 +263,15 @@ export function renderTransactions(container) {
         }
       }
     });
+
+    // Load Amazon orders in the background — doesn't block the transaction listener.
+    // Re-renders once when ready so strips appear without requiring a detail-sheet open.
+    dbGet(`amazonOrders/${hid}`)
+      .then(orders => {
+        _amazonOrders = orders ?? {};
+        if (allTxns.length) refresh();
+      })
+      .catch(() => { _amazonOrders = {}; });
   })();
 
   if (hid === uid) getPartnerUid(uid).then(p => {
@@ -1020,8 +1026,11 @@ function renderPage(filtered, state, uid, refresh, accountMap) {
         if (foundKey) {
           _matchedOrder    = _amazonOrders[foundKey];
           _matchedOrderKey = foundKey;
-          // Persist the link so future renders skip the scan
-          if (!t.amazonOrderKey) dbUpdate(`transactions/${hid}/${id}`, { amazonOrderKey: foundKey });
+          // Persist the link once per session so future renders skip the scan
+          if (!t.amazonOrderKey && !_writtenOrderKeys.has(id)) {
+            _writtenOrderKeys.add(id);
+            dbUpdate(`transactions/${hid}/${id}`, { amazonOrderKey: foundKey });
+          }
         }
       }
     }
