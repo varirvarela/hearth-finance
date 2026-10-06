@@ -38,6 +38,7 @@ const _aiSugCache    = new Map();
 let _updateSugStripCb = null; // set by renderPage so appendAmazonItems can trigger strip updates
 let _txnState        = null; // persists filter/sort/search state across navigation // txnId → { catId, source }
 let _amazonOrders    = null; // cached amazonOrders for current household
+let _ordersLinked    = false; // true once proactiveLinkOrders has run for this session
 const _writtenOrderKeys = new Set(); // txnIds whose amazonOrderKey was already written this session
 
 function getSourceBadge(source) {
@@ -184,6 +185,7 @@ export function renderTransactions(container) {
   partnerAllTxns = [];
   partnerInitial = 'P';
   _amazonOrders  = null; // reset cache on page mount
+  _ordersLinked  = false;
   _writtenOrderKeys.clear();
 
   if (!_txnState) _txnState = blankState();
@@ -249,6 +251,8 @@ export function renderTransactions(container) {
 
     dbListen(`transactions/${hid}`, txns => {
       allTxns = Object.entries(txns ?? {}).sort((a, b) => b[1].date.localeCompare(a[1].date));
+      // If orders loaded first and proactiveLinkOrders bailed on empty allTxns, run it now.
+      if (_amazonOrders && !_ordersLinked) proactiveLinkOrders(hid);
       refresh();
       updateDupBanner(allTxns, hid);
     });
@@ -1019,6 +1023,7 @@ function proactiveLinkOrders(hid) {
       }
     }
   }
+  _ordersLinked = true;
 }
 
 function renderPage(filtered, state, uid, refresh, accountMap) {
