@@ -1,5 +1,13 @@
 export const CHANGELOG = [
   {
+    version: '1.25.6',
+    date:    '2026-10-06',
+    changes: [
+      'Amazon: Accounts order sheet is now a pure inventory view — Apply/Split moved to the Transactions tab suggestion strip.',
+      'Amazon: fixed history sync date range (was silently falling back to 7 days due to wrong parameter names).',
+    ],
+  },
+  {
     version: '1.25.5',
     date:    '2026-10-05',
     changes: [

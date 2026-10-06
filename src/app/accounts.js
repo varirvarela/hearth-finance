@@ -1,7 +1,6 @@
 ﻿import { dbGet, dbSet, dbUpdate, dbRemove, dbPush, dbListen, auth, getPartnerUid, getHouseholdId } from '../shared/firebase.js';
 import { fmtCurrency, fmtDate } from '../shared/format.js';
 import { CHANGELOG } from '../shared/changelog.js';
-import { getCategoryById } from '../shared/categories.js';
 
 const WORKER_URL = import.meta.env.VITE_WORKER_URL ?? 'http://localhost:8787';
 
@@ -689,7 +688,7 @@ function openHistorySheet(uid, hid) {
       const res   = await fetch(`${WORKER_URL}/gmail/sync`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ uid, from, to }),
+        body: JSON.stringify({ uid, since: from, until: to }),
       });
       const data = await res.json();
       msg.textContent = data.imported != null
@@ -922,45 +921,12 @@ async function openAmazonOrdersSheet(uid, hid, unmatchedOnly = false) {
           (order.items.length > 5 ? `<p style="font-size:0.75rem;color:var(--muted);margin:2px 0 0">+${order.items.length - 5} more items</p>` : '')
         : '<p style="font-size:0.75rem;color:var(--muted);margin:0">No items extracted</p>';
 
-      // Tax / credits line
       let totalsHtml = '';
       if (order.tax || order.credits) {
         totalsHtml = `<div style="display:flex;gap:0.75rem;font-size:0.75rem;color:var(--muted);margin-top:0.2rem">`;
         if (order.tax)     totalsHtml += `<span>Tax: ${fmtCurrency(order.tax)}</span>`;
         if (order.credits) totalsHtml += `<span style="color:#16a34a">Credit: −${fmtCurrency(order.credits)}</span>`;
         totalsHtml += `</div>`;
-      }
-
-      // AI category suggestion + split chips
-      let suggestionHtml = '';
-      if (order.suggestedCategory) {
-        const cat  = getCategoryById(order.suggestedCategory);
-        const conf = order.suggestedConf != null ? Math.round(order.suggestedConf * 100) : 0;
-        const applyBtn = isMatched
-          ? `<button class="apply-cat-btn" data-order-id="${orderId}" style="border:none;background:#4f46e5;color:#fff;border-radius:10px;padding:2px 10px;font-size:0.72rem;cursor:pointer">Apply</button>`
-          : '';
-        suggestionHtml += `
-          <div style="display:flex;align-items:center;gap:0.4rem;margin-top:0.35rem;flex-wrap:wrap">
-            <span style="font-size:0.73rem;color:var(--muted)">AI:</span>
-            <span style="background:var(--faint);border:1px solid var(--border);border-radius:12px;padding:2px 9px;font-size:0.73rem">${cat?.icon ?? '📦'} ${cat?.name ?? order.suggestedCategory} ${conf ? conf + '%' : ''}</span>
-            ${applyBtn}
-          </div>`;
-
-        if (order.suggestedSplits?.length >= 2) {
-          const splitDesc = order.suggestedSplits.map(s => {
-            const c = getCategoryById(s.category);
-            return `${c?.icon ?? '•'} ${c?.name ?? s.category} ${Math.round(s.fraction * 100)}%`;
-          }).join(' + ');
-          const splitBtn = isMatched
-            ? `<button class="apply-split-btn" data-order-id="${orderId}" style="border:1px solid #8b5cf6;background:transparent;color:#8b5cf6;border-radius:10px;padding:2px 10px;font-size:0.72rem;cursor:pointer">Apply Split</button>`
-            : '';
-          suggestionHtml += `
-            <div style="display:flex;align-items:center;gap:0.4rem;margin-top:0.2rem;flex-wrap:wrap">
-              <span style="font-size:0.73rem;color:#8b5cf6">Split:</span>
-              <span style="background:#f5f3ff;border:1px solid #ddd6fe;border-radius:12px;padding:2px 9px;font-size:0.73rem">${splitDesc}</span>
-              ${splitBtn}
-            </div>`;
-        }
       }
 
       const orderLabel  = order.orderNumber ? `#${order.orderNumber}` : 'Amazon order';
@@ -977,82 +943,11 @@ async function openAmazonOrdersSheet(uid, hid, unmatchedOnly = false) {
           </div>
           ${totalsHtml}
           ${statusBar}
-          ${suggestionHtml}
           <div style="border-top:1px solid var(--border);padding-top:0.3rem;margin-top:0.35rem">${itemsHtml}</div>
         </div>`;
     }).join('');
 
     body.innerHTML = summaryHtml + (toShow.length ? orderCards : `<p style="color:var(--muted);text-align:center;padding:1rem">Nothing to show.</p>`);
-
-    // Event delegation for Apply / Apply Split buttons
-    body.addEventListener('click', async e => {
-      const btn = e.target.closest('.apply-cat-btn, .apply-split-btn');
-      if (!btn || btn.disabled) return;
-
-      const orderId  = btn.dataset.orderId;
-      const order    = ordersRaw?.[orderId];
-      const txnEntry = matched.get(orderId);
-      if (!order || !txnEntry) return;
-      const [txnId, txn] = txnEntry;
-
-      if (btn.classList.contains('apply-cat-btn')) {
-        btn.disabled = true; btn.textContent = '…';
-        try {
-          const cat = getCategoryById(order.suggestedCategory);
-          await dbUpdate(`transactions/${hid}/${txnId}`, {
-            category:       order.suggestedCategory,
-            group:          cat?.parent ?? null,
-            categorySource: 'ai',
-            needsReview:    false,
-          });
-          btn.textContent = '✓ Applied';
-          btn.style.background = '#16a34a';
-        } catch (err) {
-          btn.disabled = false; btn.textContent = 'Apply';
-          alert('Could not apply: ' + err.message);
-        }
-
-      } else if (btn.classList.contains('apply-split-btn')) {
-        const splits = order.suggestedSplits;
-        if (!splits?.length) return;
-        const totalAmount = txn.amount;
-        const lines = splits.map(s => {
-          const c = getCategoryById(s.category);
-          return `${c?.icon ?? ''} ${c?.name ?? s.category}: ${fmtCurrency(Math.round(totalAmount * s.fraction * 100) / 100)}`;
-        }).join('\n');
-        if (!confirm(`Split ${fmtCurrency(totalAmount)} into:\n\n${lines}\n\nThis will create ${splits.length} new transactions and delete the original.`)) return;
-
-        btn.disabled = true; btn.textContent = 'Splitting…';
-        try {
-          let allocated = 0;
-          for (let i = 0; i < splits.length; i++) {
-            const s   = splits[i];
-            const cat = getCategoryById(s.category);
-            const amt = i === splits.length - 1
-              ? Math.round((totalAmount - allocated) * 100) / 100
-              : Math.round(totalAmount * s.fraction * 100) / 100;
-            allocated += amt;
-            const { amazonOrderKey: _drop, ...baseTxn } = txn;
-            await dbPush(`transactions/${hid}`, {
-              ...baseTxn,
-              amount:         amt,
-              category:       s.category,
-              group:          cat?.parent ?? null,
-              categorySource: 'ai',
-              needsReview:    false,
-              notes:          (txn.notes ? txn.notes + ' | ' : '') + `Split ${i + 1}/${splits.length}`,
-            });
-          }
-          await dbRemove(`transactions/${hid}/${txnId}`);
-          btn.textContent = '✓ Split!';
-          btn.style.color = '#16a34a';
-          btn.style.borderColor = '#16a34a';
-        } catch (err) {
-          btn.disabled = false; btn.textContent = 'Apply Split';
-          alert('Split failed: ' + err.message);
-        }
-      }
-    });
 
   } catch (e) {
     body.innerHTML = `<p style="color:var(--danger);font-size:0.85rem">Error loading orders: ${e.message}</p>`;
