@@ -1,5 +1,12 @@
 export const CHANGELOG = [
   {
+    version: '1.25.10',
+    date:    '2026-10-07',
+    changes: [
+      'Amazon: resetting all orders now also removes the order tag from all matched transactions.',
+    ],
+  },
+  {
     version: '1.25.9',
     date:    '2026-10-07',
     changes: [

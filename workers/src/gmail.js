@@ -284,10 +284,21 @@ async function syncGmail(env, uid, specificKey = null, { since = null, until = n
 }
 
 async function purgeOrders(env, uid) {
-  const { fbGet, fbSet } = await import('./firebase.js');
+  const { fbGet, fbSet, fbPatch } = await import('./firebase.js');
   const profile     = await fbGet(env, `users/${uid}`).catch(() => null);
   const householdId = (typeof profile === 'object' && profile?.householdId) ? profile.householdId : uid;
   await fbSet(env, `amazonOrders/${householdId}`, null);
+
+  // Strip amazonOrderKey from all transactions that have it
+  const txns = await fbGet(env, `transactions/${householdId}`).catch(() => null);
+  if (txns && typeof txns === 'object') {
+    const patch = {};
+    for (const [txnId, txn] of Object.entries(txns)) {
+      if (txn?.amazonOrderKey) patch[`transactions/${householdId}/${txnId}/amazonOrderKey`] = null;
+    }
+    if (Object.keys(patch).length) await fbPatch(env, '', patch);
+  }
+
   return { ok: true };
 }
 
