@@ -914,7 +914,7 @@ function openApplySheet(uid, rules, { singleRule = null, filterCatId = null } = 
     if (accounts && txns) {
       for (const t of Object.values(txns)) {
         if (!t.accountName && t.accountId && accounts[t.accountId]) {
-          t.accountName = accounts[t.accountId].alias ?? accounts[t.accountId].name ?? '';
+          t.accountName = accounts[t.accountId].name ?? '';
         }
       }
     }

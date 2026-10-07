@@ -1,5 +1,12 @@
 export const CHANGELOG = [
   {
+    version: '1.25.11',
+    date:    '2026-10-07',
+    changes: [
+      'Rules: account-name conditions now match the real Plaid account name, not the display alias.',
+    ],
+  },
+  {
     version: '1.25.10',
     date:    '2026-10-07',
     changes: [
