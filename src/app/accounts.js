@@ -546,7 +546,7 @@ async function renderAmazonSection(uid, hid) {
     const unmatchedCount = totalOrders - matchedCount;
 
     const acctRows = accountList.map(([key, acct]) => {
-      const label       = acct.email ? `<strong>${acct.email}</strong>` : 'Gmail account';
+      const alias       = acct.alias ?? acct.email ?? 'Gmail account';
       const lastSyncStr = acct.lastSync
         ? new Date(acct.lastSync).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
         : 'Never synced';
@@ -555,10 +555,11 @@ async function renderAmazonSection(uid, hid) {
         <div class="acct-row amazon-acct-row" data-key="${key}" style="cursor:pointer">
           <div class="acct-row-icon" style="font-size:1.25rem">📦</div>
           <div class="acct-row-info">
-            <span class="acct-row-name">${label}</span>
+            <span class="acct-row-name">${alias}</span>
             <span class="acct-row-sync ${syncCls}">${lastSyncStr}</span>
           </div>
           <div style="display:flex;gap:0.35rem;align-items:center">
+            <button class="btn-ghost amazon-edit-alias-btn" data-key="${key}" data-alias="${alias}" style="font-size:0.75rem;padding:2px 8px;white-space:nowrap" title="Edit name">✏️</button>
             <button class="btn-ghost amazon-sync-btn" data-key="${key}" style="font-size:0.75rem;padding:2px 8px;white-space:nowrap" title="Sync this account">⟳ Sync</button>
             <span style="color:var(--muted);font-size:0.85rem">›</span>
           </div>
@@ -583,8 +584,21 @@ async function renderAmazonSection(uid, hid) {
       </div>
       <p id="amazon-sync-msg" style="padding:0 0.75rem;font-size:0.8rem;color:var(--muted);margin:0 0 0.5rem"></p>`;
 
-    inner.querySelector('#amazon-view-orders-btn')?.addEventListener('click', () => openAmazonOrdersSheet(uid, hid));
-    inner.querySelector('#amazon-view-all')?.addEventListener('click',        () => openAmazonOrdersSheet(uid, hid, true));
+    const gmailAccounts = Object.fromEntries(accountList.map(([k, a]) => [k, a]));
+    inner.querySelector('#amazon-view-orders-btn')?.addEventListener('click', () => openAmazonOrdersSheet(uid, hid, false, gmailAccounts));
+    inner.querySelector('#amazon-view-all')?.addEventListener('click',        () => openAmazonOrdersSheet(uid, hid, true,  gmailAccounts));
+
+    inner.querySelectorAll('.amazon-edit-alias-btn').forEach(btn => {
+      btn.addEventListener('click', async e => {
+        e.stopPropagation();
+        const key      = btn.dataset.key;
+        const current  = btn.dataset.alias;
+        const newAlias = prompt('Account name:', current);
+        if (!newAlias || newAlias === current) return;
+        await dbSet(`gmail/${uid}/accounts/${key}/alias`, newAlias);
+        renderAmazonSection(uid, hid);
+      });
+    });
 
     inner.querySelector('#amazon-add-btn').addEventListener('click', () => {
       const key = Math.random().toString(36).slice(2, 10);
@@ -624,7 +638,7 @@ async function renderAmazonSection(uid, hid) {
 
     // Row tap → full order sheet
     inner.querySelectorAll('.amazon-acct-row').forEach(row => {
-      row.addEventListener('click', () => openAmazonOrdersSheet(uid, hid));
+      row.addEventListener('click', () => openAmazonOrdersSheet(uid, hid, false, gmailAccounts));
     });
 
     // Sync All (7 days)
@@ -672,7 +686,8 @@ function openHistorySheet(uid, hid) {
     </div>`;
 
   document.body.appendChild(overlay);
-  const close = () => overlay.remove();
+  requestAnimationFrame(() => overlay.classList.add('open'));
+  const close = () => { overlay.classList.remove('open'); setTimeout(() => overlay.remove(), 260); };
   overlay.querySelector('#hist-close').addEventListener('click', close);
   overlay.addEventListener('click', e => { if (e.target === overlay) close(); });
 
@@ -743,17 +758,16 @@ function countMatchedOrders(orders, txns) {
   return matchAllOrders(orders, txns).size;
 }
 
-async function openAmazonOrdersSheet(uid, hid, unmatchedOnly = false) {
+async function openAmazonOrdersSheet(uid, hid, unmatchedOnly = false, gmailAccounts = {}) {
   const overlay = document.createElement('div');
   overlay.className = 'sheet-overlay';
   overlay.innerHTML = `
-    <div class="sheet" style="max-height:90vh">
-      <div class="sheet-handle"></div>
-      <div class="sheet-hdr">
+    <div class="sheet" style="height:100vh;max-height:100vh;border-radius:0">
+      <div class="sheet-hdr" style="position:sticky;top:0;z-index:1;background:var(--surface)">
+        <button class="sheet-close" id="amazon-sheet-close" style="margin-right:0.5rem">✕</button>
         <span class="sheet-title">📦 Amazon Orders${unmatchedOnly ? ' — Unmatched' : ''}</span>
-        <button class="sheet-close" id="amazon-sheet-close">✕</button>
       </div>
-      <div id="amazon-sheet-body" style="padding:0.75rem;overflow-y:auto;flex:1">
+      <div id="amazon-sheet-body" style="padding:0.75rem;overflow-y:auto;flex:1;height:calc(100vh - 120px)">
         <p style="color:var(--muted);font-size:0.85rem;text-align:center;padding:1rem">Loading orders…</p>
       </div>
       <div style="padding:0.5rem 0.75rem;border-top:1px solid var(--border);display:flex;gap:0.5rem;flex-wrap:wrap">
@@ -931,6 +945,8 @@ async function openAmazonOrdersSheet(uid, hid, unmatchedOnly = false) {
 
       const orderLabel  = order.orderNumber ? `#${order.orderNumber}` : 'Amazon order';
       const borderColor = isMatched ? '#bbf7d0' : '#fde68a';
+      const acctKey     = orderId.startsWith('csv_') ? null : orderId.split('_')[0];
+      const acctAlias   = acctKey ? (gmailAccounts[acctKey]?.alias ?? gmailAccounts[acctKey]?.email ?? null) : 'CSV';
 
       return `
         <div style="border:1.5px solid ${borderColor};border-radius:10px;padding:0.6rem 0.75rem;margin-bottom:0.6rem">
@@ -938,6 +954,7 @@ async function openAmazonOrdersSheet(uid, hid, unmatchedOnly = false) {
             <div>
               <span style="font-size:0.72rem;color:var(--muted)">${order.shipDate ?? '—'}</span>
               <span style="font-size:0.72rem;color:var(--muted);margin-left:0.5rem">${orderLabel}</span>
+              ${acctAlias ? `<span style="font-size:0.68rem;background:var(--faint);border:1px solid var(--border);border-radius:4px;padding:0 4px;margin-left:0.4rem;color:var(--muted)">${acctAlias}</span>` : ''}
             </div>
             <span style="font-weight:700;font-size:0.9rem">${fmtCurrency(order.total)}</span>
           </div>

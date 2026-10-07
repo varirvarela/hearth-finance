@@ -1103,14 +1103,21 @@ function renderPage(filtered, state, uid, refresh, accountMap) {
         const catLabel = hasSplit
           ? `${aCat.icon} ${aCat.name} + split`
           : `${aCat.icon} ${aCat.name}`;
+        const items = _matchedOrder.items ?? [];
+        const itemPreview = items.slice(0, 3).map(i => i.name).filter(Boolean).join(' · ');
+        const moreItems   = items.length > 3 ? ` +${items.length - 3}` : '';
+        const itemsLine   = itemPreview
+          ? `<div style="flex-basis:100%;font-size:0.71rem;color:var(--muted);padding:2px 0 0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${itemPreview}${moreItems}</div>`
+          : '';
         suggestionHTML = `
-          <div class="sug-strip ai">
+          <div class="sug-strip ai" style="flex-wrap:wrap">
             <span class="sug-lbl ai">📦${aConf}</span>
             <span class="sug-cat">${catLabel}</span>
             <button class="btn-quick-confirm" data-id="${id}" data-cat="${_matchedOrder.suggestedCategory}">✓ Apply</button>
             ${hasSplit
               ? `<button class="btn-amazon-split" data-id="${id}" data-order-key="${_matchedOrderKey}">Split →</button>`
               : `<button class="btn-quick-change" data-id="${id}" data-cat="${_matchedOrder.suggestedCategory}">Change</button>`}
+            ${itemsLine}
           </div>`;
       } else if (t.category !== 'uncategorized' && t.categorySource === 'ai' && (t.aiConfidence ?? 0) > 0) {
         const confLabel = ` · ${Math.round(t.aiConfidence * 100)}%`;

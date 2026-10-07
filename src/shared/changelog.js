@@ -1,5 +1,16 @@
 export const CHANGELOG = [
   {
+    version: '1.25.8',
+    date:    '2026-10-06',
+    changes: [
+      'Amazon: "Get history" button now opens correctly (was invisible due to missing animation class).',
+      'Amazon: order sheet is now full-screen instead of a small popup.',
+      'Amazon: each order card shows which Gmail account it came from.',
+      'Amazon: Gmail account names are editable via the pencil button on each account row.',
+      'Transactions: Amazon suggestion strip now shows item names below the category chip.',
+    ],
+  },
+  {
     version: '1.25.7',
     date:    '2026-10-06',
     changes: [
