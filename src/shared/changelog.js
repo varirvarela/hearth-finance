@@ -1,5 +1,15 @@
 export const CHANGELOG = [
   {
+    version: '1.25.9',
+    date:    '2026-10-07',
+    changes: [
+      'Amazon: Gmail account alias can now be edited (Firebase rule was blocking writes).',
+      'Amazon: suggestion strip now shows for transactions matched via proactive linking, even when the bank merchant name is not "Amazon".',
+      'Amazon: order cards show email subject as item description when individual items could not be parsed.',
+      'Amazon: fixed full-screen order sheet scrolling (conflicting height values).',
+    ],
+  },
+  {
     version: '1.25.8',
     date:    '2026-10-06',
     changes: [

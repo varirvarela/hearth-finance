@@ -767,7 +767,7 @@ async function openAmazonOrdersSheet(uid, hid, unmatchedOnly = false, gmailAccou
         <button class="sheet-close" id="amazon-sheet-close" style="margin-right:0.5rem">✕</button>
         <span class="sheet-title">📦 Amazon Orders${unmatchedOnly ? ' — Unmatched' : ''}</span>
       </div>
-      <div id="amazon-sheet-body" style="padding:0.75rem;overflow-y:auto;flex:1;height:calc(100vh - 120px)">
+      <div id="amazon-sheet-body" style="padding:0.75rem;overflow-y:auto;flex:1;min-height:0">
         <p style="color:var(--muted);font-size:0.85rem;text-align:center;padding:1rem">Loading orders…</p>
       </div>
       <div style="padding:0.5rem 0.75rem;border-top:1px solid var(--border);display:flex;gap:0.5rem;flex-wrap:wrap">
@@ -933,7 +933,9 @@ async function openAmazonOrdersSheet(uid, hid, unmatchedOnly = false, gmailAccou
                <span style="margin-left:0.5rem;white-space:nowrap">${i.price != null ? fmtCurrency(i.price) : ''}</span>
              </div>`).join('') +
           (order.items.length > 5 ? `<p style="font-size:0.75rem;color:var(--muted);margin:2px 0 0">+${order.items.length - 5} more items</p>` : '')
-        : '<p style="font-size:0.75rem;color:var(--muted);margin:0">No items extracted</p>';
+        : order.subject
+          ? `<p style="font-size:0.75rem;color:var(--muted);margin:0;font-style:italic">${order.subject}</p>`
+          : '<p style="font-size:0.75rem;color:var(--muted);margin:0">No items extracted from this email</p>';
 
       let totalsHtml = '';
       if (order.tax || order.credits) {

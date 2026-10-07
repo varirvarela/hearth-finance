@@ -1064,15 +1064,19 @@ function renderPage(filtered, state, uid, refresh, accountMap) {
     if (acctName) subParts.push(acctName);
     const subHTML = `<span class="txn-sub">${subParts.join(' · ')} ${partnerBadge}</span>`;
 
-    // Resolve matched Amazon order — direct key lookup first, then amount+date scan for new txns
+    // Resolve matched Amazon order.
+    // 1. Direct lookup if already linked (any merchant name — proactive link may have set this)
+    // 2. Fallback scan by amount+date for Amazon-named transactions not yet linked
     const AMAZON_TXN_PAT = /amazon|amzn/i;
     let _matchedOrder = null;
     let _matchedOrderKey = null;
-    if (_amazonOrders && AMAZON_TXN_PAT.test(t.merchantName ?? t.description ?? '')) {
+    if (_amazonOrders) {
       if (t.amazonOrderKey && _amazonOrders[t.amazonOrderKey]) {
+        // Already linked — no merchant name check needed
         _matchedOrder    = _amazonOrders[t.amazonOrderKey];
         _matchedOrderKey = t.amazonOrderKey;
-      } else {
+      } else if (AMAZON_TXN_PAT.test(t.merchantName ?? t.description ?? '')) {
+        // Not linked yet — scan by amount+date (only for clearly Amazon-named transactions)
         const txnTime = new Date(t.date).getTime();
         const foundKey = Object.keys(_amazonOrders).find(k => {
           const o = _amazonOrders[k];
@@ -1083,8 +1087,7 @@ function renderPage(filtered, state, uid, refresh, accountMap) {
         if (foundKey) {
           _matchedOrder    = _amazonOrders[foundKey];
           _matchedOrderKey = foundKey;
-          // Persist the link once per session so future renders skip the scan
-          if (!t.amazonOrderKey && !_writtenOrderKeys.has(id)) {
+          if (!_writtenOrderKeys.has(id)) {
             _writtenOrderKeys.add(id);
             dbUpdate(`transactions/${hid}/${id}`, { amazonOrderKey: foundKey });
           }
@@ -1104,7 +1107,8 @@ function renderPage(filtered, state, uid, refresh, accountMap) {
           ? `${aCat.icon} ${aCat.name} + split`
           : `${aCat.icon} ${aCat.name}`;
         const items = _matchedOrder.items ?? [];
-        const itemPreview = items.slice(0, 3).map(i => i.name).filter(Boolean).join(' · ');
+        const itemPreview = items.slice(0, 3).map(i => i.name).filter(Boolean).join(' · ')
+          || _matchedOrder.subject || '';
         const moreItems   = items.length > 3 ? ` +${items.length - 3}` : '';
         const itemsLine   = itemPreview
           ? `<div style="flex-basis:100%;font-size:0.71rem;color:var(--muted);padding:2px 0 0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${itemPreview}${moreItems}</div>`

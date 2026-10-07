@@ -77,7 +77,14 @@
     "gmail": {
       "$uid": {
         ".read":  "auth != null && auth.uid === $uid",
-        ".write": false
+        ".write": false,
+        "accounts": {
+          "$key": {
+            "alias": {
+              ".write": "auth != null && auth.uid === $uid"
+            }
+          }
+        }
       }
     },
     "categoryDescriptions": {
