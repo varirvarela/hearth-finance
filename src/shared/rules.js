@@ -64,7 +64,7 @@ function matchesCondition(txn, { field, op, value }) {
     case 'contains':    return isStr && fieldVal.includes(norm(value));
     case 'notContains': return isStr && !fieldVal.includes(norm(value));
     case 'startsWith':  return isStr && fieldVal.startsWith(norm(value));
-    case 'equals':      return isStr ? fieldVal === norm(value) : fieldVal === value;
+    case 'equals':      return isStr ? fieldVal === norm(value) : (isNum ? fieldVal === Number(value) : fieldVal === value);
     case 'gt':          return isNum && fieldVal > Number(value);
     case 'gte':         return isNum && fieldVal >= Number(value);
     case 'lt':          return isNum && fieldVal < Number(value);

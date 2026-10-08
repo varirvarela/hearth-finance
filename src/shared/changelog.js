@@ -1,5 +1,13 @@
 export const CHANGELOG = [
   {
+    version: '1.25.13',
+    date:    '2026-10-08',
+    changes: [
+      'Rules: amount conditions now match correctly — equals was comparing a number to a stored string and always failing.',
+      'Rules: amount values are now saved as numbers in Firebase; existing string-typed rules repaired automatically.',
+    ],
+  },
+  {
     version: '1.25.12',
     date:    '2026-10-07',
     changes: [

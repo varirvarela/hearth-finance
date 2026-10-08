@@ -561,7 +561,7 @@ export function openRuleEditor(uid, ruleId = null, prefill = null, prefillCatId 
         cond.value = [...checks].map(c => c.value);
       } else {
         const valEl2 = condsEl.querySelector(`.re-cond-val[data-ci="${idx}"]`);
-        if (valEl2) cond.value = valEl2.value;
+        if (valEl2) cond.value = fd?.type === 'number' ? Number(valEl2.value) : valEl2.value;
       }
     });
   }
@@ -594,8 +594,18 @@ export function openRuleEditor(uid, ruleId = null, prefill = null, prefillCatId 
     });
 
     condsEl.querySelectorAll('.re-cond-val').forEach(el => {
-      el.addEventListener('input',  () => { conditions[+el.dataset.ci].value = el.value; updatePreview(); });
-      el.addEventListener('change', () => { conditions[+el.dataset.ci].value = el.value; updatePreview(); });
+      el.addEventListener('input',  () => {
+        const ci = +el.dataset.ci;
+        const fd = RULE_FIELD_DEFS[conditions[ci]?.field];
+        conditions[ci].value = fd?.type === 'number' ? Number(el.value) : el.value;
+        updatePreview();
+      });
+      el.addEventListener('change', () => {
+        const ci = +el.dataset.ci;
+        const fd = RULE_FIELD_DEFS[conditions[ci]?.field];
+        conditions[ci].value = fd?.type === 'number' ? Number(el.value) : el.value;
+        updatePreview();
+      });
     });
 
     condsEl.querySelectorAll('.re-cond-multicheck').forEach(wrap => {
