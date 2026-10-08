@@ -79,7 +79,7 @@ export async function handleUserSync(env, uid, filterItemIds = null) {
 
   const accountNameMap = {};
   for (const [accountId, account] of Object.entries(accounts)) {
-    accountNameMap[accountId] = account.alias ?? account.name ?? '';
+    accountNameMap[accountId] = account.name ?? '';
   }
 
   const existing         = await fbGet(env, `transactions/${uid}`).catch(() => ({})) ?? {};

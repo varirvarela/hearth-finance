@@ -1,5 +1,13 @@
 export const CHANGELOG = [
   {
+    version: '1.25.12',
+    date:    '2026-10-07',
+    changes: [
+      'Rules: fixed accountName being stored as the display alias instead of the real Plaid name during sync — rules matching on account name now work correctly again.',
+      'Data: repaired 1,626 existing transactions across all aliased accounts (BofA, Venmo, Citi, Chase, Wells Fargo, Amex, Etrade) that had the wrong accountName stored.',
+    ],
+  },
+  {
     version: '1.25.11',
     date:    '2026-10-07',
     changes: [
