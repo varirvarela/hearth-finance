@@ -377,13 +377,32 @@ function parseAmazonEmail(msgData) {
   };
 }
 
-// Extract item name(s) from the email subject when the body has none
+// Extract item name(s) from the email subject when the body has none.
+// Amazon "Ordered:" / "Enviado:" emails wrap each product name in curly quotes:
+//   Ordered: "SANTINY Pleated Tennis..."
+//   Ordered: ⁦2⁩ "Creeping Thyme Seeds -..."
+//   Ordered: "Timberland PRO Men's 6..." and ⁦5⁩ more items
 function extractItemsFromSubject(subject) {
-  // "Ordered 1 item: Acer Chromebook 315..." (Amazon.com)
-  const m = subject.match(/[Oo]rdered\s+1\s+items?\s*:\s*(.+)/);
+  if (!subject) return [];
+  const items = [];
+
+  // Grab every quoted segment (the product names). Amazon uses straight ASCII
+  // quotes in "Ordered:" subjects and curly quotes in "Shipped:" subjects.
+  for (const mm of subject.matchAll(/["“]([^"“”]+)["”]/g)) {
+    const name = mm[1].trim().replace(/\.{3,}$/, '').trim();
+    if (name.length > 2 && /[a-z0-9]/i.test(name)) items.push({ name, price: null });
+  }
+
+  // "and N more items" → record the extra count on the first item
+  const more = subject.match(/and\s+[⁦⁩]?(\d+)[⁦⁩]?\s+more\s+items?/i);
+  if (more && items.length) items[0].moreCount = Number(more[1]);
+
+  if (items.length) return items;
+
+  // Legacy / localized fallbacks
+  const m = subject.match(/[Oo]rdered\s+\d+\s+items?\s*:\s*(.+)/);
   if (m) return [{ name: m[1].trim(), price: null }];
-  // Spanish: "Has pedido 1 artículo: Nombre del producto"
-  const m2 = subject.match(/[Hh]as\s+pedido\s+1\s+art[íi]culos?\s*:\s*(.+)/);
+  const m2 = subject.match(/[Hh]as\s+pedido\s+\d+\s+art[íi]culos?\s*:\s*(.+)/);
   if (m2) return [{ name: m2[1].trim(), price: null }];
   return [];
 }
@@ -504,7 +523,7 @@ function parseAmazonBody(text) {
     if (m) { total = normalizeAmount(m[1]); break; }
   }
 
-  const skip = /total|shipping|handling|\btax\b|subtotal|discount|coupon|savings|gift\s*card|fee|delivery|gastos|impuesto|env[íi]o|amazon|hola|estimad|pedido|enviado|confirma|direcci|address|order\s*#|art[íi]culo|qty|cantidad|units?|unidad/i;
+  const skip = /total|shipping|handling|\btax\b|subtotal|discount|coupon|savings|gift\s*card|fee|delivery|gastos|impuesto|env[íi]o|amazon|hola|estimad|pedido|enviado|confirma|direcci|address|order\s*#|art[íi]culo|quantity|qty|cantidad|units?|unidad/i;
 
   // Phase 1: items with explicit price (currency symbol present)
   // Allow up to 150 chars for item names (long product titles are common)

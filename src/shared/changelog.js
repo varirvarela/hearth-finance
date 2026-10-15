@@ -1,5 +1,13 @@
 export const CHANGELOG = [
   {
+    version: '1.25.14',
+    date:    '2026-10-15',
+    changes: [
+      'Amazon: order item names now parse correctly from the email subject — fixes orders that showed only "Quantity: 1" with no product name.',
+      'Amazon: repaired 63 existing orders to show real product names instead of quantity placeholders.',
+    ],
+  },
+  {
     version: '1.25.13',
     date:    '2026-10-08',
     changes: [
